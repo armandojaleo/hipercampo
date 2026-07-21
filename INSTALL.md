@@ -214,14 +214,20 @@ Por defecto hipercampo es léxico (CPU, sin GPU). Si quieres que capte sinónimo
 pip install -e ".[semantic]"     # trae sentence-transformers (Apache-2.0)
 ```
 
-Y en tu arranque:
+Y actívala en el servidor con una variable de entorno (en el `env` de tu config MCP):
 
-```python
-from hipercampo import encoder, semantic
-encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())
+```json
+"env": {
+  "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/hipercampo.db",
+  "HIPERCAMPO_SEMANTIC": "1"
+}
 ```
 
-Ver [ATTRIBUTION.md](ATTRIBUTION.md) para licencias del modelo.
+(O en código: `from hipercampo import encoder; encoder.enable_semantic()`.)
+
+Sube el MRR global de recuperación de **0.77 a 0.95** en el banco de estrés
+(`python scripts/stress.py --semantic`). La 1ª vez descarga el modelo. Ver
+[ATTRIBUTION.md](ATTRIBUTION.md) para licencias del modelo.
 
 ---
 

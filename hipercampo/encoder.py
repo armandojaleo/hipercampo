@@ -38,10 +38,11 @@ _cache: dict[str, np.ndarray] = {}
 # Si se define, su salida se mezcla en el bundle. Por defecto: None (VSA puro).
 _semantic_hook: Optional[Callable[[str], np.ndarray]] = None
 
-# Peso del vector semántico frente a lo léxico. Valor por defecto 0.2: el mejor
-# equilibrio MEDIDO (ver scripts/benchmark.py) entre robustez a erratas y sinónimos
-# (erratas 0.79 / sinónimos 0.79). Subir para priorizar sinónimos; bajar para erratas.
-SEMANTIC_WEIGHT = float(os.environ.get("HIPERCAMPO_SEMANTIC_WEIGHT", "0.2"))
+# Peso del vector semántico frente a lo léxico. Por defecto 0.15: óptimo MEDIDO en
+# scripts/stress.py (global MRR 0.95; erratas 0.95, sinónimos 0.90). Poco peso basta;
+# demasiado ahoga la pista léxica que desambigua distractores del mismo tema.
+# Está ajustado a un banco sintético: cámbialo según tu dominio con la env var.
+SEMANTIC_WEIGHT = float(os.environ.get("HIPERCAMPO_SEMANTIC_WEIGHT", "0.15"))
 
 
 def set_semantic_hook(fn: Optional[Callable[[str], np.ndarray]]) -> None:
@@ -49,6 +50,25 @@ def set_semantic_hook(fn: Optional[Callable[[str], np.ndarray]]) -> None:
     MODELO que uses son tuyos y con su propia licencia: hipercampo no incluye ninguno."""
     global _semantic_hook
     _semantic_hook = fn
+
+
+def enable_semantic(model_name: str | None = None) -> bool:
+    """Activa el hook semántico de referencia (sentence-transformers) si está
+    instalado. Devuelve True si se activó, False si falta la dependencia (en cuyo
+    caso el sistema sigue funcionando en modo léxico). Carga perezosa del modelo."""
+    global _semantic_hook
+    try:
+        from . import semantic
+        fn = (semantic.make_sentence_transformer_hook(model_name)
+              if model_name else semantic.make_sentence_transformer_hook())
+        _semantic_hook = fn
+        return True
+    except Exception:
+        return False
+
+
+def semantic_active() -> bool:
+    return _semantic_hook is not None
 
 
 def _tokenize(text: str) -> list[str]:

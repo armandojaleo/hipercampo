@@ -118,6 +118,23 @@ encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())
 
 Ver [ATTRIBUTION.md](ATTRIBUTION.md) para licencias del modelo.
 
+### Banco de estrés (10 hechos + 10 distractores del mismo tema)
+
+`python scripts/stress.py [--semantic]` — condiciones duras: distractores que
+comparten vocabulario con la respuesta correcta. MRR por categoría:
+
+| Categoría | Léxico | + Semántico (peso 0.15) |
+|-----------|:---:|:---:|
+| keyword (palabras compartidas) | 1.00 | 1.00 |
+| typo (palabras mal escritas) | 1.00 | 0.95 |
+| synonym (paráfrasis) | 0.32 | **0.90** |
+| **GLOBAL** | 0.77 | **0.95** |
+
+Activar semántica sube el MRR global de **0.77 → 0.95**. Hallazgo medido: **poco
+peso semántico (0.15) gana** — demasiado ahoga la pista léxica que distingue hechos
+del mismo dominio. El modo semántico se activa con `HIPERCAMPO_SEMANTIC=1` en el
+entorno del servidor (requiere el extra `[semantic]`).
+
 ## Levantar con Docker
 
 ```bash

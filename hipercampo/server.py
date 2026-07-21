@@ -13,10 +13,22 @@ Se comunica por stdio (el estándar de MCP), así que funciona igual lanzado en
 local (`python -m hipercampo.server`) o dentro de Docker (`docker run -i ...`).
 """
 
+import os
+import sys
+
 from mcp.server.fastmcp import FastMCP
 
+from . import encoder
 from .config import db_path
 from .memory import Hipercampo
+
+# Modo semántico opcional (para sinónimos): HIPERCAMPO_SEMANTIC=1.
+# Requiere `pip install "hipercampo[semantic]"`. Si falta, seguimos en léxico.
+if os.environ.get("HIPERCAMPO_SEMANTIC") == "1":
+    ok = encoder.enable_semantic(os.environ.get("HIPERCAMPO_SEMANTIC_MODEL") or None)
+    print("hipercampo: modo semántico " + ("ACTIVO" if ok else
+          "NO disponible (instala hipercampo[semantic]); sigo en léxico"),
+          file=sys.stderr)
 
 DB_PATH = db_path()
 hc = Hipercampo(DB_PATH)
