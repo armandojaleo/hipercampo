@@ -89,6 +89,26 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 Reinicia Claude Code. Deberías ver 5 herramientas nuevas: `hc_remember`,
 `hc_recall`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
+### Memoria compartida entre TODOS los proyectos (global)
+
+El `.mcp.json` del paso anterior activa hipercampo **solo en ese proyecto**. Como la
+base de datos ya vive en una ruta global (`~/.hipercampo/hipercampo.db`), los datos
+se comparten igual; lo único "por proyecto" es el registro del servidor.
+
+Para que Claude tenga las herramientas en **cualquier** proyecto, registra el
+servidor a nivel **usuario**:
+
+```bash
+claude mcp add --scope user hipercampo -- python -m hipercampo.server
+```
+
+O a mano, añade un bloque `mcpServers` de nivel raíz en `~/.claude.json` (Claude
+Code) — misma forma que el `.mcp.json`, pero en el archivo global del usuario. Usa
+rutas absolutas del ejecutable de Python y de `HIPERCAMPO_DB`. Reinicia Claude Code.
+
+> Puedes tener ambos (global + `.mcp.json` del repo): si apuntan a la misma BD y
+> comando, es inofensivo. El `.mcp.json` del repo es útil para quien clone el proyecto.
+
 ### Claude Desktop
 
 Edita el archivo de configuración:
