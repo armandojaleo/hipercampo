@@ -46,4 +46,4 @@ tú quien los acepta: decláralo en tu despliegue.
 ## Cómo citar hipercampo
 
 > Jaleo, A. (2026). *hipercampo: memoria asociativa para LLMs basada en
-> hipervectores*. https://github.com/<tu-usuario>/hipercampo
+> hipervectores*. https://github.com/armandojaleo/hipercampo
