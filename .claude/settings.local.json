@@ -3,7 +3,8 @@
     "allow": [
       "WebSearch",
       "WebFetch(domain:arxiv.org)",
-      "Bash(PYTHONIOENCODING=utf-8 python tests/test_properties.py)"
+      "Bash(PYTHONIOENCODING=utf-8 python tests/test_properties.py)",
+      "Bash(docker build *)"
     ]
   }
 }

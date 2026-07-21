@@ -23,6 +23,19 @@ Se instalan por separado vía `pip`; **su código no se incluye** en este reposi
 
 Cada una conserva su propia licencia y copyright.
 
+### Dependencia OPCIONAL del hook semántico (no se instala por defecto)
+
+Solo si activas la semántica con `pip install hipercampo[semantic]`:
+
+| Dependencia / recurso | Uso | Licencia |
+|-----------------------|-----|----------|
+| [sentence-transformers](https://github.com/UKPLab/sentence-transformers) | generar embeddings densos | Apache-2.0 |
+| Modelo `paraphrase-multilingual-MiniLM-L12-v2` (por defecto) | embeddings multilingües | Apache-2.0 (autores del modelo) |
+
+El puente SimHash (`semantic.embedding_to_hv`) que convierte esos embeddings en
+hipervectores es **código original nuestro**. El modelo lo descarga el usuario y se
+rige por su propia licencia; puedes sustituirlo por cualquier otro con `make_hook`.
+
 ## Ideas y trabajo académico en el que nos inspiramos
 
 hipercampo **no implementa** estos trabajos; se inspira en sus ideas y las cita

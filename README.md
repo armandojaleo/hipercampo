@@ -69,11 +69,36 @@ conocida entre distractores. Resultados reales del codificador VSA puro (CPU):
 | **Difícil** — sinónimos puros, sin palabras comunes | 0.25 | **0.300** | límite del léxico: aquí entra el hook semántico |
 
 Conclusión honesta: el ranking léxico es **excelente** cuando hay solape de
-palabras (incluso con erratas) y **flojo** ante sinónimos. Para ese caso existe un
-**hook semántico opcional** (`hipercampo.encoder.set_semantic_hook`): enchufas el
-modelo de embeddings que quieras y su vector se liga al hipervector. Por defecto no
-se usa ninguno → cero GPU, cero dependencias de terceros. Ver
-[ATTRIBUTION.md](ATTRIBUTION.md).
+palabras (incluso con erratas) y **flojo** ante sinónimos.
+
+### Hook semántico opcional (medido)
+
+Para los sinónimos existe un **hook semántico opcional**: un embedding denso se
+proyecta a hipervector vía SimHash y se liga con peso al resto (SEMANTIC_WEIGHT).
+
+```bash
+pip install "hipercampo[semantic]"          # trae sentence-transformers (Apache-2.0)
+python scripts/benchmark.py --semantic       # descarga el modelo la 1ª vez
+```
+
+| Escenario | Solo léxico (por defecto) | + Semántico (peso 0.2) |
+|-----------|:---:|:---:|
+| Fácil (palabras compartidas) | **1.00** | 1.00 |
+| Erratas | **1.00** | 0.79 |
+| Sinónimos puros | 0.30 | **0.79** |
+
+Activar semántica **casi triplica** los sinónimos (0.30 → 0.79) a cambio de algo de
+robustez a erratas (1.00 → 0.79). El peso 0.2 es el mejor equilibrio medido; súbelo
+para priorizar sinónimos. Por defecto el hook está **apagado** → cero GPU, cero
+dependencias de terceros. En código:
+
+```python
+from hipercampo import encoder, semantic
+encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())
+# o con tu propio modelo:  encoder.set_semantic_hook(semantic.make_hook(mi_embed_fn))
+```
+
+Ver [ATTRIBUTION.md](ATTRIBUTION.md) para licencias del modelo.
 
 ## Levantar con Docker
 

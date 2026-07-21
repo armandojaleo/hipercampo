@@ -38,6 +38,11 @@ _cache: dict[str, np.ndarray] = {}
 # Si se define, su salida se mezcla en el bundle. Por defecto: None (VSA puro).
 _semantic_hook: Optional[Callable[[str], np.ndarray]] = None
 
+# Peso del vector semántico frente a lo léxico. Valor por defecto 0.2: el mejor
+# equilibrio MEDIDO (ver scripts/benchmark.py) entre robustez a erratas y sinónimos
+# (erratas 0.79 / sinónimos 0.79). Subir para priorizar sinónimos; bajar para erratas.
+SEMANTIC_WEIGHT = float(os.environ.get("HIPERCAMPO_SEMANTIC_WEIGHT", "0.2"))
+
 
 def set_semantic_hook(fn: Optional[Callable[[str], np.ndarray]]) -> None:
     """Enchufa (o quita con None) un codificador semántico externo. La FUNCIÓN y el
@@ -84,7 +89,12 @@ def encode_text(text: str) -> np.ndarray:
 
     if _semantic_hook is not None:                                  # semántica opcional
         try:
-            parts.append(_semantic_hook(text))
+            sem = _semantic_hook(text)
+            # El bundle es voto por mayoría: un solo vector semántico quedaría
+            # ahogado entre decenas de léxicos. Lo replicamos para que pese ~50%
+            # del total y la semántica influya de verdad (peso tuneable).
+            peso = max(1, int(len(parts) * SEMANTIC_WEIGHT))
+            parts.extend([sem] * peso)
         except Exception:
             pass                                                    # nunca romper por el hook
 

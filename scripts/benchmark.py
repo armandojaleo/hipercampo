@@ -151,7 +151,15 @@ QA_TYPO = [
 
 
 if __name__ == "__main__":
-    print(f"Distractores: {len(DISTRACTORES)}")
+    modo_sem = "--semantic" in sys.argv
+    if modo_sem:
+        from hipercampo import encoder, semantic
+        print("Activando hook semántico (sentence-transformers)... "
+              "(descarga el modelo la 1ª vez)")
+        encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())
+        print("Hook activo.\n")
+
+    print(f"Distractores: {len(DISTRACTORES)}  |  semántica: {'ON' if modo_sem else 'OFF'}")
     _informe("== FÁCIL (comparten palabras clave) ==", run(QA))
     _informe("== ERRATAS (palabras clave mal escritas) ==", run(QA_TYPO))
     _informe("== DIFÍCIL (sinónimos, casi sin palabras compartidas) ==", run(QA_HARD))

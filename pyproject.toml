@@ -10,6 +10,11 @@ dependencies = [
     "mcp>=1.2.0",
 ]
 
+[project.optional-dependencies]
+# Hook semántico OPCIONAL. Trae modelos de terceros con su propia licencia
+# (ver ATTRIBUTION.md). No se instala por defecto: el core es VSA puro, CPU.
+semantic = ["sentence-transformers>=2.2"]
+
 [project.scripts]
 hipercampo = "hipercampo.server:main"
 
