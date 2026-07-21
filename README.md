@@ -24,7 +24,25 @@ que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 
 ---
 
-## Prueba en 30 segundos (sin Docker, sin Claude)
+## Instalación (guía completa: [INSTALL.md](INSTALL.md))
+
+**Vía rápida — Python local + Claude Code:**
+
+```bash
+git clone https://github.com/armandojaleo/hipercampo.git
+cd hipercampo
+pip install -e .                                  # instala hipercampo + deps
+python scripts/demo.py                            # (opcional) ver el ciclo funcionando
+claude mcp add hipercampo -- python -m hipercampo.server   # conectar a Claude Code
+```
+
+Reinicia Claude Code y tendrás 5 herramientas nuevas (`hc_remember`, `hc_recall`,
+`hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
+verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
+
+---
+
+## Prueba en 30 segundos (sin Claude)
 
 ```bash
 pip install numpy
