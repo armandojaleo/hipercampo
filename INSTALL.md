@@ -136,6 +136,56 @@ Debe listar las 5 herramientas `hc_*`.
 
 ---
 
+## Controlar y respaldar la memoria
+
+Toda la memoria de hipercampo es **un único fichero SQLite**. Fácil de ver, mover,
+copiar o borrar.
+
+### ¿Dónde está?
+
+Por defecto:
+
+- **Local (Windows)**: `C:\Users\<tú>\.hipercampo\hipercampo.db`
+- **Local (macOS/Linux)**: `~/.hipercampo/hipercampo.db`
+- **Docker**: dentro del volumen `hipercampo_data` (`/data/hipercampo.db`)
+
+Puedes cambiarla con la variable **`HIPERCAMPO_DB`** (en el `env` de la config MCP,
+o al lanzar el server). Y puedes preguntárselo a Claude: la herramienta `hc_stats`
+devuelve el campo `db` con la ruta absoluta.
+
+### Controlar su uso desde Claude
+
+Las 5 herramientas te dan control total, sin tocar código:
+
+| Quieres… | Pídele a Claude (usa la tool) |
+|----------|-------------------------------|
+| Ver cuánto recuerda y dónde | `hc_stats` |
+| Que guarde algo concreto | `hc_remember` (con `importance` alta para que no se olvide) |
+| Que recuerde algo | `hc_recall` |
+| Condensar (fase de sueño) | `hc_consolidate` |
+| Podar lo viejo/trivial | `hc_forget` (usa `dry_run=true` para ver antes qué se iría) |
+| Empezar de cero | cierra el server y borra el fichero `.db` |
+
+Los umbrales (cuándo algo es "novedoso", "predecible", cuándo se olvida) están al
+inicio de [`hipercampo/memory.py`](hipercampo/memory.py) — comentados y ajustables.
+
+### Backup y restauración
+
+```bash
+# Copia de seguridad (consistente, aunque el server esté activo):
+python -m hipercampo.backup                       # -> <db>.YYYYMMDD-HHMMSS.bak
+python -m hipercampo.backup C:\copias\hc.db        # -> a la ruta que elijas
+
+# Restaurar desde una copia:
+python -m hipercampo.backup --restore C:\copias\hc.db
+```
+
+O simplemente **copia el fichero `.db`** con el server parado; es igual de válido.
+En Docker: `docker run --rm -v hipercampo_data:/data -v "%cd%":/backup alpine \
+cp /data/hipercampo.db /backup/`.
+
+---
+
 ## Semántica opcional (para sinónimos)
 
 Por defecto hipercampo es léxico (CPU, sin GPU). Si quieres que capte sinónimos:

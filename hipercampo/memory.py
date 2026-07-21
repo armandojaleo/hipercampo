@@ -17,6 +17,7 @@ por NOVEDAD = 1 - (máxima similitud con lo ya sabido). Es una aproximación
 defendible; el gancho para una sorpresa real (error de predicción) queda abierto.
 """
 
+import os
 import time
 
 import numpy as np
@@ -215,4 +216,5 @@ class Hipercampo:
         sem = [r for r in rows if r["kind"] == "semantic"]
         arch = [r for r in rows if r["consolidated"]]
         return {"episodicos_activos": len(ep), "semanticos": len(sem),
-                "archivados": len(arch), "total": len(rows)}
+                "archivados": len(arch), "total": len(rows),
+                "db": os.path.abspath(self.store.path)}

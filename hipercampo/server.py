@@ -13,13 +13,12 @@ Se comunica por stdio (el estándar de MCP), así que funciona igual lanzado en
 local (`python -m hipercampo.server`) o dentro de Docker (`docker run -i ...`).
 """
 
-import os
-
 from mcp.server.fastmcp import FastMCP
 
+from .config import db_path
 from .memory import Hipercampo
 
-DB_PATH = os.environ.get("HIPERCAMPO_DB", "/data/hipercampo.db")
+DB_PATH = db_path()
 hc = Hipercampo(DB_PATH)
 mcp = FastMCP("hipercampo")
 

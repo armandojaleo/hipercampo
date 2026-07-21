@@ -40,6 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_kind ON memories(kind, consolidated);
 
 class Store:
     def __init__(self, path: str = "data/hipercampo.db"):
+        self.path = path
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
