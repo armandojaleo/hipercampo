@@ -1,0 +1,19 @@
+# Construye la imagen y persiste la memoria en un volumen local.
+#
+#   docker compose build          # construir
+#   docker compose run --rm hipercampo   # probar (habla por stdio)
+#
+# Para conectarlo a Claude, ver README (sección "Conectar con Claude").
+services:
+  hipercampo:
+    build: .
+    image: hipercampo:latest
+    stdin_open: true      # -i : MCP necesita STDIN abierto
+    tty: false
+    volumes:
+      - hipercampo_data:/data
+    environment:
+      - HIPERCAMPO_DB=/data/hipercampo.db
+
+volumes:
+  hipercampo_data:

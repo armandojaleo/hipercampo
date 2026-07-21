@@ -1,0 +1,73 @@
+"""
+Álgebra de hipervectores (VSA / HDC) — el corazón de hipercampo.
+
+No usamos embeddings densos ni GPU. Trabajamos con vectores binarios enormes
+(D = 10.000 bits) y tres operaciones que sí tienen "significado algebraico":
+
+    bind(a, b)   -> liga dos conceptos en uno nuevo y reversible   (XOR)
+    bundle([..]) -> mete varios en una "bolsa" (superposición)      (voto mayoría)
+    permute(a)   -> marca orden / posición                          (rotación de bits)
+
+Comparar dos recuerdos = contar en cuántos bits difieren (distancia de Hamming),
+que la CPU resuelve con popcount en nanosegundos. Cero GPU, cero índice ANN.
+"""
+
+import numpy as np
+
+D = 10_000                 # dimensionalidad (bits). Alta -> casi-ortogonalidad.
+_BYTES = (D + 7) // 8      # 1250 bytes por hipervector empaquetado
+
+
+def random_hv(seed: int | None = None) -> np.ndarray:
+    """Un hipervector aleatorio, empaquetado en bits (uint8[1250])."""
+    rng = np.random.default_rng(seed)
+    bits = rng.integers(0, 2, size=D, dtype=np.uint8)
+    return np.packbits(bits)
+
+
+def bind(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Ligar = XOR bit a bit. Reversible: bind(bind(a,b), b) == a."""
+    return np.bitwise_xor(a, b)
+
+
+def bundle(hvs: list[np.ndarray]) -> np.ndarray:
+    """
+    Agrupar = voto por mayoría bit a bit. El resultado se parece a TODOS
+    sus componentes a la vez (superposición). Empates -> 0 (determinista).
+    """
+    if not hvs:
+        return random_hv(0)
+    if len(hvs) == 1:
+        return hvs[0].copy()
+    acc = np.zeros(D, dtype=np.int32)
+    for h in hvs:
+        acc += np.unpackbits(h)[:D].astype(np.int32) * 2 - 1   # 0/1 -> -1/+1
+    bits = (acc > 0).astype(np.uint8)
+    return np.packbits(bits)
+
+
+def permute(a: np.ndarray, shift: int = 1) -> np.ndarray:
+    """Rotar los bits: codifica orden/posición sin colisionar con el original."""
+    if shift == 0:
+        return a.copy()
+    bits = np.unpackbits(a)[:D]
+    bits = np.roll(bits, shift)
+    return np.packbits(bits)
+
+
+def hamming(a: np.ndarray, b: np.ndarray) -> int:
+    """Número de bits en los que difieren (0 = idénticos, D = opuestos)."""
+    return int(np.unpackbits(np.bitwise_xor(a, b)).sum())
+
+
+def similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """Similitud en [0,1]. 1 = idéntico, 0.5 = no relacionado (ortogonal)."""
+    return 1.0 - hamming(a, b) / D
+
+
+def to_blob(hv: np.ndarray) -> bytes:
+    return hv.tobytes()
+
+
+def from_blob(blob: bytes) -> np.ndarray:
+    return np.frombuffer(blob, dtype=np.uint8).copy()
