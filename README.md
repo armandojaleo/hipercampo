@@ -57,6 +57,24 @@ python scripts/scenarios.py      # historia narrada: Claude recordando a un usua
   distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *consolidar
   nunca aumenta los episódicos*.
 
+## Calidad de recuperación (medida, no prometida)
+
+`python scripts/benchmark.py` mide MRR / hit@1 sobre preguntas con respuesta
+conocida entre distractores. Resultados reales del codificador VSA puro (CPU):
+
+| Escenario | hit@1 | MRR | Lectura |
+|-----------|-------|-----|---------|
+| **Fácil** — comparten palabras clave | 1.00 | **1.000** | recuperación perfecta |
+| **Erratas** — palabras clave mal escritas | 1.00 | **1.000** | los trigramas de char lo salvan (sin ellos: 0.67) |
+| **Difícil** — sinónimos puros, sin palabras comunes | 0.25 | **0.300** | límite del léxico: aquí entra el hook semántico |
+
+Conclusión honesta: el ranking léxico es **excelente** cuando hay solape de
+palabras (incluso con erratas) y **flojo** ante sinónimos. Para ese caso existe un
+**hook semántico opcional** (`hipercampo.encoder.set_semantic_hook`): enchufas el
+modelo de embeddings que quieras y su vector se liga al hipervector. Por defecto no
+se usa ninguno → cero GPU, cero dependencias de terceros. Ver
+[ATTRIBUTION.md](ATTRIBUTION.md).
+
 ## Levantar con Docker
 
 ```bash
@@ -143,6 +161,9 @@ texto ──▶ encoder.py ──▶ hipervector (10.000 bits)
 Kanerva (*Sparse Distributed Memory*), Plate (*Holographic Reduced Representations*),
 la librería **torchhd**, y la línea de trabajo Titans / MIRAS / HippoRAG (2024-2026).
 
-## Licencia
+## Licencia y atribución
 
-MIT.
+MIT (ver [LICENSE](LICENSE)). Todo el código es original; las dependencias y las
+ideas académicas en que nos inspiramos están acreditadas en
+[ATTRIBUTION.md](ATTRIBUTION.md). Regla de la casa: **si usamos trabajo de otros,
+sobre todo con copyright, se dice.**
