@@ -23,10 +23,12 @@ import numpy as np
 
 from .encoder import encode_text
 from .store import Store
+from .surprise import SurpriseModel
 from .vsa import bundle, similarity
 
 # --- parámetros de criterio (aquí es donde manda el juicio humano) -------
-NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo sabíamos, no dupliques
+NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
+SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
 CONSOLIDATE_SIMILARITY = 0.60    # fundir episodios así de parecidos
 DECAY_HALF_LIFE_DAYS = 14.0      # a qué ritmo se desvanece lo no reforzado
@@ -36,10 +38,15 @@ FORGET_STRENGTH_FLOOR = 0.15     # por debajo de esto y sin uso -> se poda
 class Hipercampo:
     def __init__(self, path="data/hipercampo.db"):
         self.store = Store(path)
+        # Modelo de sorpresa: se "calienta" reproduciendo la memoria existente,
+        # así lo ya guardado no vuelve a considerarse sorprendente tras un reinicio.
+        self.surprise = SurpriseModel()
+        for row in self.store.all(only_active=False):
+            self.surprise.learn(row["text"])
 
     # 1 -------------------------------------------------------------------
     def remember(self, text: str, importance: float = 0.5) -> dict:
-        """Graba un episodio SI es suficientemente novedoso."""
+        """Graba un episodio si es novedoso O sorprendente (error de predicción)."""
         hv = encode_text(text)
         actives = self.store.all(only_active=True)
 
@@ -49,15 +56,24 @@ class Hipercampo:
             if s > best_sim:
                 best_sim, best_id = s, row["id"]
 
-        novelty = 1.0 - best_sim
+        novelty = 1.0 - best_sim                      # ¿hay algo parecido ya?
+        surprise = self.surprise.surprise(text)       # ¿era predecible? (bits, MDL)
+        self.surprise.learn(text)                     # lo visto deja de sorprender
 
-        # Demasiado parecido a algo que ya sé -> refuerzo, no duplico.
-        if best_id is not None and novelty < NOVELTY_WRITE_THRESHOLD:
-            self.store.reinforce(best_id)
-            return {"stored": False, "reason": "redundante (reforzado)",
-                    "novelty": round(novelty, 3), "reinforced_id": best_id}
+        # DOBLE VETO (la tesis del ahorro de tokens): saltamos lo que NO aporta,
+        # sea porque ya lo tenemos (redundante) o porque el modelo ya lo predecía
+        # (conocimiento trivial). Solo guardamos lo novedoso Y sorprendente.
+        redundante = best_id is not None and novelty < NOVELTY_WRITE_THRESHOLD
+        predecible = surprise < SURPRISE_WRITE_THRESHOLD
+        if redundante or predecible:
+            if best_id is not None:
+                self.store.reinforce(best_id)
+            return {"stored": False,
+                    "reason": "redundante" if redundante else "predecible",
+                    "novelty": round(novelty, 3), "surprise": round(surprise, 3),
+                    "reinforced_id": best_id}
 
-        mem_id = self.store.add(text, hv, novelty, importance)
+        mem_id = self.store.add(text, hv, max(novelty, surprise), importance)
 
         # Tejer asociaciones con lo parecido (grafo para la propagación).
         for row in actives:
@@ -66,7 +82,7 @@ class Hipercampo:
                 self.store.link(mem_id, row["id"], weight=s)
 
         return {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
-                "importance": importance}
+                "surprise": round(surprise, 3), "importance": importance}
 
     # 2 -------------------------------------------------------------------
     def recall(self, query: str, k: int = 5, hops: int = 1) -> list[dict]:

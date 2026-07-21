@@ -12,15 +12,15 @@ que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 | Idea | Qué hace | Inspiración |
 |------|----------|-------------|
 | **VSA / hipervectores** | Recuerdos como vectores binarios de 10.000 bits con álgebra real (`bind`/`bundle`). Distingue *"el perro muerde al hombre"* de su inverso — cosa que un embedding denso difumina. Corre en CPU con popcount, sin GPU. | Kanerva (SDM), Plate (HRR) |
-| **Escritura por sorpresa** | Solo graba lo que **no** era predecible desde lo ya sabido. Lo redundante refuerza el recuerdo existente. Ahí está el ahorro de tokens. | Error de predicción hipocampal |
+| **Escritura por sorpresa** | Doble veto: no guarda lo **redundante** (ya hay algo parecido) ni lo **predecible** (un modelo de lenguaje incremental interno ya lo predecía, medido en *bits* — compresión/MDL). Ahí está el ahorro de tokens. | Error de predicción hipocampal; compresión-como-inteligencia (Hutter) |
 | **Consolidación ("sueño")** | Un proceso offline agrupa episodios parecidos, los funde en conocimiento semántico condensado y archiva los originales. | Replay hipocampo→córtex |
 | **Olvido activo** | La fuerza de un recuerdo decae con el desuso; lo débil y poco importante se poda. La importancia alta protege. | Olvido adaptativo |
 
-> **Honestidad de ingeniería.** La "sorpresa" aquí es un *proxy por novedad*
-> (`1 − máxima similitud con lo ya sabido`), no el error de predicción real del
-> modelo — eso queda como gancho abierto. Y el codificador es **léxico** (basado en
-> palabras), no semántico profundo: es transparente y sin GPU, a cambio de no captar
-> sinónimos por sí solo. Ambas cosas son sustituibles sin tocar el resto.
+> **Honestidad de ingeniería.** La sorpresa combina dos señales: *novedad léxica*
+> (`1 − máxima similitud con lo ya guardado`) y *error de predicción* real, estimado
+> por un modelo de lenguaje incremental propio en bits/token (compresión/MDL, sin
+> red neuronal ni GPU). El codificador base es **léxico**; para sinónimos hay un
+> hook semántico opcional (más abajo). Todo es sustituible sin tocar el resto.
 
 ---
 
@@ -173,8 +173,9 @@ texto ──▶ encoder.py ──▶ hipervector (10.000 bits)
 
 ## Dónde puedes aportar (esto es un punto de partida, no un final)
 
-- **Sorpresa real**: sustituir el proxy de novedad por error de predicción de un
-  modelo pequeño local. *(el hueco más interesante)*
+- **Sorpresa aún mejor**: el error de predicción ya es real (modelo n-grama interno,
+  `hipercampo/surprise.py`). Un siguiente paso sería un modelo local más potente o
+  usar la propia perplejidad del LLM cliente como señal de sorpresa.
 - **Olvido con criterio**: hoy la importancia es un número; podría ser un juicio
   aprendido de qué merece perdurar. La literatura de 2025-26 dice que "aprender a
   olvidar" sigue **sin resolver**.
