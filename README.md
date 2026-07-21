@@ -36,6 +36,27 @@ Verás el álgebra distinguiendo el orden de las palabras y el ciclo completo
 
 ---
 
+## Batería de pruebas — que hace lo que dice
+
+Tres niveles, todos sin dependencias extra (solo `numpy`):
+
+```bash
+python tests/test_vsa.py         # álgebra VSA (bind/bundle/orden)
+python tests/test_memory.py      # el CICLO: sorpresa, recall, sueño, olvido, persistencia
+python tests/test_properties.py  # invariantes con datos FABRICADOS al azar (8 rondas)
+python scripts/scenarios.py      # historia narrada: Claude recordando a un usuario
+```
+
+- **test_memory.py** — 10 casos realistas, uno por promesa (no duplica lo conocido,
+  prioriza lo relevante, la propagación trae asociados, el sueño condensa, la
+  importancia protege del olvido, la memoria sobrevive a un reinicio…).
+- **test_properties.py** — pruebas *generativas espontáneas*: cada invariante se
+  comprueba con 8 juegos de datos distintos inventados en el momento. Si alguna
+  promesa se rompe con **algún** dato, el test enseña el contraejemplo. Ejemplos:
+  *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera entre 25
+  distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *consolidar
+  nunca aumenta los episódicos*.
+
 ## Levantar con Docker
 
 ```bash
