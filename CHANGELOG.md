@@ -26,6 +26,12 @@ First public alpha. Local-first, single-user memory for Claude via MCP.
 - Docs (EN/ES), SECURITY, ATTRIBUTION, ROADMAP; 14 test suites + CI (Python 3.11–3.13)
   running tests, benchmarks and a baseline comparison (BM25 / embeddings).
 
+### Added (post-tag, unreleased)
+- **Dormant memory & creative recall**: forgetting now *archives* memories as
+  `dormant` (not deleted, like the human mind); `hc_muse` performs serendipitous
+  recall — favoring indirect associations and resurfacing dormant memories to tie
+  ideas together (insight/brainstorming).
+
 ### Known limits (declared, not hidden)
 - Retrieval is linear (no ANN index): fine for hundreds–thousands of memories.
 - Surprise counters are not fully persisted (rebuilt from stored memories on start).

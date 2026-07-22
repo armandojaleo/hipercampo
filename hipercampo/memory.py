@@ -384,6 +384,9 @@ class Hipercampo:
         CANDIDATOS; quien decide es la RETENCIÓN (importancia + fiabilidad +
         utilidad). Así no se olvida algo poco consultado pero importante o fiable,
         ni algo trivial solo porque se usó una vez. La importancia alta protege.
+
+        Como en la mente humana, olvidar NO borra: el recuerdo se ADORMECE (latente).
+        Sale de la recuperación normal pero puede resurgir e inspirar (ver `muse`).
         """
         now = time.time()
         half = DECAY_HALF_LIFE_DAYS * 86400
@@ -404,16 +407,79 @@ class Hipercampo:
                 self.store.set_strength(r["id"], decayed)
 
         if not dry_run and to_prune:
-            self.store.delete(to_prune)
+            self.store.mark_dormant(to_prune)     # adormecer, NO borrar
         self.store.commit()
-        return {"olvidados": len(to_prune), "ids": to_prune, "dry_run": dry_run}
+        return {"olvidados": len(to_prune), "ids": to_prune, "dry_run": dry_run,
+                "nota": "latentes, no borrados; pueden resurgir con muse"}
+
+    # 5 · RECUERDO INSPIRADOR --------------------------------------------
+    def muse(self, query: str, k: int = 3, hops: int = 3) -> list[dict]:
+        """Recuperación CREATIVA: en vez del match obvio, busca conexiones
+        INDIRECTAS (alcanzadas por asociación, no por parecido directo) e incluye
+        recuerdos LATENTES (dormidos por el olvido). Es la incubación: atar cosas que
+        no sabías que estaban conectadas. Un recuerdo latente que resurge se despierta.
+        """
+        if not isinstance(query, str) or not query.strip():
+            return []
+        qhv = encode_text(query)
+        rows = [r for r in self.store.all(only_active=False, include_dormant=True)
+                if not r["superseded"]]
+        if not rows:
+            return []
+        by_id = {r["id"]: r for r in rows}
+        sims = similarity_batch(qhv, stack_hvs([r["hv"] for r in rows]))
+        directo = {r["id"]: max(0.0, 2.0 * (float(sims[i]) - 0.5))
+                   for i, r in enumerate(rows)}
+
+        # propagación LARGA desde las semillas directas
+        activacion = dict(directo)
+        seeds = sorted(directo, key=directo.get, reverse=True)[:k]
+        frontier = list(seeds)
+        for _ in range(max(1, hops)):
+            nxt = []
+            for mid in frontier:
+                for dst, w in self.store.neighbors(mid):
+                    if dst in activacion:
+                        spread = activacion[mid] * w * 0.6
+                        if spread > activacion[dst]:
+                            activacion[dst] = spread
+                            nxt.append(dst)
+            frontier = nxt
+
+        # score CREATIVO: premia lo alcanzado por asociación (indirecto) y lo latente;
+        # penaliza el match directo y obvio (eso ya lo da un recall normal).
+        creativos = []
+        for mid, act in activacion.items():
+            r = by_id[mid]
+            indirecto = act - 0.7 * directo[mid]          # ganancia por asociación
+            bonus = 1.0 + (0.6 if r["dormant"] else 0.0)  # lo latente inspira más
+            score = indirecto * bonus
+            if score > 0 and directo[mid] < 0.9:          # nada de coincidencias obvias
+                creativos.append((score, act, r))
+        creativos.sort(key=lambda t: t[0], reverse=True)
+        top = creativos[:k]
+
+        # un recuerdo latente que resurge se DESPIERTA (vuelve a la memoria viva)
+        resurgidos = [r["id"] for _, _, r in top if r["dormant"]]
+        if resurgidos:
+            self.store.reactivate(resurgidos)
+
+        return [
+            {"id": r["id"], "text": r["text"], "kind": r["kind"],
+             "score": round(score, 3),
+             "via": "asociación indirecta" if directo[r["id"]] < 0.15 else "similitud+asociación",
+             "resurgido": bool(r["dormant"])}
+            for score, act, r in top
+        ]
 
     # utilidades ----------------------------------------------------------
     def stats(self) -> dict:
         rows = self.store.all(only_active=False)
+        dormidos = self.store.all(only_active=False, include_dormant=True)
         ep = [r for r in rows if r["kind"] == "episodic" and not r["consolidated"]]
         sem = [r for r in rows if r["kind"] == "semantic"]
         arch = [r for r in rows if r["consolidated"]]
         return {"episodicos_activos": len(ep), "semanticos": len(sem),
-                "archivados": len(arch), "total": len(rows),
+                "archivados": len(arch), "latentes": len(dormidos) - len(rows),
+                "total": len(rows),
                 "db": os.path.abspath(self.store.path)}

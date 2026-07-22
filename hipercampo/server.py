@@ -95,6 +95,16 @@ def hc_ask_role(role: str, subject: str = "", predicate: str = "", object: str =
 
 
 @mcp.tool()
+def hc_muse(query: str, k: int = 3) -> list:
+    """Recuerdo INSPIRADOR (incubación creativa). En vez del match obvio, trae
+    conexiones INDIRECTAS —cosas ligadas por asociación, no por parecido directo— e
+    incluye recuerdos LATENTES (olvidados pero no borrados) que pueden resurgir y
+    'atar' ideas que no sabías conectadas. Úsalo para brainstorming, analogías,
+    encontrar relaciones inesperadas. Distinto de hc_recall (que busca lo relevante)."""
+    return hc.muse(query, k)
+
+
+@mcp.tool()
 def hc_consolidate() -> dict:
     """Fase de sueño: AGRUPA episodios parecidos en un recuerdo semántico y archiva
     los originales (reduce nodos activos; el texto se une, no se resume). Correr

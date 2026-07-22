@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS memories (
     last_access  REAL    NOT NULL,
     consolidated INTEGER NOT NULL DEFAULT 0,            -- ya absorbido en semántico
     superseded   INTEGER NOT NULL DEFAULT 0,            -- reemplazado por uno más nuevo
+    dormant      INTEGER NOT NULL DEFAULT 0,            -- olvidado-pero-no-borrado (latente)
     namespace    TEXT    NOT NULL DEFAULT 'default'     -- aislamiento por inquilino
 );
 CREATE TABLE IF NOT EXISTS links (
@@ -109,6 +110,9 @@ class Store:
         if "namespace" not in cols:
             self.db.execute(
                 "ALTER TABLE memories ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
+        if "dormant" not in cols:
+            self.db.execute(
+                "ALTER TABLE memories ADD COLUMN dormant INTEGER NOT NULL DEFAULT 0")
         lcols = {r[1] for r in self.db.execute("PRAGMA table_info(links)")}
         if lcols and "namespace" not in lcols:
             self.db.execute(
@@ -200,8 +204,25 @@ class Store:
             [(i, i, self.namespace) for i in ids])
         self._commit()
 
+    def mark_dormant(self, ids: list[int]):
+        """Adormece recuerdos: olvidados-pero-NO-borrados. Salen de la recuperación
+        normal, pero quedan latentes y pueden resurgir (ver Hipercampo.muse)."""
+        self.db.executemany(
+            "UPDATE memories SET dormant = 1 WHERE id = ? AND namespace = ?",
+            [(i, self.namespace) for i in ids],
+        )
+        self._commit()
+
+    def reactivate(self, ids: list[int]):
+        """Despierta recuerdos latentes (un recuerdo que resurge)."""
+        self.db.executemany(
+            "UPDATE memories SET dormant = 0, last_access = ? WHERE id = ? AND namespace = ?",
+            [(time.time(), i, self.namespace) for i in ids],
+        )
+        self._commit()
+
     # --- lectura (siempre acotada al namespace del store) ----------------
-    def all(self, kind=None, only_active=True) -> list[sqlite3.Row]:
+    def all(self, kind=None, only_active=True, include_dormant=False) -> list[sqlite3.Row]:
         q = "SELECT * FROM memories WHERE namespace = ?"
         args: list = [self.namespace]
         if kind:
@@ -209,6 +230,8 @@ class Store:
             args.append(kind)
         if only_active:
             q += " AND consolidated = 0"
+        if not include_dormant:
+            q += " AND dormant = 0"
         return self.db.execute(q, args).fetchall()
 
     def get(self, mem_id: int):

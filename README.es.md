@@ -18,7 +18,7 @@ que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 | **VSA / hipervectores** | Recuerdos como vectores binarios de 10.000 bits con álgebra real (`bind`/`bundle`). Distingue *"el perro muerde al hombre"* de su inverso — cosa que un embedding denso difumina. Corre en CPU con popcount, sin GPU. | Kanerva (SDM), Plate (HRR) |
 | **Escritura por sorpresa** | Doble veto: no guarda lo **redundante** (ya hay algo parecido) ni lo **predecible** (un modelo de lenguaje incremental interno ya lo predecía, medido en *bits* — compresión/MDL). Ahí *apunta* el ahorro de tokens (aún no medido de extremo a extremo). | Error de predicción hipocampal; compresión-como-inteligencia (Hutter) |
 | **Consolidación ("sueño")** | Un proceso offline **agrupa** episodios parecidos en un recuerdo semántico (agrupación estructural: reduce nodos, el texto se une; con un `summarizer` opcional se resume de verdad) y archiva los originales. | Replay hipocampo→córtex |
-| **Olvido activo** | La fuerza de un recuerdo decae con el desuso; lo débil y poco importante se poda. La importancia alta protege. | Olvido adaptativo |
+| **Olvido activo** | La fuerza decae con el desuso; lo débil queda **latente** (no borrado, como la mente humana) y puede **resurgir** con `hc_muse`. La importancia alta protege. | Olvido adaptativo |
 
 > **Honestidad de ingeniería.** La sorpresa combina dos señales: *novedad léxica*
 > (`1 − máxima similitud con lo ya guardado`) y *error de predicción* real, estimado
@@ -112,6 +112,7 @@ personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, n
 |-------------|----------|
 | `hc_remember(text, importance, confidence)` | Guarda algo (si es novedoso/sorprendente). `importance` = cuánto importa (≥0.8 protege del olvido); `confidence` = cuán fiable (pesa en el ranking). |
 | `hc_recall(query, k, include_history)` | Recupera por similitud + propagación. Puede **abstenerse** (devolver `[]`). |
+| `hc_muse(query, k)` | **Recuerdo inspirador**: trae conexiones *indirectas* y recuerdos **latentes** que pueden resurgir y atar ideas. Para intuición/brainstorming. |
 | `hc_update(target, new_text, memory_id)` | **Actualiza un hecho que cambió** (supersesión segura; el viejo queda como historia). |
 | `hc_consolidate()` | Fase de sueño: agrupa episodios en conocimiento semántico. |
 | `hc_forget(dry_run)` | Olvido activo. `dry_run=True` ensaya sin borrar. |

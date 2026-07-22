@@ -18,7 +18,7 @@ modeled on the hippocampus, with four ideas integrated into a cycle:
 | **VSA / hypervectors** | Memories as 10,000-bit binary vectors with real algebra (`bind`/`bundle`). It tells *"the dog bites the man"* from its reverse — something a dense embedding blurs. Runs on CPU with popcount, no GPU. | Kanerva (SDM), Plate (HRR) |
 | **Surprise-gated writing** | Double veto: it won't store the **redundant** (something similar exists) nor the **predictable** (an internal incremental language model already predicted it, measured in *bits* — compression/MDL). That's where token savings *point* (not yet measured end-to-end). | Hippocampal prediction error; compression-as-intelligence (Hutter) |
 | **Consolidation ("sleep")** | An offline process **groups** similar episodes into a semantic memory (structural grouping: fewer nodes, text is joined; with an optional `summarizer` it truly condenses) and archives the originals. | Hippocampus→cortex replay |
-| **Active forgetting** | A memory's strength decays with disuse; the weak and unimportant is pruned. High importance protects. | Adaptive forgetting |
+| **Active forgetting** | Strength decays with disuse; the weak becomes **dormant** (not deleted, like the human mind) and can later **resurface** via `hc_muse`. High importance protects. | Adaptive forgetting |
 
 > **Engineering honesty.** Surprise combines two signals: *lexical novelty*
 > (`1 − max similarity to what's stored`) and real *prediction error*, estimated by
@@ -112,6 +112,7 @@ thousands); at ~100k you'd want an index. A known limit, not hidden.
 |------|-----|
 | `hc_remember(text, importance, confidence)` | Store something (if novel/surprising). `importance` = how much it matters (≥0.8 protects from forgetting); `confidence` = how reliable (weights ranking). |
 | `hc_recall(query, k, include_history)` | Retrieve by similarity + spreading activation. Can **abstain** (return `[]`). |
+| `hc_muse(query, k)` | **Creative recall**: surfaces *indirect* connections and **dormant** memories that can resurface and tie ideas together. For insight/brainstorming. |
 | `hc_update(target, new_text, memory_id)` | **Update a fact that changed** (safe supersession; the old one stays as history). |
 | `hc_consolidate()` | Sleep phase: group episodes into semantic knowledge. |
 | `hc_forget(dry_run)` | Active forgetting. `dry_run=True` rehearses without deleting. |
