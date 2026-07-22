@@ -30,6 +30,8 @@ from .vsa import bundle, similarity
 # --- parámetros de criterio (aquí es donde manda el juicio humano) -------
 NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
 SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
+SUPERSEDE_HINT_SIMILARITY = 0.72 # por encima -> avisamos de posible actualización
+SUPERSEDED_RECALL_PENALTY = 0.2  # cuánto se demueve un recuerdo superado al recuperar
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
 CONSOLIDATE_SIMILARITY = 0.60    # fundir episodios así de parecidos
 DECAY_HALF_LIFE_DAYS = 14.0      # a qué ritmo se desvanece lo no reforzado
@@ -82,8 +84,50 @@ class Hipercampo:
             if s >= LINK_SIMILARITY:
                 self.store.link(mem_id, row["id"], weight=s)
 
-        return {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
-                "surprise": round(surprise, 3), "importance": importance}
+        result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
+                  "surprise": round(surprise, 3), "importance": importance}
+
+        # Aviso de posible actualización/contradicción: si esto se parece mucho a un
+        # recuerdo existente, quizá lo ACTUALICE. No decidimos nosotros (haría falta
+        # entender el significado): se lo señalamos al LLM para que use hc_update.
+        if best_id is not None and best_sim >= SUPERSEDE_HINT_SIMILARITY:
+            old = self.store.get(best_id)
+            result["similar_to"] = {"id": best_id, "text": old["text"],
+                                    "similarity": round(best_sim, 3)}
+            result["hint"] = ("Se parece a un recuerdo existente. Si lo ACTUALIZA o "
+                              "CONTRADICE (un hecho que cambió), usa hc_update para "
+                              "reemplazarlo en vez de acumular contradicciones.")
+        return result
+
+    def update(self, target: str, new_text: str, importance: float = 0.7) -> dict:
+        """Reemplaza el recuerdo que mejor case con 'target' por 'new_text'. El viejo
+        no se borra: se marca como superado y se debilita (queda como historia).
+        Pensado para hechos que cambian ('el server estaba en Frankfurt' -> 'Dublín')."""
+        thv = encode_text(target)
+        candidatos = [r for r in self.store.all(only_active=False)
+                      if not r["superseded"]]
+        best, best_sim = None, 0.0
+        for r in candidatos:
+            s = similarity(thv, self.store.hv_of(r))
+            if s > best_sim:
+                best_sim, best = s, r
+
+        new_hv = encode_text(new_text)
+        self.surprise.learn(new_text)
+        new_id = self.store.add(new_text, new_hv, 1.0, importance)
+        for r in self.store.all(only_active=True):
+            if r["id"] != new_id:
+                s = similarity(new_hv, self.store.hv_of(r))
+                if s >= LINK_SIMILARITY:
+                    self.store.link(new_id, r["id"], weight=s)
+
+        superseded = None
+        if best is not None:
+            self.store.mark_superseded([best["id"]])
+            superseded = best["id"]
+        return {"updated": True, "new_id": new_id, "superseded_id": superseded,
+                "replaced_text": best["text"] if best else None,
+                "match_similarity": round(best_sim, 3)}
 
     # 2 -------------------------------------------------------------------
     def recall(self, query: str, k: int = 5, hops: int = 1) -> list[dict]:
@@ -124,6 +168,8 @@ class Hipercampo:
         for mid, act in activation.items():
             r = by_id[mid]
             score = act * (0.7 + 0.3 * min(r["strength"], 3.0) / 3.0)
+            if r["superseded"]:                       # lo reemplazado no debe dominar
+                score *= SUPERSEDED_RECALL_PENALTY
             scored.append((score, act, r))
         scored.sort(key=lambda t: t[0], reverse=True)
 

@@ -51,6 +51,16 @@ def hc_recall(query: str, k: int = 5) -> list:
 
 
 @mcp.tool()
+def hc_update(target: str, new_text: str, importance: float = 0.7) -> dict:
+    """Actualiza un hecho que cambió. Busca el recuerdo que mejor case con 'target'
+    (descríbelo con tus palabras), lo marca como superado y guarda 'new_text' como
+    la versión vigente. Úsalo cuando algo CONTRADICE o ACTUALIZA lo que ya sabías
+    (p. ej. una preferencia que cambió, un dato que se movió). El viejo no se borra:
+    queda como historia pero deja de dominar la recuperación."""
+    return hc.update(target, new_text, importance)
+
+
+@mcp.tool()
 def hc_consolidate() -> dict:
     """Fase de sueño: agrupa episodios parecidos, los funde en conocimiento
     semántico condensado y archiva los originales. Correr periódicamente."""

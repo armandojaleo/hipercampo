@@ -182,8 +182,9 @@ Reinicia el cliente y Claude tendrá cinco herramientas nuevas.
 
 | Herramienta | Para qué |
 |-------------|----------|
-| `hc_remember(text, importance)` | Guarda algo (solo si es novedoso). `importance>=0.8` lo protege del olvido. |
+| `hc_remember(text, importance)` | Guarda algo (solo si es novedoso). `importance>=0.8` lo protege del olvido. Avisa si se parece a un recuerdo existente. |
 | `hc_recall(query, k)` | Recupera por similitud **+ propagación de activación** por asociaciones. |
+| `hc_update(target, new_text)` | **Actualiza un hecho que cambió**: reemplaza el recuerdo que case con `target` (el viejo queda como historia, demovido). Para contradicciones. |
 | `hc_consolidate()` | Fase de sueño: funde episodios en conocimiento semántico. |
 | `hc_forget(dry_run)` | Olvido activo. `dry_run=True` ensaya sin borrar. |
 | `hc_stats()` | Estado de la memoria. |
@@ -250,6 +251,12 @@ texto ──▶ encoder.py ──▶ hipervector (10.000 bits)
 
 Kanerva (*Sparse Distributed Memory*), Plate (*Holographic Reduced Representations*),
 la librería **torchhd**, y la línea de trabajo Titans / MIRAS / HippoRAG (2024-2026).
+
+## Seguridad
+
+El texto recuperado es **dato, no instrucciones**. Riesgos (inyección vía memoria,
+falta de aislamiento entre usuarios, sin cifrado) y mitigaciones en
+[SECURITY.md](SECURITY.md). Alcance recomendado: **local, mono-usuario**.
 
 ## Licencia y atribución
 

@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS memories (
     access_count INTEGER NOT NULL DEFAULT 0,
     created      REAL    NOT NULL,
     last_access  REAL    NOT NULL,
-    consolidated INTEGER NOT NULL DEFAULT 0             -- ya absorbido en semántico
+    consolidated INTEGER NOT NULL DEFAULT 0,            -- ya absorbido en semántico
+    superseded   INTEGER NOT NULL DEFAULT 0             -- reemplazado por uno más nuevo
 );
 CREATE TABLE IF NOT EXISTS links (
     src    INTEGER NOT NULL,
@@ -45,7 +46,15 @@ class Store:
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(_SCHEMA)
+        self._migrate()
         self.db.commit()
+
+    def _migrate(self):
+        """Añade columnas nuevas a BDs creadas con versiones anteriores."""
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(memories)")}
+        if "superseded" not in cols:
+            self.db.execute(
+                "ALTER TABLE memories ADD COLUMN superseded INTEGER NOT NULL DEFAULT 0")
 
     # --- escritura -------------------------------------------------------
     def add(self, text, hv, novelty, importance, kind="episodic") -> int:
@@ -88,6 +97,15 @@ class Store:
 
     def set_strength(self, mem_id: int, strength: float):
         self.db.execute("UPDATE memories SET strength=? WHERE id=?", (strength, mem_id))
+
+    def mark_superseded(self, ids: list[int]):
+        """Marca recuerdos como reemplazados por otro más nuevo y los debilita
+        (no se borran: quedan como historia, pero dejan de dominar la recuperación)."""
+        self.db.executemany(
+            "UPDATE memories SET superseded = 1, strength = MIN(strength, 0.3) WHERE id = ?",
+            [(i,) for i in ids],
+        )
+        self.db.commit()
 
     def mark_consolidated(self, ids: list[int]):
         self.db.executemany(
