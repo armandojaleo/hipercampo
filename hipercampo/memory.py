@@ -431,8 +431,10 @@ class Hipercampo:
         directo = {r["id"]: max(0.0, 2.0 * (float(sims[i]) - 0.5))
                    for i, r in enumerate(rows)}
 
-        # propagación LARGA desde las semillas directas
+        # propagación LARGA desde las semillas directas, guardando el "puente"
+        # (el recuerdo intermedio que trajo a cada uno: el porqué de la conexión).
         activacion = dict(directo)
+        parent: dict[int, int] = {}
         seeds = sorted(directo, key=directo.get, reverse=True)[:k]
         frontier = list(seeds)
         for _ in range(max(1, hops)):
@@ -443,6 +445,7 @@ class Hipercampo:
                         spread = activacion[mid] * w * 0.6
                         if spread > activacion[dst]:
                             activacion[dst] = spread
+                            parent[dst] = mid
                             nxt.append(dst)
             frontier = nxt
 
@@ -464,13 +467,17 @@ class Hipercampo:
         if resurgidos:
             self.store.reactivate(resurgidos)
 
-        return [
-            {"id": r["id"], "text": r["text"], "kind": r["kind"],
-             "score": round(score, 3),
-             "via": "asociación indirecta" if directo[r["id"]] < 0.15 else "similitud+asociación",
-             "resurgido": bool(r["dormant"])}
-            for score, act, r in top
-        ]
+        salida = []
+        for score, act, r in top:
+            mid = r["id"]
+            puente = by_id[parent[mid]]["text"] if parent.get(mid) in by_id else None
+            salida.append({
+                "id": mid, "text": r["text"], "kind": r["kind"],
+                "score": round(score, 3),
+                "via": "asociación indirecta" if directo[mid] < 0.15 else "similitud+asociación",
+                "conectado_por": puente,          # el recuerdo puente (el porqué)
+                "resurgido": bool(r["dormant"])})
+        return salida
 
     # utilidades ----------------------------------------------------------
     def stats(self) -> dict:

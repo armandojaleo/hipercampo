@@ -56,6 +56,10 @@ python scripts/demo.py
 Verás el álgebra distinguiendo el orden de las palabras y el ciclo completo
 (sorpresa → recuerdo → sueño → olvido) funcionando.
 
+**Casos de uso reales** en [`examples/`](examples/): un asistente personal que
+recuerda entre sesiones, una base de conocimiento con consultas por rol, y
+brainstorming creativo donde los recuerdos olvidados resurgen.
+
 ---
 
 ## Batería de pruebas — que hace lo que dice

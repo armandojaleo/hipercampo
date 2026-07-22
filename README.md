@@ -56,6 +56,10 @@ python scripts/demo.py
 You'll see the algebra distinguishing word order and the full cycle
 (surprise → recall → sleep → forget) working.
 
+**Real use cases** in [`examples/`](examples/): a personal assistant that remembers
+across sessions, a project knowledge base with role queries, and creative
+brainstorming where forgotten memories resurface.
+
 ---
 
 ## Test battery — it does what it says

@@ -49,3 +49,6 @@ jobs:
         run: python scripts/stress.py
       - name: Comparativa con baselines (BM25 vs hipercampo, léxico)
         run: python scripts/baselines.py
+      - name: Ejemplos de uso (smoke)
+        run: |
+          for e in examples/*.py; do echo "== $e =="; python "$e"; done
