@@ -22,6 +22,7 @@ import time
 
 import numpy as np
 
+from . import audit
 from .encoder import encode_text
 from .safety import redact_secrets, scan_injection, scan_secrets
 from .store import Store
@@ -90,6 +91,7 @@ class Hipercampo:
     def __init__(self, path="data/hipercampo.db", namespace="default"):
         namespace = (namespace or "default").strip()[:200] or "default"
         self.store = Store(path, namespace=namespace)
+        audit.set_logfile(path)
         # Modelo de sorpresa: se "calienta" reproduciendo la memoria existente,
         # así lo ya guardado no vuelve a considerarse sorprendente tras un reinicio.
         self.surprise = SurpriseModel()
@@ -161,6 +163,8 @@ class Hipercampo:
             if redundante:
                 self.store.reinforce(best_id)
             self.surprise.learn(text)
+            audit.log("remember", "saltado: " + ("redundante" if redundante else "predecible"),
+                      novedad=round(novelty, 2), sorpresa=round(surprise, 2))
             r = {"stored": False,
                  "reason": "redundante" if redundante else "predecible",
                  "novelty": round(novelty, 3), "surprise": round(surprise, 3),
@@ -197,6 +201,8 @@ class Hipercampo:
                     self.store.link(mem_id, row["id"], weight=float(sims_act[i]),
                                     type="lexical")
         self.surprise.learn(text)                     # aprender tras confirmar
+        audit.log("remember", f"guardado id={mem_id}", novedad=round(novelty, 2),
+                  sorpresa=round(surprise, 2), evictado=evictado)
         mantenimiento = self._autosleep()             # ¿le toca dormir sola?
 
         result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
@@ -340,11 +346,14 @@ class Hipercampo:
             acts = np.array([a for _, a, _ in scored], dtype=np.float64)
             mu, sd = float(acts.mean()), float(acts.std())
             if top[0][1] < mu + RECALL_Z * sd:        # el mejor no sobresale del ruido
+                audit.log("recall", "abstención: nada destaca del ruido",
+                          n=len(scored))
                 top = []                              # abstención
         # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
         # para no darle utilidad a falsos positivos que luego se auto-protegerían.
         self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
 
+        audit.log("recall", f"{len(top)} resultado(s)", consulta=query[:40])
         salida = []
         for score, act, r in top:
             item = {"id": r["id"], "text": r["text"], "kind": r["kind"],
@@ -419,6 +428,7 @@ class Hipercampo:
                 made += 1
                 archived += len(group)
 
+        audit.log("sleep", f"consolidó {made} grupo(s)", archivados=archived)
         return {"clusters_fusionados": made, "episodios_archivados": archived}
 
     # 4 -------------------------------------------------------------------
@@ -453,6 +463,7 @@ class Hipercampo:
         if not dry_run and to_prune:
             self.store.mark_dormant(to_prune)     # adormecer, NO borrar
         self.store.commit()
+        audit.log("forget", f"{len(to_prune)} adormecido(s)", ensayo=dry_run or None)
         return {"olvidados": len(to_prune), "ids": to_prune, "dry_run": dry_run,
                 "nota": "latentes, no borrados; pueden resurgir con muse"}
 
@@ -521,6 +532,7 @@ class Hipercampo:
         if resurgidos:
             self.store.reactivate(resurgidos)
 
+        audit.log("muse", f"{len(top)} idea(s)", resurgidos=len(resurgidos) or None)
         salida = []
         for score, act, r, gain, via in top:
             mid = r["id"]
@@ -590,6 +602,7 @@ class Hipercampo:
                 for br in bridges:
                     self.store.link(br["a_id"], br["b_id"], weight=0.5,
                                     type="dream", status="proposed")
+        audit.log("dream", f"{len(bridges)} hipótesis", solo_propuesta=dry_run or None)
         return {"bridges": bridges, "dry_run": dry_run,
                 "nota": ("solo propuestas; usa dry_run=False para registrarlas como "
                          "hipótesis y hc_accept_bridge para confirmarlas")}
@@ -620,6 +633,7 @@ class Hipercampo:
             resumen = self.sleep()
             resumen["nota"] = ("mantenimiento automático tras "
                                f"{AUTOSLEEP_EVERY} escrituras")
+            audit.log("autosleep", "durmió sola", **resumen)
             return resumen
         except Exception:
             return None                      # el mantenimiento nunca debe romper nada

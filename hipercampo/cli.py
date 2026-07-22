@@ -94,6 +94,8 @@ def main(argv=None) -> int:
             sp.add_argument("--confidence", type=float, default=0.5)
     bk = sub.add_parser("backup", help="copia de seguridad consistente")
     bk.add_argument("dest", nargs="?")
+    lg = sub.add_parser("log", help="qué ha decidido hipercampo últimamente")
+    lg.add_argument("-n", type=int, default=20, help="cuántas líneas")
     args = p.parse_args(argv)
 
     if args.cmd in (None, "version"):
@@ -110,6 +112,14 @@ def main(argv=None) -> int:
     if args.cmd == "backup":
         from .backup import backup
         print("Copia creada en:", backup(args.dest)); return 0
+    if args.cmd == "log":
+        from . import audit
+        from .config import db_path
+        audit.set_logfile(db_path())
+        lineas = audit.tail(args.n)
+        print(f"# {audit.logfile() or '(registro desactivado)'}")
+        print("\n".join(lineas) if lineas else "(sin actividad registrada todavía)")
+        return 0
 
     hc = _hc()
     try:

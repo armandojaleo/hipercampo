@@ -19,6 +19,8 @@ Heurísticas léxicas bilingües (ES/EN), sin LLM ni dependencias.
 
 import re
 
+from . import audit
+
 # Cuando NADIE ha preguntado, hipercampo solo interviene si la relevancia es alta.
 # Soltar una asociación floja sin venir a cuento es ruido, no memoria.
 VOLUNTEER_MIN_SCORE = 0.10
@@ -41,6 +43,12 @@ _AFIRMACION = re.compile(
 
 def decide(hc, message: str, k: int = 3) -> dict:
     """Decide y ejecuta lo seguro. Devuelve la acción, el porqué y el resultado."""
+    r = _decide(hc, message, k)
+    audit.log("assist", f"{r['action']}: {r.get('why','')}")
+    return r
+
+
+def _decide(hc, message: str, k: int = 3) -> dict:
     if not isinstance(message, str) or not message.strip():
         return {"action": "nothing", "why": "mensaje vacío"}
     msg = message.strip()
