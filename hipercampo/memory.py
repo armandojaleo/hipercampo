@@ -398,14 +398,21 @@ class Hipercampo:
         #     a los propios candidatos. Incluirlos (como se hacía antes) infla mu y sd
         #     con la misma señal que se juzga, y como el z máximo de una muestra entre
         #     n es (n-1)/sqrt(n), con memorias pequeñas la puerta era INALCANZABLE:
-        #     se abstenía SIEMPRE. La cola necesita NOISE_MIN_N muestras para ser
-        #     estimador; si no llega, manda solo el suelo absoluto.
+        #     se abstenía SIEMPRE. Excluir solo al mejor (leave-one-out) tampoco vale:
+        #     los DEMÁS aciertos siguen inflando el ruido y vuelve a sobre-abstenerse.
+        #     Se excluyen los candidatos, pero dejando siempre NOISE_MIN_N muestras de
+        #     cola: con la memoria muy pequeña no hay estadística y manda solo el suelo.
         # Superada la puerta se devuelven también los asociados legítimos, que pueden
         # ir por debajo de ANSWER_MIN_SCORE: solo el MEJOR tiene que justificar respuesta.
         top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
         if top:
             mejor = max(a for _, a, _ in top)
-            cola = np.array([a for _, a, _ in scored[len(top):]], dtype=np.float64)
+            # El ruido se mide sobre ACTIVACIONES ordenadas por activación: `scored`
+            # va por score (activación ponderada por fuerza y fiabilidad), así que su
+            # cola no es la de menor activación y mezclaría las dos escalas.
+            acts = np.sort(np.array([a for _, a, _ in scored], dtype=np.float64))[::-1]
+            n_excl = min(len(top), max(1, len(acts) - NOISE_MIN_N))
+            cola = acts[n_excl:]
             if mejor < ANSWER_MIN_SCORE:              # nada relevante en absoluto
                 audit.log("recall", "abstención: nada relevante", mejor=round(mejor, 3))
                 top = []

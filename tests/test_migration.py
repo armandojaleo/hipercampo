@@ -18,7 +18,7 @@ _DB = "data/_test_migr.db"
 
 
 def _clean():
-    for suf in ("", "-wal", "-shm"):
+    for suf in ("", "-wal", "-shm", ".bak-v0"):
         Path(_DB + suf).unlink(missing_ok=True)
 
 
@@ -91,8 +91,9 @@ def test_migrar_dos_veces_no_hace_nada_la_segunda():
     hc = Hipercampo(_DB, namespace="default"); hc.store.close()
     hc = Hipercampo(_DB, namespace="default")     # segunda apertura
     textos = [r["text"] for r in hc.store.all(only_active=False)]
-    assert any("version antigua" in t for t in textos)
-    assert hc.health()["sana"] is True
+    assert any("version antigua" in t for t in textos), f"se perdieron datos: {textos}"
+    salud = hc.health()
+    assert salud["sana"] is True, salud
     hc.store.close(); _clean()
 
 
