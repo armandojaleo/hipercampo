@@ -89,7 +89,7 @@ def main():
     eureka = next((i for i in ideas if i["resurgido"]), None)
     titulo("EUREKA")
     if eureka:
-        print(f"  Un recuerdo sepultado resurgió y ató el problema con una analogía:")
+        print("  Un recuerdo sepultado resurgió y ató el problema con una analogía:")
         print(f"    «{eureka['text']}»")
         print("  → Y si los sensores se sincronizan COMO LAS LUCIÉRNAGAS: sin líder,")
         print("    solo mirando a los vecinos y ajustándose... ¡ahí está la solución!")

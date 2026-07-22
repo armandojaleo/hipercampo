@@ -171,7 +171,7 @@ def hc_health(full: bool = False) -> dict:
     escritura REAL (una escritura de prueba que se deshace, no solo permisos).
     Informa también de la versión del esquema y del último sueño. Si algo falla,
     las operaciones transitorias reconectan solas y avisan; los fallos permanentes
-    NO se reintentan. Usa full=True para un integrity_check completo (más lento).""" 
+    NO se reintentan. Usa full=True para un integrity_check completo (más lento)."""
     return hc.health(full)
 
 

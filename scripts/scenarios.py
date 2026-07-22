@@ -54,8 +54,9 @@ def main():
     # ---- Sesión 2: intenta colar redundancia ----------------------------
     sesion("SESIÓN 2 · Repite algo casi idéntico (no debe duplicar)")
     r = hc.remember("me llamo Armando y trabajo como desarrollador", 0.9)
-    print(f"  usuario: «me llamo Armando y trabajo como desarrollador»")
-    print(f"           {'✓ recordado' if r['stored'] else '· reconocido como conocido → reforzado'}")
+    print("  usuario: «me llamo Armando y trabajo como desarrollador»")
+    veredicto = '✓ recordado' if r['stored'] else '· reconocido como conocido → reforzado'
+    print(f"           {veredicto}")
 
     # ---- Claude necesita recordar antes de responder --------------------
     sesion("SESIÓN 3 · Claude consulta su memoria antes de responder")

@@ -175,7 +175,7 @@ class RoleMemory:
             validos = {r["id"] for r in self.store.all_facts(only_current=True)}
         olvidados = self.store.dormant_fact_ids()   # su sombra textual se olvidó
         sims = np.array([-1.0 if (fid not in validos or fid in olvidados) else s
-                         for fid, s in zip(self._ids, sims)])
+                         for fid, s in zip(self._ids, sims, strict=False)])
         j = int(np.argmax(sims))
         match = float(sims[j])
         # abstención 1: ningún hecho encaja de verdad con lo conocido

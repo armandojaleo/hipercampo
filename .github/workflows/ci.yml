@@ -30,7 +30,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: pip install -e .
+        run: pip install -e . ruff
+
+      - name: Lint (ruff)
+        run: python -m ruff check hipercampo/ tests/ scripts/ examples/
 
       - name: Test suite (todas las suites, incluidas las generativas)
         shell: bash
@@ -38,7 +41,7 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           set -e
-          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience estados procs linked properties; do
+          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience estados procs linked api_contract properties; do
             echo "::group::test_$t"
             python tests/test_$t.py
             echo "::endgroup::"
@@ -53,7 +56,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install
-        run: pip install -e .
+        run: pip install -e . ruff
+
+      - name: Lint (ruff)
+        run: python -m ruff check hipercampo/ tests/ scripts/ examples/
       - name: Benchmark de calidad (modo léxico)
         run: python scripts/benchmark.py
       - name: Banco de estrés (10 hechos + 10 distractores confusos)

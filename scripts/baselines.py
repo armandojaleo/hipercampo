@@ -120,7 +120,6 @@ def run(semantic=False):
     if semantic:
         try:
             from sentence_transformers import SentenceTransformer
-            import numpy as np
             model = SentenceTransformer(
                 "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
             E = model.encode(facts, normalize_embeddings=True)
@@ -178,7 +177,8 @@ def run(semantic=False):
         fr = falsa_recuperacion(hit_fn)
         fila = f"{nombre:22}" + "".join(f"{m:>10.3f}" for m in mrrs) + f"{glob:>9.3f}{fr:>10.2f}"
         print(fila)
-    print("\n(MRR: más alto mejor. falsaRec: fracción de consultas ajenas que devuelven algo; más bajo mejor.)")
+    print("\n(MRR: más alto mejor. falsaRec: fracción de consultas ajenas que"
+          " devuelven algo; más bajo mejor.)")
 
 
 if __name__ == "__main__":

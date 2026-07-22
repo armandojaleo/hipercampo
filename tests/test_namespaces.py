@@ -108,7 +108,7 @@ def test_validacion_rechaza_texto_vacio():
     for malo in ("", "   ", None):
         try:
             hc.remember(malo, 0.5)
-            assert False, f"debería rechazar texto inválido: {malo!r}"
+            raise AssertionError(f"debería rechazar texto inválido: {malo!r}")
         except (ValueError, TypeError):
             pass
     hc.store.close(); _clean()

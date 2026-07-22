@@ -45,7 +45,8 @@ def main():
     print("\n── Preguntas por rol (unbinding VSA) ──")
     consultas = [
         ("object", {"subject": "auth-service", "predicate": "usa"}, "¿qué usa auth-service?"),
-        ("subject", {"predicate": "mantiene", "object": "auth-service"}, "¿quién mantiene auth-service?"),
+        ("subject", {"predicate": "mantiene", "object": "auth-service"},
+         "¿quién mantiene auth-service?"),
         ("subject", {"predicate": "usa", "object": "Stripe"}, "¿qué servicio usa Stripe?"),
     ]
     for role, known, pregunta in consultas:

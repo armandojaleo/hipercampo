@@ -11,11 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.encoder import encode_text          # noqa: E402
 from hipercampo.memory import (                      # noqa: E402
-    FORGET_STRENGTH_FLOOR, Hipercampo)
-from hipercampo.store import Store                   # noqa: E402
-from hipercampo.vsa import similarity                # noqa: E402
+    Hipercampo)
 
 _DB = "data/_test_memory.db"
 

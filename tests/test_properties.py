@@ -16,7 +16,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.encoder import encode_text          # noqa: E402
 from hipercampo.memory import Hipercampo             # noqa: E402
 from hipercampo.vsa import bind, bundle, random_hv, similarity   # noqa: E402
 
@@ -168,5 +167,6 @@ if __name__ == "__main__":
     if _open is not None:
         _open.store.close()
     Path(_DB).unlink(missing_ok=True)
-    print(f"\n{'TODAS LAS INVARIANTES SE SOSTIENEN' if not fails else f'{fails} INVARIANTES ROTAS'}")
+    print("\n" + ('TODAS LAS INVARIANTES SE SOSTIENEN' if not fails
+                  else f'{fails} INVARIANTES ROTAS'))
     sys.exit(1 if fails else 0)

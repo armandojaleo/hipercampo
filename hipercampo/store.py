@@ -439,7 +439,8 @@ class Store:
         q = "SELECT * FROM facts WHERE namespace = ?"
         args: list = [self.namespace]
         if at is not None:
-            q += " AND (valid_from IS NULL OR valid_from <= ?) AND (valid_to IS NULL OR valid_to > ?)"
+            q += (" AND (valid_from IS NULL OR valid_from <= ?)"
+                  " AND (valid_to IS NULL OR valid_to > ?)")
             args += [at, at]
         elif only_current:
             q += " AND valid_to IS NULL"

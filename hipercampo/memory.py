@@ -29,7 +29,7 @@ from .encoder import encode_text, semantic_active
 from .safety import redact_secrets, scan_injection, scan_secrets
 from .store import Store
 from .surprise import SurpriseModel
-from .vsa import bundle, similarity, similarity_batch, stack_hvs
+from .vsa import bundle, similarity, similarity_batch
 
 # --- parámetros de criterio (aquí es donde manda el juicio humano) -------
 NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
@@ -645,7 +645,7 @@ class Hipercampo:
 
         audit.log("muse", f"{len(top)} idea(s)", resurgidos=len(resurgidos) or None)
         salida = []
-        for score, act, r, gain, via in top:
+        for score, _act, r, gain, via in top:
             mid = r["id"]
             puente = by_id[parent[mid]]["text"] if parent.get(mid) in by_id else None
             salida.append({

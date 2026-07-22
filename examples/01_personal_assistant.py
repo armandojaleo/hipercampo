@@ -37,14 +37,15 @@ def main():
                        ("uso Figma a diario", 0.6),
                        ("hoy tengo dolor de cabeza", 0.2)]:
         r = hc.remember(texto, imp)
-        print(f"  guardado: «{texto}»" if r["stored"] else f"  (ya lo sabía)")
+        print(f"  guardado: «{texto}»" if r["stored"] else "  (ya lo sabía)")
 
     print("\n── Sesión 2: un dato cambia ──")
     r = hc.update("uso Figma a diario", "ahora uso Penpot a diario en vez de Figma")
     if r.get("superseded_id"):
-        print(f"  actualizado: Figma → Penpot  (el viejo #{r['superseded_id']} queda como historia)")
+        print(f"  actualizado: Figma → Penpot  "
+              f"(el viejo #{r['superseded_id']} queda como historia)")
     else:
-        print(f"  guardado como dato nuevo (no había match fiable que reemplazar)")
+        print("  guardado como dato nuevo (no había match fiable que reemplazar)")
 
     print("\n── Sesión 3: Claude consulta antes de responder ──")
     for pregunta in ["¿cómo se llama y a qué se dedica?",

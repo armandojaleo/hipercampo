@@ -101,7 +101,6 @@ def cmd_hook(_args) -> int:
 
 
 def _describe(p: dict) -> str:
-    from . import __version__
     cuando = (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(p["arranque"]))
               if p.get("arranque") else "?")
     edad = ""

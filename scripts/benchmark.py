@@ -133,7 +133,7 @@ def _informe(titulo, r):
     print(f"  hit@1 = {r['hit@1']:.2f}   hit@3 = {r['hit@3']:.2f}   MRR = {r['MRR']:.3f}")
     if r["fallos"]:
         print(f"  {len(r['fallos'])} no salieron primeras:")
-        for preg, pos, top in r["fallos"]:
+        for preg, pos, _top in r["fallos"]:
             donde = f"pos {pos}" if pos is not None else "NO recuperado"
             print(f"   · «{preg[:48]}» → {donde}")
 

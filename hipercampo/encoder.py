@@ -25,7 +25,7 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from .vsa import D, bind, bundle, permute, random_hv
+from .vsa import bind, bundle, permute, random_hv
 
 # Los trigramas de caracteres dan robustez a erratas/morfología. Se pueden apagar
 # para medir su aporte (o por velocidad) con HIPERCAMPO_NO_TRIGRAMS=1.
@@ -101,7 +101,7 @@ def encode_text(text: str) -> np.ndarray:
         return random_hv(0)
 
     parts: list[np.ndarray] = [token_hv(t) for t in tokens]          # unigramas
-    for a, b in zip(tokens, tokens[1:]):                             # bigramas (orden)
+    for a, b in zip(tokens, tokens[1:], strict=False):           # bigramas (orden)
         parts.append(bind(token_hv(a), permute(token_hv(b), 1)))
     if _USE_TRIGRAMS:
         for t in tokens:                                            # subpalabra

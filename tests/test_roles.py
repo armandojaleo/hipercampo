@@ -9,7 +9,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hipercampo.roles import ItemMemory, encode_fact, query_role   # noqa: E402
-from hipercampo.vsa import similarity                              # noqa: E402
 
 
 def _mundo(*valores):
@@ -60,7 +59,7 @@ def test_rol_desconocido_falla():
     f = encode_fact({"subject": "perro"}, im)
     try:
         query_role(f, "lugar", im)
-        assert False, "debería rechazar un rol desconocido"
+        raise AssertionError("debería rechazar un rol desconocido")
     except ValueError:
         pass
 
