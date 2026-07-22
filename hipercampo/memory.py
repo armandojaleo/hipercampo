@@ -362,6 +362,13 @@ class Hipercampo:
             r["id"]: max(0.0, 2.0 * (float(sims[i]) - 0.5)) for i, r in enumerate(rows)
         }
 
+        # Foto de la activación DIRECTA (solo similitud), antes de propagar. Es el
+        # material con el que se decide si abstenerse: la propagación es refuerzo de
+        # señal, no ruido, y si se mide sobre ella, en una consulta buena los asociados
+        # se encienden, suben la media y la memoria acaba abstiéndose justo cuando sí
+        # sabía la respuesta.
+        directa = np.sort(np.array(list(activation.values()), dtype=np.float64))[::-1]
+
         # propagación: la chispa salta a los vecinos, atenuada
         seeds = sorted(activation, key=activation.get, reverse=True)[:k]
         frontier = list(seeds)
@@ -406,13 +413,9 @@ class Hipercampo:
         # ir por debajo de ANSWER_MIN_SCORE: solo el MEJOR tiene que justificar respuesta.
         top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
         if top:
-            mejor = max(a for _, a, _ in top)
-            # El ruido se mide sobre ACTIVACIONES ordenadas por activación: `scored`
-            # va por score (activación ponderada por fuerza y fiabilidad), así que su
-            # cola no es la de menor activación y mezclaría las dos escalas.
-            acts = np.sort(np.array([a for _, a, _ in scored], dtype=np.float64))[::-1]
-            n_excl = min(len(top), max(1, len(acts) - NOISE_MIN_N))
-            cola = acts[n_excl:]
+            mejor = float(directa[0])                 # el mejor ANCLA directo
+            n_excl = min(len(top), max(1, len(directa) - NOISE_MIN_N))
+            cola = directa[n_excl:]
             if mejor < ANSWER_MIN_SCORE:              # nada relevante en absoluto
                 audit.log("recall", "abstención: nada relevante", mejor=round(mejor, 3))
                 top = []

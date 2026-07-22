@@ -32,6 +32,41 @@ def test_recall_se_abstiene_ante_ruido():
     assert hits == [], f"debería abstenerse ante ruido: {hits}"
 
 
+# REGRESIÓN: la puerta de abstención llegó a estar SIEMPRE cerrada. Estimaba el
+# ruido incluyendo a los propios candidatos, y como el z máximo de una muestra entre
+# n es (n-1)/sqrt(n), con una memoria pequeña era inalcanzable: recall() devolvía []
+# incluso ante una consulta literal. El test viejo no lo pillaba porque usaba 2
+# recuerdos y ahí el z-score ni se aplica; hacen falta bastantes para exponerlo.
+def _memoria_poblada():
+    hc = fresh()
+    for t in ("Armando Jaleo es desarrollador y creador del proyecto",
+              "el gato duerme en el sofá del salón",
+              "python es un lenguaje de programación interpretado",
+              "la factura del cliente vence el día diez de marzo",
+              "el servidor de producción corre sobre Windows con IIS",
+              "los tests de la api no arrancan por una dependencia corrupta",
+              "compartir listas usa identificadores en base64url",
+              "el despliegue del cliente y de la api van por separado",
+              "las preferencias del usuario se guardan en localStorage",
+              "el modo oscuro usa cian como color de acento"):
+        hc.remember(t, 0.5)
+    return hc
+
+
+def test_recall_responde_con_memoria_poblada():
+    hc = _memoria_poblada()
+    for consulta in ("Armando", "tests de la api", "color de acento"):
+        assert hc.recall(consulta, k=5), f"no debería abstenerse ante {consulta!r}"
+
+
+def test_recall_sigue_absteniendose_con_memoria_poblada():
+    hc = _memoria_poblada()
+    # Abrir la puerta no puede significar dejar pasar todo: ante ruido puro, donde
+    # TODAS las activaciones se desploman a ~0, se sigue diciendo "no tengo nada".
+    for consulta in ("xylófono cuántico marciano zzzz qwerty", "zzzz qqqq wwww"):
+        assert hc.recall(consulta, k=5) == [], f"debería abstenerse ante {consulta!r}"
+
+
 def test_recall_no_refuerza_irrelevantes():
     hc = fresh()
     mid = hc.remember("la factura del cliente vence el día diez", 0.5)["id"]

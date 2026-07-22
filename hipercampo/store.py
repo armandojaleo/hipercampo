@@ -255,7 +255,14 @@ class Store:
     def _m005_metadatos_de_salud(self):
         # Un enlace solo puede estar en uno de estos estados; una BD antigua con
         # basura queda normalizada antes de que la máquina de estados dependa de ella.
-        if self._columnas("links"):
+        if not self._columnas("links"):
+            return
+        # Leer antes de escribir: si no hay nada que normalizar (el caso normal) no
+        # pedimos el lock de escritura, y varios procesos pueden abrir a la vez.
+        hay = self.db.execute(
+            "SELECT 1 FROM links WHERE status NOT IN "
+            "('proposed','confirmed','rejected') LIMIT 1").fetchone()
+        if hay:
             self.db.execute("UPDATE links SET status='confirmed' "
                             "WHERE status NOT IN ('proposed','confirmed','rejected')")
 
@@ -315,6 +322,10 @@ class Store:
                     self.db.execute("RELEASE hc_migracion")
                 except Exception:
                     pass
+                # Otro proceso puede estar migrando la misma BD a la vez: si ya la
+                # dejó en esta versión, no hay nada que arreglar (no es un fallo).
+                if self.db.execute("PRAGMA user_version").fetchone()[0] >= version:
+                    continue
                 raise RuntimeError(
                     f"falló la migración {version:03d}_{nombre}: {e} · "
                     f"la BD sigue en la versión {actual}; hay una copia en "
