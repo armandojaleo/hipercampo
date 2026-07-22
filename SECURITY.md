@@ -41,6 +41,24 @@ local-first, un proceso por contexto—. Para separar:
 - **Borrado seguro**: `hc_forget` elimina filas, pero pueden quedar restos en el
   fichero SQLite hasta un `VACUUM`.
 
+## Salvaguardas integradas (defensa en profundidad)
+
+hipercampo incluye dos escáneres ligeros (`hipercampo/safety.py`), que **avisan, no
+bloquean**:
+
+- **Aviso de secretos al guardar.** `hc_remember` detecta patrones de credenciales
+  (claves tipo Stripe/AWS/GitHub, JWT, claves privadas, `password:`/`api_key=`, hex
+  largos) y devuelve `secret_warning` + una pista. Como la BD es texto plano, sirve
+  para no almacenar secretos por descuido.
+- **Marca de inyección al recuperar.** `hc_recall` marca con `untrusted: true` los
+  recuerdos que parecen contener instrucciones ("ignore previous instructions",
+  "ignora las instrucciones anteriores", marcadores de rol...), para que el cliente
+  los trate como **dato citado**, no como órdenes a ejecutar.
+
+No son infalibles (un atacante decidido evade patrones); reducen el riesgo del caso
+común y hacen visible lo sospechoso. La mitigación de fondo sigue siendo del cliente:
+tratar SIEMPRE lo recuperado como datos, no como instrucciones.
+
 ## ¿Es seguro instalar y ejecutar hipercampo?
 
 Para quien lo instala en su máquina, la superficie de ataque es pequeña **por diseño**:

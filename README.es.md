@@ -157,8 +157,10 @@ y capacidad hasta 5 roles. Integrarlo en el ciclo MCP vivo es el siguiente paso
   en una misma BD, o ficheros distintos (`HIPERCAMPO_DB`). Aislamiento **local**, no
   seguridad multiusuario — hipercampo es local-first. Ver [SECURITY.md](SECURITY.md).
 - **Docker**: `docker compose build && docker compose run --rm hipercampo`.
-- **Seguridad**: el texto recuperado es **dato, no instrucciones**; riesgos y
-  mitigaciones en [SECURITY.md](SECURITY.md). Roadmap en [ROADMAP.md](ROADMAP.md).
+- **Seguridad**: el texto recuperado es **dato, no instrucciones**. Salvaguardas
+  integradas (`hipercampo/safety.py`): `hc_remember` avisa de posibles **secretos**
+  (BD en claro), `hc_recall` marca como `untrusted` los recuerdos con pinta de
+  **instrucciones inyectadas**. Avisan, no bloquean. Detalles en [SECURITY.md](SECURITY.md).
 
 ## Arquitectura
 

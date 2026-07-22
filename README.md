@@ -157,8 +157,10 @@ capacity up to 5 roles. Wiring these role-records into the live MCP cycle is nex
   one DB, or separate files (`HIPERCAMPO_DB`). **Local** isolation, not multi-user
   security — hipercampo is local-first. See [SECURITY.md](SECURITY.md).
 - **Docker**: `docker compose build && docker compose run --rm hipercampo`.
-- **Security**: retrieved text is **data, not instructions**; risks and mitigations
-  in [SECURITY.md](SECURITY.md). Roadmap in [ROADMAP.md](ROADMAP.md).
+- **Security**: retrieved text is **data, not instructions**. Built-in safeguards
+  (`hipercampo/safety.py`): `hc_remember` warns on likely **secrets** (plaintext DB),
+  `hc_recall` flags memories that look like **injected instructions** as `untrusted`.
+  They warn, not block. Details in [SECURITY.md](SECURITY.md).
 
 ## Architecture
 
