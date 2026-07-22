@@ -24,7 +24,7 @@ from hipercampo.memory import Hipercampo             # noqa: E402
 
 # hecho -> {categoria: pregunta}
 CASOS = [
-    ("la clave de la API de pagos empieza por sk_live_9f", {
+    ("la clave de la API de pagos empieza por hcdemo_9f", {
         "keyword": "¿cuál es la clave de la API de pagos?",
         "typo": "¿cuál es la clabe de la API de pgos?",
         "synonym": "¿qué credencial usa la pasarela de cobros?"}),

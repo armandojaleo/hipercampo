@@ -41,6 +41,31 @@ local-first, un proceso por contexto—. Para separar:
 - **Borrado seguro**: `hc_forget` elimina filas, pero pueden quedar restos en el
   fichero SQLite hasta un `VACUUM`.
 
+## ¿Es seguro instalar y ejecutar hipercampo?
+
+Para quien lo instala en su máquina, la superficie de ataque es pequeña **por diseño**:
+
+- **Local, sin red.** El servidor MCP habla por stdio con tu cliente Claude; no abre
+  puertos ni escucha en la red. No es atacable remotamente.
+- **No ejecuta código de tus recuerdos.** hipercampo solo *guarda y recupera texto*.
+  No hay `eval`, `exec`, `os.system`, `subprocess` ni `pickle` en el núcleo.
+- **SQL parametrizado.** Todas las consultas usan placeholders (`?`); no hay
+  concatenación de strings en SQL → sin inyección.
+- **Dependencias mínimas y auditables:** `numpy` (BSD) y `mcp` (MIT). El hook
+  semántico es **opcional** y, si lo activas, descarga un modelo de HuggingFace
+  (sentence-transformers, Apache-2.0): eso es una dependencia de cadena de
+  suministro que aceptas tú al instalar el extra `[semantic]`.
+- **El repositorio no contiene datos personales.** Las claves/contraseñas que veas
+  en `scripts/` y `tests/` (p. ej. `hcdemo_9f`, `girasol2024`) son **fixtures
+  ficticios** para los benchmarks, no credenciales reales.
+
+Precauciones sensatas:
+- La BD es **SQLite en claro** (sin cifrar). No guardes en la memoria secretos que
+  no quieras tener en disco sin cifrar.
+- Trata un fichero `.db` de **origen desconocido** como dato no confiable: su
+  contenido acabará en el contexto del modelo al recuperarse (ver inyección arriba).
+- Instala desde el repositorio oficial y revisa el código; es pequeño a propósito.
+
 ## Alcance recomendado
 
 Uso **local, mono-usuario**, como memoria personal de tu asistente. Para

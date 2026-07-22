@@ -21,7 +21,7 @@ from hipercampo.memory import Hipercampo             # noqa: E402
 
 # (hecho_a_recordar, pregunta_parafraseada_que_debe_recuperarlo)
 QA = [
-    ("la clave de la API de pagos empieza por sk_live_9f",
+    ("la clave de la API de pagos empieza por hcdemo_9f",
      "¿cuál es la clave de la API de pagos?"),
     ("el servidor de producción está alojado en Frankfurt",
      "¿dónde está alojado el servidor de producción?"),
@@ -72,7 +72,7 @@ DISTRACTORES = [
 # comparten palabras con el hecho. Aquí es donde un codificador léxico sufre y un
 # codificador semántico brillaría. Sirve para saber si merece la pena el salto.
 QA_HARD = [
-    ("la clave de la API de pagos empieza por sk_live_9f",
+    ("la clave de la API de pagos empieza por hcdemo_9f",
      "¿qué credencial usa el sistema de cobros?"),
     ("el servidor de producción está alojado en Frankfurt",
      "¿en qué ciudad viven las máquinas en vivo?"),
@@ -135,7 +135,7 @@ def _informe(titulo, r):
 # Modo erratas: preguntas con las palabras clave MAL escritas. Aquí los trigramas
 # de caracteres deberían ayudar (una errata comparte casi todos sus trigramas).
 QA_TYPO = [
-    ("la clave de la API de pagos empieza por sk_live_9f",
+    ("la clave de la API de pagos empieza por hcdemo_9f",
      "¿cuál es la clabe de la API de pgos?"),
     ("el servidor de producción está alojado en Frankfurt",
      "¿dónde está el servidr de produción?"),

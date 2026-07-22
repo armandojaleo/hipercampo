@@ -55,7 +55,7 @@ def test_sorpresa_si_graba_lo_nuevo():
 # --- Afirmación: "recall ordena lo relevante por encima del ruido" ---------
 def test_recall_prioriza_lo_relevante():
     hc = fresh()
-    hc.remember("la clave de la API de pagos empieza por sk_live", 0.9)
+    hc.remember("la clave de la API de pagos empieza por hcdemo", 0.9)
     hc.remember("el equipo hace daily a las nueve de la mañana", 0.4)
     hc.remember("el logo de la empresa es de color naranja", 0.3)
     hits = hc.recall("¿cuál es la clave de la API de pagos?", k=3)
