@@ -2,327 +2,181 @@
 
 [![CI](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml/badge.svg)](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml)
 
-**Una memoria viva para Claude, basada en hipervectores — no en embeddings.**
+🌍 **Español: [README.es.md](README.es.md)** · You are reading the English version.
 
-La mayoría de las memorias para LLMs son lo mismo: trocear texto, convertirlo en
-vectores densos y buscar los más parecidos (ANN / top-k). Eso mide *parecido*,
-pero no *relevancia*, no *importancia*, y nunca *olvida*. Es un vertedero con buscador.
+**A living memory for Claude, built on hypervectors — not embeddings.**
 
-`hipercampo` prueba otra cosa. Es un servidor **MCP** que le da a Claude una memoria
-que imita al hipocampo, con cuatro ideas integradas en un ciclo:
+Most LLM memories are the same thing: chunk text, turn it into dense vectors, and
+retrieve the closest ones (ANN / top-k). That measures *similarity*, but not
+*relevance*, not *importance*, and it never *forgets*. It's a landfill with a search box.
 
-| Idea | Qué hace | Inspiración |
-|------|----------|-------------|
-| **VSA / hipervectores** | Recuerdos como vectores binarios de 10.000 bits con álgebra real (`bind`/`bundle`). Distingue *"el perro muerde al hombre"* de su inverso — cosa que un embedding denso difumina. Corre en CPU con popcount, sin GPU. | Kanerva (SDM), Plate (HRR) |
-| **Escritura por sorpresa** | Doble veto: no guarda lo **redundante** (ya hay algo parecido) ni lo **predecible** (un modelo de lenguaje incremental interno ya lo predecía, medido en *bits* — compresión/MDL). Ahí *apunta* el ahorro de tokens (aún no medido de extremo a extremo). | Error de predicción hipocampal; compresión-como-inteligencia (Hutter) |
-| **Consolidación ("sueño")** | Un proceso offline **agrupa** episodios parecidos en un recuerdo semántico (agrupación estructural: reduce nodos, el texto se une; con un `summarizer` opcional se resume de verdad) y archiva los originales. | Replay hipocampo→córtex |
-| **Olvido activo** | La fuerza de un recuerdo decae con el desuso; lo débil y poco importante se poda. La importancia alta protege. | Olvido adaptativo |
+`hipercampo` tries something else. It's an **MCP** server that gives Claude a memory
+modeled on the hippocampus, with four ideas integrated into a cycle:
 
-> **Honestidad de ingeniería.** La sorpresa combina dos señales: *novedad léxica*
-> (`1 − máxima similitud con lo ya guardado`) y *error de predicción* real, estimado
-> por un modelo de lenguaje incremental propio en bits/token (compresión/MDL, sin
-> red neuronal ni GPU). El codificador base es **léxico**; para sinónimos hay un
-> hook semántico opcional (más abajo). Todo es sustituible sin tocar el resto.
+| Idea | What it does | Inspiration |
+|------|--------------|-------------|
+| **VSA / hypervectors** | Memories as 10,000-bit binary vectors with real algebra (`bind`/`bundle`). It tells *"the dog bites the man"* from its reverse — something a dense embedding blurs. Runs on CPU with popcount, no GPU. | Kanerva (SDM), Plate (HRR) |
+| **Surprise-gated writing** | Double veto: it won't store the **redundant** (something similar exists) nor the **predictable** (an internal incremental language model already predicted it, measured in *bits* — compression/MDL). That's where token savings *point* (not yet measured end-to-end). | Hippocampal prediction error; compression-as-intelligence (Hutter) |
+| **Consolidation ("sleep")** | An offline process **groups** similar episodes into a semantic memory (structural grouping: fewer nodes, text is joined; with an optional `summarizer` it truly condenses) and archives the originals. | Hippocampus→cortex replay |
+| **Active forgetting** | A memory's strength decays with disuse; the weak and unimportant is pruned. High importance protects. | Adaptive forgetting |
+
+> **Engineering honesty.** Surprise combines two signals: *lexical novelty*
+> (`1 − max similarity to what's stored`) and real *prediction error*, estimated by
+> an in-house incremental language model in bits/token (compression/MDL, no neural
+> net, no GPU). The base encoder is **lexical**; for synonyms there's an optional
+> semantic hook (below). Everything is swappable without touching the rest.
 
 ---
 
-## Instalación (guía completa: [INSTALL.md](INSTALL.md))
+## Install (full guide: [INSTALL.md](INSTALL.md))
 
-**Vía rápida — Python local + Claude Code:**
+**Quick path — local Python + Claude Code:**
 
 ```bash
 git clone https://github.com/armandojaleo/hipercampo.git
 cd hipercampo
-pip install -e .                                  # instala hipercampo + deps
-python scripts/demo.py                            # (opcional) ver el ciclo funcionando
-claude mcp add hipercampo -- python -m hipercampo.server   # conectar a Claude Code
+pip install -e .                                  # installs hipercampo + deps
+python scripts/demo.py                            # (optional) watch the cycle run
+claude mcp add hipercampo -- python -m hipercampo.server   # connect to Claude Code
 ```
 
-Reinicia Claude Code y tendrás 6 herramientas nuevas (`hc_remember`, `hc_recall`,
-`hc_update`, `hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
-verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
+Restart Claude Code and you'll have 6 new tools (`hc_remember`, `hc_recall`,
+`hc_update`, `hc_consolidate`, `hc_forget`, `hc_stats`). For Docker, Claude Desktop,
+`.mcp.json`, verification and troubleshooting → **[INSTALL.md](INSTALL.md)**.
 
 ---
 
-## Prueba en 30 segundos (sin Claude)
+## 30-second try (no Claude)
 
 ```bash
 pip install numpy
 python scripts/demo.py
 ```
 
-Verás el álgebra distinguiendo el orden de las palabras y el ciclo completo
-(sorpresa → recuerdo → sueño → olvido) funcionando.
+You'll see the algebra distinguishing word order and the full cycle
+(surprise → recall → sleep → forget) working.
 
 ---
 
-## Batería de pruebas — que hace lo que dice
-
-Tres niveles, todos sin dependencias extra (solo `numpy`):
+## Test battery — it does what it says
 
 ```bash
-python tests/test_vsa.py         # álgebra VSA (bind/bundle/orden)
-python tests/test_memory.py      # el CICLO: sorpresa, recall, sueño, olvido, persistencia
-python tests/test_properties.py  # invariantes con datos FABRICADOS al azar (8 rondas)
-python scripts/scenarios.py      # historia narrada: Claude recordando a un usuario
+python tests/test_vsa.py          # VSA algebra (bind/bundle/order)
+python tests/test_memory.py       # the CYCLE: surprise, recall, sleep, forget, persistence
+python tests/test_namespaces.py   # context isolation, concurrency, transactions
+python tests/test_calibration.py  # adaptive surprise, rollback, empty query, cohesion
+python tests/test_properties.py   # invariants over fabricated data (8 rounds)
+python scripts/scenarios.py       # narrated story: Claude remembering a user
 ```
 
-- **test_memory.py** — 10 casos realistas, uno por promesa (no duplica lo conocido,
-  prioriza lo relevante, la propagación trae asociados, el sueño condensa, la
-  importancia protege del olvido, la memoria sobrevive a un reinicio…).
-- **test_properties.py** — pruebas *generativas* (8 semillas fijas y vocabulario
-  acotado, reproducibles; no es property-based amplio tipo Hypothesis): cada invariante se
-  comprueba con 8 juegos de datos distintos inventados en el momento. Si alguna
-  promesa se rompe con **algún** dato, el test enseña el contraejemplo. Ejemplos:
-  *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera entre 25
-  distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *consolidar
-  nunca aumenta los episódicos*.
+10 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
+*a duplicate never creates a second memory*, *a needle is retrieved among 25
+distractors*, *forgetting never deletes something with importance ≥ 0.8*, *one
+context can neither see nor modify another's data*, *a failed transaction leaves no trace*.
 
-## Calidad de recuperación (medida, no prometida)
+## Baseline comparison (Phase 2)
 
-`python scripts/benchmark.py` mide MRR / hit@1 sobre preguntas con respuesta
-conocida entre distractores. Resultados reales del codificador VSA puro (CPU):
+`python scripts/baselines.py [--semantic]` pits hipercampo against the standard
+methods on the same corpus (10 facts + 10 confusable distractors). MRR per category
++ **false-recall rate** (unrelated queries that still return something):
 
-| Escenario | hit@1 | MRR | Lectura |
-|-----------|-------|-----|---------|
-| **Fácil** — comparten palabras clave | 1.00 | **1.000** | recuperación perfecta |
-| **Erratas** — palabras clave mal escritas | 1.00 | **1.000** | los trigramas de char lo salvan (sin ellos: 0.67) |
-| **Difícil** — sinónimos puros, sin palabras comunes | 0.25 | **0.300** | límite del léxico: aquí entra el hook semántico |
-
-Conclusión honesta: el ranking léxico es **excelente** cuando hay solape de
-palabras (incluso con erratas) y **flojo** ante sinónimos.
-
-### Hook semántico opcional (medido)
-
-Para los sinónimos existe un **hook semántico opcional**: un embedding denso se
-proyecta a hipervector vía SimHash y se liga con peso al resto (SEMANTIC_WEIGHT).
-
-```bash
-pip install "hipercampo[semantic]"          # trae sentence-transformers (Apache-2.0)
-python scripts/benchmark.py --semantic       # descarga el modelo la 1ª vez
-```
-
-| Escenario | Solo léxico (por defecto) | + Semántico (peso 0.2) |
-|-----------|:---:|:---:|
-| Fácil (palabras compartidas) | **1.00** | 1.00 |
-| Erratas | **1.00** | 0.79 |
-| Sinónimos puros | 0.30 | **0.79** |
-
-Activar semántica **casi triplica** los sinónimos (0.30 → 0.79) a cambio de algo de
-robustez a erratas (1.00 → 0.79). El peso 0.2 es el mejor equilibrio medido; súbelo
-para priorizar sinónimos. Por defecto el hook está **apagado** → cero GPU, cero
-dependencias de terceros. En código:
-
-```python
-from hipercampo import encoder, semantic
-encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())
-# o con tu propio modelo:  encoder.set_semantic_hook(semantic.make_hook(mi_embed_fn))
-```
-
-Ver [ATTRIBUTION.md](ATTRIBUTION.md) para licencias del modelo.
-
-### Banco de estrés (10 hechos + 10 distractores del mismo tema)
-
-`python scripts/stress.py [--semantic]` — condiciones duras: distractores que
-comparten vocabulario con la respuesta correcta. MRR por categoría:
-
-| Categoría | Léxico | + Semántico (peso 0.15) |
-|-----------|:---:|:---:|
-| keyword (palabras compartidas) | 1.00 | 1.00 |
-| typo (palabras mal escritas) | 1.00 | 0.95 |
-| synonym (paráfrasis) | 0.32 | **0.90** |
-| **GLOBAL** | 0.77 | **0.95** |
-
-Activar semántica sube el MRR global de **0.77 → 0.95**. Hallazgo medido: **poco
-peso semántico (0.15) gana** — demasiado ahoga la pista léxica que distingue hechos
-del mismo dominio. El modo semántico se activa con `HIPERCAMPO_SEMANTIC=1` en el
-entorno del servidor (requiere el extra `[semantic]`).
-
-## Levantar con Docker
-
-```bash
-docker compose build
-docker compose run --rm hipercampo   # arranca el servidor MCP (habla por stdio)
-```
-
-La memoria persiste en el volumen `hipercampo_data` (`/data/hipercampo.db`).
-
----
-
-## Conectar con Claude
-
-`hipercampo` es un **servidor MCP**. Añádelo a la config de tu cliente Claude.
-
-**Claude Desktop** — edita `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "hipercampo": {
-      "command": "docker",
-      "args": ["run", "--rm", "-i",
-               "-v", "hipercampo_data:/data",
-               "hipercampo:latest"]
-    }
-  }
-}
-```
-
-**Claude Code** — en la raíz del proyecto:
-
-```bash
-claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hipercampo:latest
-```
-
-(O sin Docker: `command: "python"`, `args: ["-m", "hipercampo.server"]`, con
-`HIPERCAMPO_DB` apuntando a un fichero local.)
-
-Reinicia el cliente y Claude tendrá seis herramientas nuevas.
-
----
-
-## Herramientas que gana Claude
-
-| Herramienta | Para qué |
-|-------------|----------|
-| `hc_remember(text, importance, confidence)` | Guarda algo (si es novedoso/sorprendente). `importance` = cuánto importa (≥0.8 protege del olvido); `confidence` = cuán fiable/cierto (pesa en el ranking). Avisa si se parece a algo ya guardado. |
-| `hc_recall(query, k)` | Recupera por similitud **+ propagación de activación** por asociaciones. |
-| `hc_update(target, new_text)` | **Actualiza un hecho que cambió**: reemplaza el recuerdo que case con `target` (el viejo queda como historia, demovido). Para contradicciones. |
-| `hc_consolidate()` | Fase de sueño: funde episodios en conocimiento semántico. |
-| `hc_forget(dry_run)` | Olvido activo. `dry_run=True` ensaya sin borrar. |
-| `hc_stats()` | Estado de la memoria. |
-
----
-
-## Escala y latencia (medido, con sus límites)
-
-`python scripts/stress.py` mide calidad; para el coste, un test con 2000 recuerdos
-sintéticos + 1 "aguja":
-
-| Recuerdos | `recall()` completo (CPU) | ¿Encuentra la aguja? |
-|-----------|:---:|:---:|
-| 2.000 | ~40 ms | sí, posición #1 |
-| 10.000 | ~164 ms | sí, posición #1 |
-
-El escaneo de similitud está **vectorizado** (XOR de toda la matriz + popcount nativo
-de NumPy 2.0, con tabla de respaldo): ~5× más rápido que fila-a-fila. En este test la
-aguja **sigue saliendo primera** al crecer la memoria (buena señal), pero no es una
-prueba general de que la precisión no se degrade: haría falta muchas consultas,
-distintas similitudes y baselines externos. El recall sigue siendo **lineal** (no hay
-índice ANN): a ~100k recuerdos serían
-segundos. Para memoria personal/agente (cientos a pocos miles) va sobrado; a gran
-escala haría falta vectorizar el escaneo (popcount por bloques) o un índice. Es un
-límite conocido, no oculto.
-
-## Comparativa con baselines (Fase 2)
-
-`python scripts/baselines.py [--semantic]` enfrenta hipercampo a los métodos
-estándar sobre el mismo corpus (10 hechos + 10 distractores confusos). MRR por
-categoría + tasa de **falsa recuperación** (consultas ajenas que devuelven algo):
-
-| método | keyword | typo | synonym | global | falsaRec |
+| method | keyword | typo | synonym | global | falseRec |
 |--------|:---:|:---:|:---:|:---:|:---:|
-| BM25 (léxico exacto) | 1.00 | 0.77 | 0.33 | 0.70 | 1.00 |
-| embeddings + coseno | 0.95 | 0.88 | 0.79 | 0.87 | **0.20** |
-| hipercampo (léxico) | 1.00 | 0.95 | 0.37 | 0.77 | 1.00 |
-| **hipercampo + semántico** | 1.00 | 0.95 | **0.90** | **0.95** | 1.00 |
+| BM25 (exact lexical) | 1.00 | 0.77 | 0.33 | 0.70 | 1.00 |
+| embeddings + cosine | 0.95 | 0.88 | 0.79 | 0.87 | **0.20** |
+| hipercampo (lexical) | 1.00 | 0.95 | 0.37 | 0.77 | 1.00 |
+| **hipercampo + semantic** | 1.00 | 0.95 | **0.90** | **0.95** | 1.00 |
 
-Lectura honesta:
-- **En ranking (MRR), hipercampo+semántico gana** (0.95): junta la precisión léxica
-  (keyword/typo) con el alcance semántico (sinónimos). En léxico puro ya supera a
-  BM25, sobre todo en **erratas** (0.95 vs 0.77) gracias a los trigramas de carácter.
-- **En abstención, pierde**: embeddings rechaza negativas con su umbral de coseno
-  (falsaRec 0.20); hipercampo aún no (1.00). Hay que calibrar `MIN_RECALL_SCORE`.
-- **Ablación**: quitar la propagación no cambió el resultado *en este corpus* (las
-  asociaciones no eran necesarias aquí); habría que probarla donde el multi-salto importe.
+Honest reading:
+- **On ranking (MRR), hipercampo+semantic wins** (0.95): it fuses lexical precision
+  (keyword/typo) with semantic reach (synonyms). In pure-lexical mode it already
+  beats BM25, especially on **typos** (0.95 vs 0.77) thanks to character trigrams.
+- **On abstention, it loses**: embeddings reject negatives with a cosine threshold
+  (falseRec 0.20); hipercampo doesn't yet (1.00). `MIN_RECALL_SCORE` needs calibration.
+- The corpus is **small and synthetic**: a signal, not proof at scale. See [ROADMAP.md](ROADMAP.md).
 
-Caveat: corpus **pequeño y sintético**, propio. Es una señal, no una prueba a escala;
-faltan datasets estándar (LongMemEval) y más consultas. Ver [ROADMAP.md](ROADMAP.md).
+## Scale & latency (measured)
 
-## Trabajo relacionado y posicionamiento honesto
+| Memories | full `recall()` (CPU) | Finds the needle? |
+|----------|:---:|:---:|
+| 2,000 | ~40 ms | yes, rank #1 |
+| 10,000 | ~164 ms | yes, rank #1 |
 
-hipercampo **no inventa** la computación hiperdimensional (HDC/VSA existe desde los
-90: Kanerva, Plate). Tampoco es el primer intento de dar memoria a agentes LLM
-(Mem0, Letta, Graphiti, MemGPT lo hacen con embeddings/grafos). Y hay trabajo que
-usa HDC para memoria de IA (p. ej. MnemoCore).
+**Vectorized** scan (XOR of the whole matrix + native NumPy 2.0 popcount): ~5× faster
+than row-by-row. It's linear (no ANN index): plenty for personal memory (hundreds to
+thousands); at ~100k you'd want an index. A known limit, not hidden.
 
-Lo que sí parece original es **la combinación concreta**: HDC/VSA como sustrato +
-escritura por sorpresa (error de predicción/MDL) + consolidación tipo sueño + olvido
-activo + recuperación asociativa, todo expuesto como servidor **MCP** y tratando la
-memoria como un **ciclo** (guardar→relacionar→consolidar→olvidar), no como un
-almacén. No afirmamos superar a las memorias híbridas por embeddings; afirmamos
-explorar un paradigma distinto, con sus límites medidos.
+## Tools Claude gains
 
-## Arquitectura
+| Tool | For |
+|------|-----|
+| `hc_remember(text, importance, confidence)` | Store something (if novel/surprising). `importance` = how much it matters (≥0.8 protects from forgetting); `confidence` = how reliable (weights ranking). |
+| `hc_recall(query, k, include_history)` | Retrieve by similarity + spreading activation. Can **abstain** (return `[]`). |
+| `hc_update(target, new_text, memory_id)` | **Update a fact that changed** (safe supersession; the old one stays as history). |
+| `hc_consolidate()` | Sleep phase: group episodes into semantic knowledge. |
+| `hc_forget(dry_run)` | Active forgetting. `dry_run=True` rehearses without deleting. |
+| `hc_stats()` | Memory state (includes the DB path). |
+
+## The four axes of a memory (novelty ≠ importance ≠ reliability ≠ utility)
+
+| Axis | What it measures | Who sets it | Used for |
+|------|------------------|-------------|----------|
+| **novelty / surprise** | new or predictable? (MDL) | derived | decide whether to **write** |
+| **importance** | how much it matters | the caller (`importance`) | **protect** from forgetting |
+| **reliability** | how true/credible | the caller (`confidence`) | **ranking** at retrieval |
+| **utility** | how much it's actually used | derived (`access_count`) | **protect** from forgetting by use |
+
+Forgetting combines the last three into a transparent *retention*
+(`0.4·importance + 0.3·reliability + 0.3·utility`): time only flags candidates, but
+**value** decides.
+
+## Contexts, Docker, security
+
+- **Contexts**: namespaces (`HIPERCAMPO_NAMESPACE`) to isolate projects/profiles in
+  one DB, or separate files (`HIPERCAMPO_DB`). **Local** isolation, not multi-user
+  security — hipercampo is local-first. See [SECURITY.md](SECURITY.md).
+- **Docker**: `docker compose build && docker compose run --rm hipercampo`.
+- **Security**: retrieved text is **data, not instructions**; risks and mitigations
+  in [SECURITY.md](SECURITY.md). Roadmap in [ROADMAP.md](ROADMAP.md).
+
+## Architecture
 
 ```
-texto ──▶ encoder.py ──▶ hipervector (10.000 bits)
-                              │
-        vsa.py  (bind / bundle / permute / hamming)
-                              │
-     memory.py  ── sorpresa · recuerdo+propagación · sueño · olvido
-                              │
-      store.py  ── SQLite (recuerdos + grafo de asociaciones)
-                              │
-     server.py  ── MCP (stdio) ──▶ Claude
+text ──▶ encoder.py ──▶ hypervector (10,000 bits)
+                             │
+       vsa.py  (bind / bundle / permute / vectorized popcount)
+                             │
+    memory.py  ── surprise · recall+spreading · sleep · forget · 4 axes
+                             │
+     store.py  ── SQLite WAL (memories + graph, namespace-isolated, transactional)
+                             │
+    server.py  ── MCP (stdio) ──▶ Claude
 ```
 
----
+## Related work & honest positioning
 
-## Dónde puedes aportar (esto es un punto de partida, no un final)
+hipercampo **did not invent** hyperdimensional computing (HDC/VSA dates to the 90s:
+Kanerva, Plate), nor is it the first attempt at agent memory (Mem0, Letta, Graphiti,
+MemGPT; MnemoCore uses HDC). What's original is **the specific combination**: VSA +
+surprise (MDL) + consolidation + forgetting + four axes, exposed as an **MCP** server,
+treating memory as a **cycle**. We don't claim to beat embedding-based hybrid memories;
+we explore a different paradigm, with its limits measured.
 
-- **Sorpresa aún mejor**: el error de predicción ya es real (modelo n-grama interno,
-  `hipercampo/surprise.py`). Un siguiente paso sería un modelo local más potente o
-  usar la propia perplejidad del LLM cliente como señal de sorpresa.
-- **Olvido con criterio**: hoy la importancia es un número; podría ser un juicio
-  aprendido de qué merece perdurar. La literatura de 2025-26 dice que "aprender a
-  olvidar" sigue **sin resolver**.
-- **Codificador híbrido**: enchufar embeddings semánticos al `bundle` VSA para unir
-  parecido semántico + composicionalidad simbólica.
+## License & attribution
 
-## Créditos intelectuales
+MIT (see [LICENSE](LICENSE)). Original code; dependencies and ideas credited in
+[ATTRIBUTION.md](ATTRIBUTION.md). House rule: **if we use others' work, especially
+copyrighted, we say so.**
 
-Kanerva (*Sparse Distributed Memory*), Plate (*Holographic Reduced Representations*),
-la librería **torchhd**, y la línea de trabajo Titans / MIRAS / HippoRAG (2024-2026).
+## Acknowledgments
 
-## Los cuatro ejes de un recuerdo (novedad ≠ importancia ≠ fiabilidad ≠ utilidad)
+Built by **Armando Jaleo** with **Claude** (Anthropic), measuring before believing
+and telling the truth about the limits. Thanks to Pentti Kanerva and Tony Plate,
+whose decades-old ideas are still alive here. And to whoever audits with rigor:
+honest criticism made this project better on every pass.
 
-Un buen sistema de memoria no debe confundir estas cuatro cosas, y hipercampo las
-trata por separado, cada una con su efecto propio:
+*And yes — congratulations, Spain! 🇪🇸⚽ Some memories deserve `confidence=1.0`.*
 
-| Eje | Qué mide | Quién lo pone | Para qué se usa |
-|-----|----------|--------------|-----------------|
-| **novedad / sorpresa** | ¿es nuevo o predecible? (error de predicción, MDL) | derivado | decidir si **escribir** |
-| **importancia** | ¿cuánto importa? | quien lo dice (`importance`) | **proteger** del olvido |
-| **fiabilidad** | ¿cuán cierto/creíble? | quien lo dice (`confidence`) | **ranking** en la recuperación |
-| **utilidad** | ¿cuánto se usa de verdad? | derivado (`access_count`) | **proteger** del olvido por uso |
-
-El olvido combina los tres últimos en una *retención* transparente
-(`0.4·importancia + 0.3·fiabilidad + 0.3·utilidad`): el tiempo solo marca
-candidatos, pero es el **valor** lo que decide. Así no se pierde algo poco
-consultado pero importante, ni sobrevive algo trivial por haberse usado una vez.
-
-## Contextos: compartido vs. por proyecto
-
-Dos formas de separar (local-first, ambas válidas):
-- **Namespaces** (recomendado): una sola BD, un `HIPERCAMPO_NAMESPACE` por contexto
-  (proyecto/perfil/agente). Cada recuerdo lleva su namespace y **nada cruza** entre
-  contextos (lecturas, escrituras por id y enlaces, todo acotado).
-- **Ficheros distintos**: un `HIPERCAMPO_DB` por proyecto, si prefieres archivos
-  separados.
-
-Es aislamiento **local entre contextos**, no seguridad multiusuario (ver
-[SECURITY.md](SECURITY.md)). Recetas en [INSTALL.md](INSTALL.md).
-
-## Seguridad
-
-El texto recuperado es **dato, no instrucciones**. Riesgos (inyección vía memoria,
-falta de aislamiento entre usuarios, sin cifrado) y mitigaciones en
-[SECURITY.md](SECURITY.md). Alcance recomendado: **local, mono-usuario**.
-
-## Licencia y atribución
-
-MIT (ver [LICENSE](LICENSE)). Todo el código es original; las dependencias y las
-ideas académicas en que nos inspiramos están acreditadas en
-[ATTRIBUTION.md](ATTRIBUTION.md). Regla de la casa: **si usamos trabajo de otros,
-sobre todo con copyright, se dice.**
+> A memory is not a store: it's a cycle that saves, relates, consolidates, and forgets.
+> If one day this helps machines remember **with judgment** — and lets the people who
+> use them audit it — it will have been worth it. — made with care. 🧠
