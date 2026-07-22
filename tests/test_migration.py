@@ -126,6 +126,17 @@ def test_normaliza_estados_de_enlace_invalidos():
     hc.store.close(); _clean()
 
 
+def test_la_bd_migrada_pasa_integrity_check():
+    """`ALTER TABLE ADD COLUMN ... NOT NULL` deja las filas viejas sin reescribir y
+    algunas versiones de SQLite lo denuncian ("NULL value in memories.confidence").
+    Una BD migrada tiene que salir limpia del chequeo COMPLETO."""
+    _crear_bd_v0()
+    hc = Hipercampo(_DB, namespace="default")
+    assert hc.store.db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert hc.health(full=True)["sana"] is True
+    hc.store.close(); _clean()
+
+
 def test_puede_escribir_tras_migrar():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")

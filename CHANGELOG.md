@@ -40,6 +40,10 @@ predictable. Closes the four blockers raised in external review.
   explicit, idempotent, transactional steps instead of ad-hoc column sniffing.
   A **backup is taken before touching the schema** (`<db>.bak-v<n>`), and an
   interrupted migration can be resumed — already-applied steps are no-ops.
+  Migration 006 rewrites rows predating an `ALTER TABLE ADD COLUMN ... NOT NULL`:
+  SQLite serves them the default on read, but the on-disk record lacks the column
+  and some versions fail `integrity_check` with "NULL value in memories.confidence".
+  Found by CI on Linux — it never reproduced on the development machine.
 - `hipercampo doctor` now reports schema version and health.
 - New suite `tests/test_estados.py` (13 tests) + 4 migration tests — **21 suites**.
 - **CI now runs on Windows and macOS**, not just Linux: hipercampo is a local app.

@@ -252,6 +252,19 @@ class Store:
                          ("supersedes", "INTEGER"), ("source", "TEXT")):
             self._añadir("facts", col, ddl)
 
+    def _m006_reescribir_filas_antiguas(self):
+        """`ALTER TABLE ADD COLUMN ... NOT NULL DEFAULT` no reescribe las filas ya
+        existentes: SQLite les sirve el valor por defecto al leer, pero el registro
+        en disco sigue sin esa columna, y `integrity_check` lo denuncia
+        ("NULL value in memories.confidence") en algunas versiones. Un UPDATE que
+        no cambia nada sí reescribe el registro completo y lo deja consistente."""
+        for tabla, columna in (("memories", "confidence"), ("memories", "superseded"),
+                               ("memories", "namespace"), ("memories", "dormant"),
+                               ("links", "namespace"), ("links", "type"),
+                               ("links", "status")):
+            if columna in self._columnas(tabla):
+                self.db.execute(f"UPDATE {tabla} SET {columna} = {columna}")
+
     def _m005_metadatos_de_salud(self):
         # Un enlace solo puede estar en uno de estos estados; una BD antigua con
         # basura queda normalizada antes de que la máquina de estados dependa de ella.
@@ -272,8 +285,9 @@ class Store:
         (3, "latencia_y_enlaces_tipados", _m003_latencia_y_enlaces_tipados),
         (4, "hechos_con_historia", _m004_hechos_con_historia),
         (5, "metadatos_de_salud", _m005_metadatos_de_salud),
+        (6, "reescribir_filas_antiguas", _m006_reescribir_filas_antiguas),
     ]
-    SCHEMA_VERSION = 5
+    SCHEMA_VERSION = 6
 
     def _copia_previa(self, version: int):
         """Copia de seguridad ANTES de tocar el esquema de una BD con datos. Si algo

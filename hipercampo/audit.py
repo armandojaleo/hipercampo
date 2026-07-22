@@ -37,10 +37,22 @@ def set_logfile(db_path: str) -> None:
 
 
 def _a_stderr(linea: str) -> None:
-    """Escribe a stderr sin romper ni ensuciar la salida. En Windows la consola suele
-    ser cp1252 y no sabe escribir 'ó' ni '·': salían como '?'. Si el destino no puede
-    con el texto, se degrada a ASCII legible ('abstención' -> 'abstencion') en vez de
-    emitir basura. El FICHERO sigue guardando el original en UTF-8."""
+    """Escribe a stderr sin romper ni ensuciar la salida, que es donde el cliente MCP
+    lee lo que decimos. Dos destinos distintos y una trampa en medio:
+
+      - TUBERÍA (el caso MCP): Python no ve una consola y cae en la codificación
+        local, que en Windows es cp1252; el cliente al otro lado decodifica UTF-8 y
+        'abstención' le llega como caracteres rotos. Por eso aquí se escriben bytes
+        UTF-8 a mano, sin depender del locale de la máquina.
+      - CONSOLA: se respeta su codificación. Si no puede con 'ó' ni con '·', se
+        degrada a ASCII legible ('abstencion', '|') en vez de emitir basura.
+
+    El FICHERO de registro guarda siempre el original en UTF-8."""
+    buf = getattr(sys.stderr, "buffer", None)
+    if buf is not None and not sys.stderr.isatty():
+        buf.write((linea + "\n").encode("utf-8", "replace"))
+        buf.flush()
+        return
     enc = getattr(sys.stderr, "encoding", None) or "utf-8"
     try:
         linea.encode(enc)
