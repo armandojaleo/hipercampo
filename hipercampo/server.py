@@ -31,9 +31,9 @@ if os.environ.get("HIPERCAMPO_SEMANTIC") == "1":
           file=sys.stderr)
 
 DB_PATH = db_path()
-# Namespace (inquilino) del servidor. Aísla los recuerdos por usuario/proyecto en
-# una misma BD. En un servicio multiusuario real vendría de la identidad autenticada;
-# aquí, del entorno (un proceso por inquilino) como primer paso.
+# Namespace = contexto/perfil/workspace. Aísla los recuerdos por proyecto o perfil
+# dentro de la MISMA máquina (local-first; no es una frontera de seguridad entre
+# clientes de un servidor). Se elige por entorno: un proceso por contexto.
 NAMESPACE = os.environ.get("HIPERCAMPO_NAMESPACE", "default")
 hc = Hipercampo(DB_PATH, namespace=NAMESPACE)
 mcp = FastMCP("hipercampo")
@@ -64,13 +64,13 @@ def hc_recall(query: str, k: int = 5, include_history: bool = False) -> list:
 
 @mcp.tool()
 def hc_update(target: str = "", new_text: str = "", importance: float = 0.7,
-              memory_id: int | None = None) -> dict:
+              memory_id: int | None = None, confidence: float = 0.75) -> dict:
     """Actualiza un hecho que cambió. Indica el recuerdo a reemplazar por 'memory_id'
     (exacto, lo más seguro) o por 'target' (se busca el que mejor case). Si no hay un
     match fiable, NO pisa nada: guarda 'new_text' como recuerdo nuevo y lo avisa.
     Úsalo cuando algo CONTRADICE o ACTUALIZA lo que ya sabías. El viejo no se borra:
     queda como historia, demovido."""
-    return hc.update(target, new_text, _clip01(importance), memory_id)
+    return hc.update(target, new_text, _clip01(importance), memory_id, _clip01(confidence))
 
 
 @mcp.tool()

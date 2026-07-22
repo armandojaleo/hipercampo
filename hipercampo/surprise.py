@@ -13,7 +13,11 @@ imprevisible = sorprendente. Pocos bits = ya era predecible = redundante.
   sorpresa(texto) = bits/token medios para codificarlo dado el pasado
 
 Es 100% original, determinista y corre en CPU. Se "calienta" reproduciendo la
-memoria existente al arrancar (ver Hipercampo.__init__), así persiste de facto.
+memoria GUARDADA al arrancar (ver Hipercampo.__init__).
+
+Limitación honesta: tras reiniciar se reconstruye SOLO desde los recuerdos
+guardados; lo que se vio pero se rechazó (por redundante/predecible) no persiste.
+Persistir los contadores es un pendiente del roadmap (Fase 1b).
 """
 
 import math

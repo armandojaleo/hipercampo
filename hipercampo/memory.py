@@ -41,10 +41,28 @@ DECAY_HALF_LIFE_DAYS = 14.0      # a qué ritmo se desvanece lo no reforzado
 FORGET_STRENGTH_FLOOR = 0.15     # por debajo de esto y sin uso -> candidato a poda
 RETENTION_FLOOR = 0.40           # valor (4 ejes) mínimo para NO olvidar
 UTILITY_CAP = 5                  # nº de usos que ya cuenta como "utilidad plena"
+MAX_TEXT_LEN = 20_000            # tope de longitud de un recuerdo (defensa)
+
+
+def _clip01(x: float) -> float:
+    try:
+        return min(1.0, max(0.0, float(x)))
+    except (TypeError, ValueError):
+        return 0.5
+
+
+def _validate_text(text: str) -> str:
+    if not isinstance(text, str):
+        raise ValueError("el texto debe ser una cadena")
+    text = text.strip()
+    if not text:
+        raise ValueError("el texto no puede estar vacío")
+    return text[:MAX_TEXT_LEN]
 
 
 class Hipercampo:
     def __init__(self, path="data/hipercampo.db", namespace="default"):
+        namespace = (namespace or "default").strip()[:200] or "default"
         self.store = Store(path, namespace=namespace)
         # Modelo de sorpresa: se "calienta" reproduciendo la memoria existente,
         # así lo ya guardado no vuelve a considerarse sorprendente tras un reinicio.
@@ -70,6 +88,8 @@ class Hipercampo:
                  confidence: float = 0.5) -> dict:
         """Graba un episodio salvo doble veto: NO lo guarda si es redundante (ya hay
         algo casi igual) NI si es predecible (el modelo de sorpresa ya lo esperaba)."""
+        text = _validate_text(text)
+        importance, confidence = _clip01(importance), _clip01(confidence)
         hv = encode_text(text)
         actives = self.store.all(only_active=True)
 
@@ -120,18 +140,22 @@ class Hipercampo:
         return result
 
     def update(self, target: str, new_text: str, importance: float = 0.7,
-               memory_id: int | None = None) -> dict:
+               memory_id: int | None = None, confidence: float = 0.75) -> dict:
         """Reemplaza un hecho que cambió. Localiza el recuerdo a superar por
         'memory_id' (exacto) o por el que mejor case con 'target'. Si NO hay un
         match suficientemente bueno (< UPDATE_MIN_SIMILARITY) NO reemplaza nada:
         guarda 'new_text' como recuerdo nuevo y lo avisa, para no pisar un recuerdo
-        ajeno por error. El superado no se borra: queda como historia, demovido."""
+        ajeno por error. El superado no se borra: queda como historia, demovido.
+        Es atómico: si falla a mitad, no deja estados incompletos."""
+        new_text = _validate_text(new_text)
+        importance, confidence = _clip01(importance), _clip01(confidence)
+
         best, best_sim = None, 0.0
         if memory_id is not None:
             best = self.store.get(memory_id)
             best_sim = 1.0 if best is not None else 0.0
         else:
-            thv = encode_text(target)
+            thv = encode_text(target or "")
             for r in self.store.all(only_active=False):
                 if r["superseded"]:
                     continue
@@ -141,17 +165,20 @@ class Hipercampo:
 
         new_hv = encode_text(new_text)
         self.surprise.learn(new_text)
-        new_id = self.store.add(new_text, new_hv, 1.0, importance, confidence=0.75)
-        for r in self.store.all(only_active=True):
-            if r["id"] != new_id:
-                s = similarity(new_hv, self.store.hv_of(r))
-                if s >= LINK_SIMILARITY:
-                    self.store.link(new_id, r["id"], weight=s)
+        confiable = best is not None and best_sim >= UPDATE_MIN_SIMILARITY
 
-        # Solo superamos si el match es fiable; si no, no pisamos a nadie.
-        if best is not None and best_sim >= UPDATE_MIN_SIMILARITY:
-            self.store.mark_superseded([best["id"]])
-            self.store.link(new_id, best["id"], weight=1.0)   # cadena de historia
+        with self.store.transaction():                    # todo o nada
+            new_id = self.store.add(new_text, new_hv, 1.0, importance, confidence)
+            for r in self.store.all(only_active=True):
+                if r["id"] != new_id:
+                    s = similarity(new_hv, self.store.hv_of(r))
+                    if s >= LINK_SIMILARITY:
+                        self.store.link(new_id, r["id"], weight=s)
+            if confiable:
+                self.store.mark_superseded([best["id"]])
+                self.store.link(new_id, best["id"], weight=1.0)   # cadena de historia
+
+        if confiable:
             return {"updated": True, "new_id": new_id, "superseded_id": best["id"],
                     "replaced_text": best["text"], "match_similarity": round(best_sim, 3)}
         return {"updated": False, "reason": "sin match fiable que reemplazar",
@@ -169,7 +196,9 @@ class Hipercampo:
         Por defecto NO devuelve historia (episodios ya consolidados ni superados);
         pon include_history=True para verla. Solo refuerza lo realmente devuelto.
         """
-        qhv = encode_text(query)
+        k = max(1, min(int(k), 100))
+        hops = max(0, min(int(hops), 5))
+        qhv = encode_text(query or "")
         rows = self.store.all(only_active=False)
         if not include_history:                      # nada de archivados ni superados
             rows = [r for r in rows if not r["consolidated"] and not r["superseded"]]
@@ -258,26 +287,27 @@ class Hipercampo:
 
         made = 0
         archived = 0
-        for group in clusters:
-            hv = bundle([self.store.hv_of(g) for g in group])
-            textos = [g["text"] for g in group]
-            if summarizer is not None:                    # condensación real (LLM)
-                cuerpo = summarizer(textos)
-                etiqueta = f"[resumen x{len(group)}]\n{cuerpo}"
-            else:                                         # agrupación estructural
-                etiqueta = "[agrupado x{}]\n· {}".format(len(group), "\n· ".join(textos))
-            importance = max(g["importance"] for g in group)
-            # confianza = media (una sola fuente muy fiable no debe inflar al grupo)
-            confidence = float(np.mean([g["confidence"] for g in group]))
-            novelty = float(np.mean([g["novelty"] for g in group]))
-            sem_id = self.store.add(etiqueta, hv, novelty, importance,
-                                    confidence, kind="semantic")
-            self.store.mark_consolidated([g["id"] for g in group])
-            for g in group:                      # heredar asociaciones
-                for dst, w in self.store.neighbors(g["id"]):
-                    self.store.link(sem_id, dst, w)
-            made += 1
-            archived += len(group)
+        with self.store.transaction():                    # cada sueño, todo o nada
+            for group in clusters:
+                hv = bundle([self.store.hv_of(g) for g in group])
+                textos = [g["text"] for g in group]
+                if summarizer is not None:                # condensación real (LLM)
+                    cuerpo = summarizer(textos)
+                    etiqueta = f"[resumen x{len(group)}]\n{cuerpo}"
+                else:                                     # agrupación estructural
+                    etiqueta = "[agrupado x{}]\n· {}".format(len(group), "\n· ".join(textos))
+                importance = max(g["importance"] for g in group)
+                # confianza = media (una sola fuente fiable no debe inflar al grupo)
+                confidence = float(np.mean([g["confidence"] for g in group]))
+                novelty = float(np.mean([g["novelty"] for g in group]))
+                sem_id = self.store.add(etiqueta, hv, novelty, importance,
+                                        confidence, kind="semantic")
+                self.store.mark_consolidated([g["id"] for g in group])
+                for g in group:                  # heredar asociaciones
+                    for dst, w in self.store.neighbors(g["id"]):
+                        self.store.link(sem_id, dst, w)
+                made += 1
+                archived += len(group)
 
         return {"clusters_fusionados": made, "episodios_archivados": archived}
 

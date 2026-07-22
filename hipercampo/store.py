@@ -8,6 +8,7 @@ Un solo fichero .db portátil. En Docker vive en el volumen /data.
 
 import sqlite3
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -32,12 +33,14 @@ CREATE TABLE IF NOT EXISTS memories (
     namespace    TEXT    NOT NULL DEFAULT 'default'     -- aislamiento por inquilino
 );
 CREATE TABLE IF NOT EXISTS links (
-    src    INTEGER NOT NULL,
-    dst    INTEGER NOT NULL,
-    weight REAL    NOT NULL DEFAULT 1.0,
+    src       INTEGER NOT NULL,
+    dst       INTEGER NOT NULL,
+    weight    REAL    NOT NULL DEFAULT 1.0,
+    namespace TEXT    NOT NULL DEFAULT 'default',
     PRIMARY KEY (src, dst)
 );
 CREATE INDEX IF NOT EXISTS idx_kind ON memories(namespace, kind, consolidated);
+CREATE INDEX IF NOT EXISTS idx_links_ns ON links(namespace);
 """
 
 
@@ -59,9 +62,30 @@ class Store:
         except sqlite3.OperationalError:
             pass
         self.db.execute("PRAGMA synchronous=NORMAL")
+        self._in_txn = False
         self.db.executescript(_SCHEMA)
         self._migrate()
         self.db.commit()
+
+    # --- transacciones ---------------------------------------------------
+    def _commit(self):
+        """Commit salvo que estemos dentro de una transacción mayor (atomicidad)."""
+        if not self._in_txn:
+            self.db.commit()
+
+    @contextmanager
+    def transaction(self):
+        """Agrupa varias operaciones en una sola transacción atómica: si algo falla
+        a mitad, se revierte todo (update/consolidate no dejan estados a medias)."""
+        self._in_txn = True
+        try:
+            yield
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        finally:
+            self._in_txn = False
 
     def _migrate(self):
         """Añade columnas nuevas a BDs creadas con versiones anteriores."""
@@ -75,6 +99,10 @@ class Store:
         if "namespace" not in cols:
             self.db.execute(
                 "ALTER TABLE memories ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
+        lcols = {r[1] for r in self.db.execute("PRAGMA table_info(links)")}
+        if lcols and "namespace" not in lcols:
+            self.db.execute(
+                "ALTER TABLE links ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
 
     # --- escritura -------------------------------------------------------
     def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic") -> int:
@@ -85,64 +113,69 @@ class Store:
             (text, kind, to_blob(hv), novelty, importance, confidence, 1.0, now, now,
              self.namespace),
         )
-        self.db.commit()
+        self._commit()
         return cur.lastrowid
 
     def link(self, src: int, dst: int, weight: float = 1.0):
         if src == dst:
             return
         # Peso acotado a [0,1]: al repetir, se satura hacia 1 (no crece sin límite,
-        # que amplificaría la propagación en vez de atenuarla).
+        # que amplificaría la propagación en vez de atenuarla). Enlace etiquetado
+        # con el namespace: nunca se cruzan contextos.
         w = min(1.0, max(0.0, weight))
         self.db.execute(
-            "INSERT INTO links(src,dst,weight) VALUES(?,?,?) "
+            "INSERT INTO links(src,dst,weight,namespace) VALUES(?,?,?,?) "
             "ON CONFLICT(src,dst) DO UPDATE SET weight = weight + 0.3 * (1.0 - weight)",
-            (src, dst, w),
+            (src, dst, w, self.namespace),
         )
-        self.db.commit()
+        self._commit()
 
     def touch(self, ids: list[int], boost: float = 0.5):
         """Reforzar recuerdos usados: sube strength, access_count, last_access."""
         now = time.time()
         self.db.executemany(
             "UPDATE memories SET access_count = access_count + 1, "
-            "last_access = ?, strength = strength + ? WHERE id = ?",
-            [(now, boost, i) for i in ids],
+            "last_access = ?, strength = strength + ? WHERE id = ? AND namespace = ?",
+            [(now, boost, i, self.namespace) for i in ids],
         )
-        self.db.commit()
+        self._commit()
 
     def reinforce(self, mem_id: int, boost: float = 0.7):
         self.db.execute(
             "UPDATE memories SET strength = strength + ?, access_count = access_count + 1 "
-            "WHERE id = ?",
-            (boost, mem_id),
+            "WHERE id = ? AND namespace = ?",
+            (boost, mem_id, self.namespace),
         )
-        self.db.commit()
+        self._commit()
 
     def set_strength(self, mem_id: int, strength: float):
-        self.db.execute("UPDATE memories SET strength=? WHERE id=?", (strength, mem_id))
+        self.db.execute("UPDATE memories SET strength=? WHERE id=? AND namespace=?",
+                        (strength, mem_id, self.namespace))
 
     def mark_superseded(self, ids: list[int]):
         """Marca recuerdos como reemplazados por otro más nuevo y los debilita
         (no se borran: quedan como historia, pero dejan de dominar la recuperación)."""
         self.db.executemany(
             "UPDATE memories SET superseded = 1, strength = MIN(strength, 0.3), "
-            "confidence = MIN(confidence, 0.3) WHERE id = ?",
-            [(i,) for i in ids],
+            "confidence = MIN(confidence, 0.3) WHERE id = ? AND namespace = ?",
+            [(i, self.namespace) for i in ids],
         )
-        self.db.commit()
+        self._commit()
 
     def mark_consolidated(self, ids: list[int]):
         self.db.executemany(
-            "UPDATE memories SET consolidated = 1 WHERE id = ?", [(i,) for i in ids]
+            "UPDATE memories SET consolidated = 1 WHERE id = ? AND namespace = ?",
+            [(i, self.namespace) for i in ids],
         )
-        self.db.commit()
+        self._commit()
 
     def delete(self, ids: list[int]):
-        self.db.executemany("DELETE FROM memories WHERE id = ?", [(i,) for i in ids])
-        self.db.executemany("DELETE FROM links WHERE src=? OR dst=?",
-                            [(i, i) for i in ids])
-        self.db.commit()
+        self.db.executemany("DELETE FROM memories WHERE id = ? AND namespace = ?",
+                            [(i, self.namespace) for i in ids])
+        self.db.executemany(
+            "DELETE FROM links WHERE (src=? OR dst=?) AND namespace = ?",
+            [(i, i, self.namespace) for i in ids])
+        self._commit()
 
     # --- lectura (siempre acotada al namespace del store) ----------------
     def all(self, kind=None, only_active=True) -> list[sqlite3.Row]:
@@ -164,9 +197,9 @@ class Store:
 
     def neighbors(self, mem_id: int) -> list[tuple[int, float]]:
         rows = self.db.execute(
-            "SELECT dst, weight FROM links WHERE src=? "
-            "UNION SELECT src, weight FROM links WHERE dst=?",
-            (mem_id, mem_id),
+            "SELECT dst, weight FROM links WHERE src=? AND namespace=? "
+            "UNION SELECT src, weight FROM links WHERE dst=? AND namespace=?",
+            (mem_id, self.namespace, mem_id, self.namespace),
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 

@@ -19,13 +19,19 @@ en el contexto del LLM, un recuerdo malicioso es un vector de ataque.
 - **No metas secretos que no quieras ver recuperados.** La memoria no cifra el
   contenido; es un SQLite en claro.
 
-## Aislamiento entre usuarios / proyectos
+## Aislamiento entre contextos / proyectos
 
-hipercampo **no** separa por usuario ni conversación dentro de una misma base de
-datos: todo lo que comparte un `.db` se mezcla en la recuperación. Para aislar:
+hipercampo **sí** separa por **namespace** dentro de una misma base de datos: cada
+recuerdo lleva su namespace y todas las lecturas y escrituras (incluidas las que van
+por id: `delete`, `touch`, `mark_*`) están acotadas a él, y los enlaces no cruzan
+contextos. Es aislamiento **local entre contextos** (proyectos, perfiles, agentes),
+**no** una frontera de seguridad entre clientes de un servidor —hipercampo es
+local-first, un proceso por contexto—. Para separar:
 
-- Usa un `HIPERCAMPO_DB` distinto por proyecto/usuario (ver INSTALL.md).
-- No expongas un mismo `.db` a contextos que no deban verse entre sí.
+- Un `HIPERCAMPO_NAMESPACE` distinto por contexto (mismo `.db`), o un
+  `HIPERCAMPO_DB` distinto por proyecto. Ambos valen (ver INSTALL.md).
+- No hay autenticación: quien pueda hablar con el proceso puede elegir su namespace.
+  El aislamiento protege de mezclas accidentales, no de un actor malicioso local.
 
 ## Lo que hipercampo NO garantiza (todavía)
 

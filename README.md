@@ -39,7 +39,7 @@ claude mcp add hipercampo -- python -m hipercampo.server   # conectar a Claude C
 ```
 
 Reinicia Claude Code y tendrás 6 herramientas nuevas (`hc_remember`, `hc_recall`,
-`hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
+`hc_update`, `hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
 verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
 
 ---
@@ -277,12 +277,17 @@ El olvido combina los tres últimos en una *retención* transparente
 candidatos, pero es el **valor** lo que decide. Así no se pierde algo poco
 consultado pero importante, ni sobrevive algo trivial por haberse usado una vez.
 
-## Memoria compartida vs. por proyecto (híbrida)
+## Contextos: compartido vs. por proyecto
 
-Como la BD es un fichero, puedes tener **varias**: una *personal* compartida entre
-todos tus proyectos (quién eres, preferencias) y una *por proyecto* para lo técnico,
-levantando dos servidores MCP con distinto `HIPERCAMPO_DB`. Ver
-[INSTALL.md](INSTALL.md).
+Dos formas de separar (local-first, ambas válidas):
+- **Namespaces** (recomendado): una sola BD, un `HIPERCAMPO_NAMESPACE` por contexto
+  (proyecto/perfil/agente). Cada recuerdo lleva su namespace y **nada cruza** entre
+  contextos (lecturas, escrituras por id y enlaces, todo acotado).
+- **Ficheros distintos**: un `HIPERCAMPO_DB` por proyecto, si prefieres archivos
+  separados.
+
+Es aislamiento **local entre contextos**, no seguridad multiusuario (ver
+[SECURITY.md](SECURITY.md)). Recetas en [INSTALL.md](INSTALL.md).
 
 ## Seguridad
 

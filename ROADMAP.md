@@ -12,13 +12,25 @@ SaaS encima, sería otro proyecto; el núcleo se mantiene local y simple.
 Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
 
 ## Fase 1 — Cimientos de fiabilidad y aislamiento
-- 🟢 **Aislamiento por inquilino** (namespaces): cada usuario ve solo lo suyo,
-  incluida la lectura por id. Tests en `tests/test_tenancy.py`.
+- 🟢 **Aislamiento por namespace/contexto**: cada contexto ve solo lo suyo, en TODAS
+  las operaciones (lecturas y escrituras por id: delete/touch/mark_*), y los enlaces
+  no cruzan contextos. Tests en `tests/test_namespaces.py`.
 - 🟢 **Concurrencia base**: SQLite en modo WAL + `busy_timeout` (lecturas mientras
   se escribe, sin corromper).
-- ⚪ Transacciones explícitas alrededor de operaciones compuestas (update, consolidate).
+- 🟢 **Transacciones atómicas** en operaciones compuestas (update, consolidate):
+  si algo falla a mitad, se revierte (`store.transaction()`).
+- 🟢 **Validación de entradas en el núcleo**: texto no vacío + longitud máxima,
+  `importance`/`confidence` acotados, `k`/`hops` acotados, namespace saneado.
 - ⚪ Migraciones versionadas (tabla `schema_version`) en vez de `ALTER TABLE` ad-hoc.
 - ⚪ `VACUUM` / borrado seguro para `hc_forget`.
+
+## Fase 1b — Calibrar la sorpresa (punto científico débil, pendiente)
+- ⚪ El veto por "predecible" usa un umbral absoluto (`0.05`) que casi nunca se cruza:
+  hoy el duplicado se rechaza por *similitud*, no por *predictibilidad*. Calibrar con
+  un criterio **relativo** (percentil del historial reciente), medido, no adivinado.
+- ⚪ **Persistencia real** del modelo de sorpresa: hoy, tras reiniciar, se reconstruye
+  SOLO desde los recuerdos guardados; lo visto-y-rechazado no persiste. Persistir los
+  contadores unigrama/bigrama por namespace.
 
 ## Fase 2 — Credibilidad: demostrar la calidad
 - ⚪ **Benchmark contra baselines externos**: BM25 (SQLite FTS5), embeddings+coseno,
@@ -33,11 +45,11 @@ Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
   tabla de respaldo. ~5× más rápido (10k: 224→47 ms). recall() 2k ~40ms, 10k ~164ms.
 - ⚪ Índice LSH sobre los binarios para sublineal a 100k+; carga perezosa de la matriz.
 
-## Fase 4 — Aislamiento local (NO servidor multiusuario)
+## Fase 4 — Aislamiento local de contextos (NO servidor multiusuario)
 Fuera de alcance auth/cifrado/Postgres/red: cada usuario es local. Lo útil aquí es
 separar contextos *dentro de una misma máquina*:
-- 🟢 **Namespaces**: aislar proyectos/contextos en una misma BD (p. ej. personal vs
-  M Player) sin levantar varios servidores. Ya implementado.
+- 🟢 **Namespaces integrales**: aislar proyectos/perfiles en una misma BD, en todas
+  las operaciones y en los enlaces. Ya implementado y probado.
 - ⚪ Selección de namespace cómoda (por proyecto) desde el cliente.
 - ⚪ Endurecer contra inyección vía memoria a nivel de cliente (ver [SECURITY.md](SECURITY.md)).
 
