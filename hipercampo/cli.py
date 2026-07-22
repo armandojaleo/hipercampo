@@ -46,6 +46,53 @@ def _print(obj, plain=False):
         print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
+def cmd_hook(_args) -> int:
+    """Modo SINÁPTICO: pensado para el hook UserPromptSubmit de Claude Code.
+
+    Lee el JSON del hook por stdin, decide qué toca (assist) y devuelve el contexto
+    a inyectar en el turno. Si no hay nada relevante, no inyecta nada (se calla)."""
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    prompt = ""
+    for clave in ("prompt", "user_prompt", "userPrompt", "message", "input"):
+        v = payload.get(clave)
+        if isinstance(v, str) and v.strip():
+            prompt = v.strip()
+            break
+    if not prompt:
+        print("{}")
+        return 0
+    try:
+        hc = _hc()
+        try:
+            r = hc.assist(prompt)
+        finally:
+            hc.store.close()
+    except Exception as e:
+        print(json.dumps({"systemMessage": f"hipercampo no pudo responder: {e}"}))
+        return 0
+
+    accion = r.get("action")
+    if accion in (None, "nothing"):
+        print("{}")                      # nada relevante: no molestar
+        return 0
+
+    lineas = [f"[memoria · {accion}] {r.get('why', '')}"]
+    for h in r.get("result") or []:
+        lineas.append(f"- {h.get('text', '')}")
+    if r.get("sugerencia"):
+        lineas.append(f"(sugerencia: {r['sugerencia']})")
+        if r.get("candidato"):
+            lineas.append(f"(candidato #{r['candidato']['id']}: {r['candidato']['text']})")
+    print(json.dumps({
+        "hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                               "additionalContext": "\n".join(lineas)},
+        "suppressOutput": True}, ensure_ascii=False))
+    return 0
+
+
 def cmd_doctor(_args) -> int:
     """Diagnóstico rápido: ¿está todo en su sitio para funcionar?"""
     from . import __version__
@@ -82,6 +129,7 @@ def main(argv=None) -> int:
     sub.add_parser("stats", help="estado de la memoria")
     sub.add_parser("sleep", help="consolidar + olvidar + soñar")
     sub.add_parser("doctor", help="diagnóstico del entorno")
+    sub.add_parser("hook", help="modo sináptico: para el hook UserPromptSubmit")
     sub.add_parser("version", help="versión instalada")
     for nombre, ayuda in (("assist", "qué toca hacer en este momento (hooks)"),
                           ("recall", "recuperar"), ("muse", "inspiración"),
@@ -109,6 +157,8 @@ def main(argv=None) -> int:
         serve(); return 0
     if args.cmd == "doctor":
         return cmd_doctor(args)
+    if args.cmd == "hook":
+        return cmd_hook(args)
     if args.cmd == "backup":
         from .backup import backup
         print("Copia creada en:", backup(args.dest)); return 0

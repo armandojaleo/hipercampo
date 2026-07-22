@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hipercampo.cli hook",
+            "timeout": 15,
+            "statusMessage": "consultando la memoria..."
+          }
+        ]
+      }
+    ]
+  }
+}

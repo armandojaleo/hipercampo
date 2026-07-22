@@ -17,6 +17,6 @@ data/
 .vscode/
 
 # Configuración local del usuario (rutas y ajustes personales, no portables)
-.claude/
+.claude/settings.local.json
 .mcp.json
 *.bak-*

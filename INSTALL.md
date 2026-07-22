@@ -225,7 +225,7 @@ hipercampo decide solo qué toca (`hipercampo assist`): recordar si preguntas,
 inspirar si estás atascado, sugerir guardar/actualizar si afirmas algo nuevo, o
 **callarse** si no hay nada relevante. Nunca escribe por su cuenta.
 
-En `~/.claude/settings.json` (o `.claude/settings.json` del proyecto):
+En `~/.claude/settings.json` (global) o `.claude/settings.json` (del proyecto):
 
 ```json
 {
@@ -235,7 +235,9 @@ En `~/.claude/settings.json` (o `.claude/settings.json` del proyecto):
         "hooks": [
           {
             "type": "command",
-            "command": "hipercampo assist \"$CLAUDE_USER_PROMPT\" --plain"
+            "command": "hipercampo hook",
+            "timeout": 15,
+            "statusMessage": "consultando la memoria..."
           }
         ]
       }
@@ -244,17 +246,37 @@ En `~/.claude/settings.json` (o `.claude/settings.json` del proyecto):
 }
 ```
 
-La salida del hook se añade al contexto del turno: Claude "recuerda" sin haber
-llamado a ninguna herramienta. Prueba antes a mano:
+`hipercampo hook` lee el JSON del hook por **stdin**, decide qué toca y devuelve el
+contexto a inyectar (`hookSpecificOutput.additionalContext`). Si no hay nada
+relevante devuelve `{}`: **no molesta**. Pruébalo a mano antes:
 
 ```bash
-hipercampo assist "¿dónde está alojado el servidor?" --plain
-hipercampo assist "hoy hace sol"        # -> nothing: se calla, y está bien
+echo '{"prompt":"¿dónde está alojado el servidor?"}' | hipercampo hook
+echo '{"prompt":"mañana compraré pan"}' | hipercampo hook     # -> {} : se calla
 ```
 
-> Ajusta el nombre de la variable del prompt a la que use tu versión de Claude Code
-> (`/hooks` te lo muestra). Si prefieres no depender de hooks, la herramienta
-> `hc_assist` hace lo mismo cuando Claude la llama al principio del turno.
+Tras editarlo, abre `/hooks` una vez (recarga la configuración) o reinicia Claude
+Code. Si prefieres no usar hooks, la herramienta **`hc_assist`** hace lo mismo
+cuando Claude la llama al principio del turno.
+
+### Ver qué está haciendo (transparencia)
+
+Cada decisión se registra —a stderr (visible en los logs del servidor MCP) y a un
+fichero junto a la base de datos:
+
+```bash
+hipercampo log -n 20     # qué ha decidido últimamente y por qué
+hipercampo doctor        # ruta de la BD, permisos, versión, dependencias
+```
+
+```
+20:47:05 remember  guardado id=1 · novedad=1.0 · sorpresa=1.0
+20:47:06 remember  saltado: redundante · novedad=0.0 · sorpresa=0.57
+20:47:07 recall    abstención: nada destaca del ruido · n=14
+20:47:07 assist    nothing: nada relevante que aportar en este turno
+```
+
+Se desactiva con `HIPERCAMPO_LOG=0`.
 
 ### Sueño autónomo
 
