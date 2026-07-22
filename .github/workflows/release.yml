@@ -45,18 +45,7 @@ jobs:
           python -m venv /tmp/venv
           /tmp/venv/bin/pip install --quiet dist/*.whl
           /tmp/venv/bin/python -c "import hipercampo; print('version:', hipercampo.__version__)"
-          /tmp/venv/bin/python -c "
-          import subprocess, json
-          msgs = [
-            json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'ci','version':'0'}}}),
-            json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'}),
-            json.dumps({'jsonrpc':'2.0','id':2,'method':'tools/list'}),
-          ]
-          out = subprocess.run(['/tmp/venv/bin/python','-m','hipercampo.server'],
-                               input='\n'.join(msgs)+'\n', capture_output=True, text=True, timeout=90)
-          assert 'hc_remember' in out.stdout, out.stdout[:500]
-          print('handshake MCP OK')
-          "
+          /tmp/venv/bin/python scripts/mcp_smoke.py /tmp/venv/bin/python
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
