@@ -27,7 +27,7 @@ jobs:
       - name: Test suite (todas las suites, incluidas las generativas)
         run: |
           set -e
-          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety properties; do
+          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails properties; do
             echo "::group::test_$t"
             python tests/test_$t.py
             echo "::endgroup::"

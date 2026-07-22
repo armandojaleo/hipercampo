@@ -59,6 +59,13 @@ No son infalibles (un atacante decidido evade patrones); reducen el riesgo del c
 común y hacen visible lo sospechoso. La mitigación de fondo sigue siendo del cliente:
 tratar SIEMPRE lo recuperado como datos, no como instrucciones.
 
+Guardrails opcionales por entorno:
+- `HIPERCAMPO_REDACT_SECRETS=1`: **enmascara** los secretos detectados antes de
+  guardarlos (en vez de solo avisar). La etiqueta se conserva, el valor se redacta.
+- `HIPERCAMPO_MAX_MEMORIES=N`: acota los recuerdos por contexto a N; al llegar, poda
+  el de **menor retención** (importancia+fiabilidad+utilidad) y **nunca** lo protegido
+  (importance ≥ 0.8). Evita que la memoria crezca sin freno.
+
 ## ¿Es seguro instalar y ejecutar hipercampo?
 
 Para quien lo instala en su máquina, la superficie de ataque es pequeña **por diseño**:

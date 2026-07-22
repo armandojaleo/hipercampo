@@ -115,7 +115,13 @@ personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, n
 | `hc_update(target, new_text, memory_id)` | **Actualiza un hecho que cambió** (supersesión segura; el viejo queda como historia). |
 | `hc_consolidate()` | Fase de sueño: agrupa episodios en conocimiento semántico. |
 | `hc_forget(dry_run)` | Olvido activo. `dry_run=True` ensaya sin borrar. |
+| `hc_remember_fact(subject, predicate, object, …)` | Guarda un **hecho estructurado** (VSA composicional). |
+| `hc_ask_role(role, …campos conocidos…)` | Pregunta un campo sabiendo otros: *"¿quién muerde al hombre?"* → unbinding. |
 | `hc_stats()` | Estado de la memoria (incluye la ruta de la BD). |
+
+Guardrails (entorno): `HIPERCAMPO_MAX_MEMORIES` acota los recuerdos por contexto
+(poda el de menor retención, nunca lo protegido); `HIPERCAMPO_REDACT_SECRETS=1`
+enmascara los secretos detectados antes de guardarlos en vez de solo avisar.
 
 ## Los cuatro ejes de un recuerdo (novedad ≠ importancia ≠ fiabilidad ≠ utilidad)
 

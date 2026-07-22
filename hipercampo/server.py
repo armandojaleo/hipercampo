@@ -74,6 +74,27 @@ def hc_update(target: str = "", new_text: str = "", importance: float = 0.7,
 
 
 @mcp.tool()
+def hc_remember_fact(subject: str = "", predicate: str = "", object: str = "",
+                     time: str = "", source: str = "") -> dict:
+    """Guarda un HECHO estructurado (memoria composicional VSA). Rellena los campos
+    que apliquen (al menos 2): subject/predicate/object y opcionalmente time/source.
+    Luego podrás preguntar por un campo conociendo otros con hc_ask_role
+    ("¿quién MUERDE al HOMBRE?"). Distingue estructura que un embedding difumina."""
+    return hc.remember_fact({"subject": subject, "predicate": predicate,
+                             "object": object, "time": time, "source": source})
+
+
+@mcp.tool()
+def hc_ask_role(role: str, subject: str = "", predicate: str = "", object: str = "",
+                time: str = "", source: str = "") -> dict:
+    """Pregunta por un CAMPO de un hecho conociendo otros. 'role' es el campo que
+    quieres (subject/predicate/object/time/source); rellena los que SÍ sabes. Ej.:
+    role='subject', predicate='muerde', object='hombre' -> '¿quién muerde al hombre?'."""
+    return hc.ask_role(role, {"subject": subject, "predicate": predicate,
+                              "object": object, "time": time, "source": source})
+
+
+@mcp.tool()
 def hc_consolidate() -> dict:
     """Fase de sueño: AGRUPA episodios parecidos en un recuerdo semántico y archiva
     los originales (reduce nodos activos; el texto se une, no se resume). Correr

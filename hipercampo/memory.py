@@ -23,7 +23,7 @@ import time
 import numpy as np
 
 from .encoder import encode_text
-from .safety import scan_injection, scan_secrets
+from .safety import redact_secrets, scan_injection, scan_secrets
 from .store import Store
 from .surprise import SurpriseModel
 from .vsa import bundle, similarity, similarity_batch, stack_hvs
@@ -43,6 +43,11 @@ FORGET_STRENGTH_FLOOR = 0.15     # por debajo de esto y sin uso -> candidato a p
 RETENTION_FLOOR = 0.40           # valor (4 ejes) mínimo para NO olvidar
 UTILITY_CAP = 5                  # nº de usos que ya cuenta como "utilidad plena"
 MAX_TEXT_LEN = 20_000            # tope de longitud de un recuerdo (defensa)
+# Tope de recuerdos por contexto (0 = sin límite). Al llegar, se poda el de menor
+# retención (importancia+fiabilidad+utilidad), nunca lo protegido (importance>=0.8).
+MAX_MEMORIES = int(os.environ.get("HIPERCAMPO_MAX_MEMORIES", "0") or "0")
+# Si está activo, los secretos se ENMASCARAN antes de guardar (no solo se avisa).
+REDACT_SECRETS = os.environ.get("HIPERCAMPO_REDACT_SECRETS") == "1"
 
 
 def _clip01(x: float) -> float:
@@ -70,6 +75,14 @@ class Hipercampo:
         self.surprise = SurpriseModel()
         for row in self.store.all(only_active=False):
             self.surprise.learn(row["text"])
+        from .roles import RoleMemory
+        self.roles = RoleMemory(self.store)   # memoria composicional de hechos
+
+    def remember_fact(self, fields: dict) -> dict:
+        return self.roles.remember_fact(fields)
+
+    def ask_role(self, role: str, known: dict) -> dict:
+        return self.roles.ask_role(role, known)
 
     # --- los cuatro ejes, separados ------------------------------------
     @staticmethod
@@ -92,6 +105,10 @@ class Hipercampo:
         text = _validate_text(text)
         importance, confidence = _clip01(importance), _clip01(confidence)
         secretos = scan_secrets(text)                 # aviso: la BD es texto plano
+        redactado = False
+        if REDACT_SECRETS and secretos:               # enmascarar antes de guardar
+            text = _validate_text(redact_secrets(text))
+            redactado = True
         hv = encode_text(text)
         actives = self.store.all(only_active=True)
 
@@ -127,6 +144,23 @@ class Hipercampo:
                 r["secret_warning"] = secretos
             return r
 
+        # Tope de contexto: si está lleno, poda el recuerdo de MENOR retención
+        # (nunca lo protegido). Mantiene la memoria acotada sin crecer sin freno.
+        evictado = None
+        if MAX_MEMORIES:
+            todos = self.store.all(only_active=False)
+            if len(todos) >= MAX_MEMORIES:
+                podables = [r for r in todos
+                            if r["kind"] == "episodic" and r["importance"] < 0.8
+                            and r["id"] != best_id]      # no evictar el match actual
+                if podables:
+                    evictado = min(podables, key=self.retention)["id"]
+                    self.store.delete([evictado])
+                else:
+                    self.surprise.learn(text)
+                    return {"stored": False, "reason": "memoria llena (todo protegido)",
+                            "novelty": round(novelty, 3), "surprise": round(surprise, 3)}
+
         with self.store.transaction():                # escritura atómica
             mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
             for i, row in enumerate(actives):         # asociaciones (sims ya calculadas)
@@ -138,14 +172,18 @@ class Hipercampo:
                   "surprise": round(surprise, 3), "importance": importance}
         if secretos:
             result["secret_warning"] = secretos
-            result["hint_secret"] = ("Parece un secreto y la BD se guarda en claro. "
-                                     "Considera no almacenarlo o cifrar el fichero.")
+            result["redacted" if redactado else "hint_secret"] = (
+                True if redactado else
+                "Parece un secreto y la BD se guarda en claro. Considera no "
+                "almacenarlo, enmascararlo (HIPERCAMPO_REDACT_SECRETS=1) o cifrar.")
+        if evictado is not None:
+            result["evicted_id"] = evictado          # se podó el de menor retención
 
         # Aviso de posible actualización/contradicción: si esto se parece mucho a un
         # recuerdo existente, quizá lo ACTUALICE. No decidimos nosotros (haría falta
         # entender el significado): se lo señalamos al LLM para que use hc_update.
-        if best_id is not None and best_sim >= SUPERSEDE_HINT_SIMILARITY:
-            old = self.store.get(best_id)
+        old = self.store.get(best_id) if best_id is not None else None
+        if old is not None and best_sim >= SUPERSEDE_HINT_SIMILARITY:
             result["similar_to"] = {"id": best_id, "text": old["text"],
                                     "similarity": round(best_sim, 3)}
             result["hint"] = ("Se parece a un recuerdo existente. Si lo ACTUALIZA o "

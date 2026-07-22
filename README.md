@@ -115,7 +115,13 @@ thousands); at ~100k you'd want an index. A known limit, not hidden.
 | `hc_update(target, new_text, memory_id)` | **Update a fact that changed** (safe supersession; the old one stays as history). |
 | `hc_consolidate()` | Sleep phase: group episodes into semantic knowledge. |
 | `hc_forget(dry_run)` | Active forgetting. `dry_run=True` rehearses without deleting. |
+| `hc_remember_fact(subject, predicate, object, …)` | Store a **structured fact** (compositional VSA). |
+| `hc_ask_role(role, …known fields…)` | Ask for a field knowing others: *"who bites the man?"* → unbinding. |
 | `hc_stats()` | Memory state (includes the DB path). |
+
+Guardrails (env): `HIPERCAMPO_MAX_MEMORIES` caps memories per context (evicts the
+lowest-retention, never the protected); `HIPERCAMPO_REDACT_SECRETS=1` masks detected
+secrets before storing instead of only warning.
 
 ## The four axes of a memory (novelty ≠ importance ≠ reliability ≠ utility)
 

@@ -39,8 +39,15 @@ CREATE TABLE IF NOT EXISTS links (
     namespace TEXT    NOT NULL DEFAULT 'default',
     PRIMARY KEY (src, dst)
 );
+CREATE TABLE IF NOT EXISTS facts (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    namespace TEXT    NOT NULL DEFAULT 'default',
+    fields    TEXT    NOT NULL,   -- JSON {rol: valor}
+    hv        BLOB    NOT NULL    -- hipervector role-filler (bind/bundle)
+);
 CREATE INDEX IF NOT EXISTS idx_kind ON memories(namespace, kind, consolidated);
 CREATE INDEX IF NOT EXISTS idx_links_ns ON links(namespace);
+CREATE INDEX IF NOT EXISTS idx_facts_ns ON facts(namespace);
 """
 
 
@@ -118,6 +125,19 @@ class Store:
         )
         self._commit()
         return cur.lastrowid
+
+    def add_fact(self, fields_json: str, hv) -> int:
+        cur = self.db.execute(
+            "INSERT INTO facts(namespace, fields, hv) VALUES(?,?,?)",
+            (self.namespace, fields_json, to_blob(hv)),
+        )
+        self._commit()
+        return cur.lastrowid
+
+    def all_facts(self) -> list[sqlite3.Row]:
+        return self.db.execute(
+            "SELECT * FROM facts WHERE namespace = ?", (self.namespace,)
+        ).fetchall()
 
     def link(self, src: int, dst: int, weight: float = 1.0):
         if src == dst:
@@ -213,4 +233,10 @@ class Store:
         self.db.commit()
 
     def close(self):
+        # Checkpoint + truncado del WAL: deja el fichero consistente y elimina los
+        # -wal/-shm (evita bloqueos residuales, sobre todo en Windows).
+        try:
+            self.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
         self.db.close()

@@ -41,6 +41,27 @@ def scan_secrets(text: str) -> list[str]:
     return sorted(set(hallados))
 
 
+def _mask(m: re.Match) -> str:
+    """Enmascara conservando algo de contexto: primeros 2 chars + «…›»."""
+    s = m.group(0)
+    return (s[:2] + "…«redactado»") if len(s) > 4 else "«redactado»"
+
+
+def redact_secrets(text: str) -> str:
+    """Devuelve el texto con los secretos ENMASCARADOS (deja algo de contexto).
+    En las credenciales etiquetadas (`password: X`) conserva la etiqueta y enmascara
+    solo el valor."""
+    if not isinstance(text, str):
+        return text
+    out = text
+    for rx, _ in _SECRET_PATTERNS:
+        if "api[_-]?key" in rx.pattern:                 # credencial etiquetada
+            out = rx.sub(lambda m: f"{m.group(1)}: «redactado»", out)
+        else:
+            out = rx.sub(_mask, out)
+    return out
+
+
 # --- inyección vía memoria --------------------------------------------------
 _INJECTION_PATTERNS = [
     re.compile(r"(?i)\b(ignore|disregard|forget)\s+(all\s+|the\s+)?(previous|prior|above)"
