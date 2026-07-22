@@ -30,7 +30,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: pip install -e . ruff
+        run: pip install -e . ruff coverage
 
       - name: Lint (ruff)
         run: python -m ruff check hipercampo/ tests/ scripts/ examples/
@@ -41,11 +41,26 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           set -e
-          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience estados procs linked api_contract failures properties; do
+          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience estados procs linked api_contract failures backup cli audit properties; do
             echo "::group::test_$t"
             python tests/test_$t.py
             echo "::endgroup::"
           done
+
+      # Cobertura con SUELO: si baja del 78%, el CI falla. No se persigue el 100%
+      # (hay ramas que solo se dan en fallos de hardware); se persigue no retroceder.
+      - name: Cobertura
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+          HIPERCAMPO_LOG: "0"
+        run: |
+          set -e
+          coverage erase
+          for t in tests/test_*.py; do coverage run -a --source=hipercampo "$t" >/dev/null; done
+          coverage report --sort=cover
+          coverage report --fail-under=78
 
   benchmarks:
     runs-on: ubuntu-latest
@@ -56,7 +71,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install
-        run: pip install -e . ruff
+        run: pip install -e . ruff coverage
 
       - name: Lint (ruff)
         run: python -m ruff check hipercampo/ tests/ scripts/ examples/

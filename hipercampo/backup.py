@@ -37,16 +37,42 @@ def backup(dst: str | None = None, src: str | None = None) -> str:
 
 
 def restore(src: str, dst: str | None = None) -> str:
+    """Restaura una copia SOBRE la memoria actual.
+
+    Antes de pisar nada guarda lo que había en `<dst>.antes-de-restaurar`: restaurar
+    la copia equivocada es un error fácil de cometer y muy caro de descubrir tarde.
+    Y se verifica que la copia sea una BD legible ANTES de tocar el original: no se
+    destruye una memoria buena para poner en su sitio un fichero roto."""
     dst = dst or db_path()
     if not os.path.exists(src):
         raise FileNotFoundError(f"No existe la copia: {src}")
-    os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
     con = sqlite3.connect(src)
+    try:
+        estado = con.execute("PRAGMA quick_check").fetchone()[0]
+        if estado != "ok":
+            raise ValueError(f"la copia no está sana ({estado}): no se restaura")
+        con.execute("SELECT 1 FROM memories LIMIT 1")     # ¿es una memoria de verdad?
+    except sqlite3.DatabaseError as e:
+        con.close()
+        raise ValueError(f"la copia no es una memoria de hipercampo válida: {e}") from e
+
+    os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
+    if os.path.exists(dst):
+        previa = f"{dst}.antes-de-restaurar"
+        anterior = sqlite3.connect(dst)
+        salvaguarda = sqlite3.connect(previa)
+        try:
+            anterior.backup(salvaguarda)
+        finally:
+            salvaguarda.close()
+            anterior.close()
+
     out = sqlite3.connect(dst)
-    with out:
+    try:
         con.backup(out)
-    out.close()
-    con.close()
+    finally:
+        out.close()
+        con.close()
     return os.path.abspath(dst)
 
 

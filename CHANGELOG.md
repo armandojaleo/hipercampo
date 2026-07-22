@@ -3,6 +3,27 @@
 All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **`restore()` could destroy your live memory silently.** It overwrote the
+  database with no copy of what it replaced, and without checking the source was
+  even a valid memory. Now it verifies the copy first (`quick_check` + readable
+  schema) and saves what it is about to overwrite to `<db>.antes-de-restaurar`.
+  Restoring the wrong file is an easy mistake and an expensive one to notice late.
+- A read-only database **could not be opened at all** (the constructor always wrote
+  the schema), and `recall` crashed on one because it reinforces what it retrieves.
+  Reinforcement is now best-effort: reading never fails for being unable to write.
+
+### Added
+- **Failure simulations** (`tests/test_failures.py`): read-only database, full
+  disk at the exact moment of the write, and the process killed mid-write and
+  mid-sleep in real subprocesses. Verified: it warns without lying, never
+  corrupts, and a killed sleep does not claim to have slept.
+- **Coverage gate in CI** (78% floor; currently 81%). New suites for the code that
+  had none: `test_backup.py` (6), `test_cli.py` (8, the hook contract),
+  `test_audit.py` (6, the decision log) — **28 suites**.
+
 ## [0.1.0a5] — 2026-07-22
 
 ### Added
