@@ -46,8 +46,11 @@ como es debido. Los conceptos son de sus autores:
 - **Torchhd** — Heddes et al., *JMLR* 2023: librería de referencia HD/VSA. La
   citamos como estado del arte; **no usamos su código** (implementamos VSA propio).
 - Línea reciente de memoria en LLMs (2024-2026): **Titans**, **MIRAS**, **HippoRAG**,
-  **MemGPT**, y la relación *atención ≈ SDM* (Bricken & Pehlevan, 2021). Sirvieron
-  para situar el hueco a explorar; ninguna aportó código a este repo.
+  **MemGPT / Letta**, **Mem0**, **Graphiti**, y **MnemoCore** (HDC/VSA para memoria de
+  IA), además de la relación *atención ≈ SDM* (Bricken & Pehlevan, 2021). Sirvieron
+  para situar el hueco a explorar; ninguna aportó código a este repo. hipercampo no
+  reclama inventar HDC ni la memoria de agentes: reclama una *combinación* concreta
+  (VSA + sorpresa + consolidación + olvido, vía MCP).
 
 ## El "hook" semántico opcional
 

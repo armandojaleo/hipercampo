@@ -190,6 +190,35 @@ Reinicia el cliente y Claude tendrá cinco herramientas nuevas.
 
 ---
 
+## Escala y latencia (medido, con sus límites)
+
+`python scripts/stress.py` mide calidad; para el coste, un test con 2000 recuerdos
+sintéticos + 1 "aguja":
+
+| Recuerdos | Recall (escaneo lineal, CPU) | ¿Encuentra la aguja? |
+|-----------|:---:|:---:|
+| 2.001 | ~124 ms | sí, posición #1 |
+
+La precisión **no se degrada** al crecer la memoria (la aguja sigue saliendo
+primera). Pero el recall es **lineal** (no hay índice ANN): a ~100k recuerdos serían
+segundos. Para memoria personal/agente (cientos a pocos miles) va sobrado; a gran
+escala haría falta vectorizar el escaneo (popcount por bloques) o un índice. Es un
+límite conocido, no oculto.
+
+## Trabajo relacionado y posicionamiento honesto
+
+hipercampo **no inventa** la computación hiperdimensional (HDC/VSA existe desde los
+90: Kanerva, Plate). Tampoco es el primer intento de dar memoria a agentes LLM
+(Mem0, Letta, Graphiti, MemGPT lo hacen con embeddings/grafos). Y hay trabajo que
+usa HDC para memoria de IA (p. ej. MnemoCore).
+
+Lo que sí parece original es **la combinación concreta**: HDC/VSA como sustrato +
+escritura por sorpresa (error de predicción/MDL) + consolidación tipo sueño + olvido
+activo + recuperación asociativa, todo expuesto como servidor **MCP** y tratando la
+memoria como un **ciclo** (guardar→relacionar→consolidar→olvidar), no como un
+almacén. No afirmamos superar a las memorias híbridas por embeddings; afirmamos
+explorar un paradigma distinto, con sus límites medidos.
+
 ## Arquitectura
 
 ```
