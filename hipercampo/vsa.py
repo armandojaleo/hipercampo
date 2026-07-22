@@ -30,10 +30,18 @@ def bind(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.bitwise_xor(a, b)
 
 
+# Patrón de desempate FIJO y pseudoaleatorio (50/50). Resolver los empates siempre
+# a 0 sesgaría la densidad por debajo de 0.5 (con nº par de componentes el bundle
+# degeneraba casi en un AND: densidad ~0.25 con 2). Con este desempate, la densidad
+# se mantiene en ~0.5 y la similitud base entre bundles no relacionados vuelve a ~0.5.
+_TIEBREAK = np.unpackbits(random_hv(0xC0FFEE))[:D].astype(np.int32)
+
+
 def bundle(hvs: list[np.ndarray]) -> np.ndarray:
     """
-    Agrupar = voto por mayoría bit a bit. El resultado se parece a TODOS
-    sus componentes a la vez (superposición). Empates -> 0 (determinista).
+    Agrupar = voto por mayoría bit a bit. El resultado se parece a TODOS sus
+    componentes a la vez (superposición). Los empates se rompen con un patrón fijo
+    pseudoaleatorio 50/50 (no siempre a 0), para no sesgar la densidad.
     """
     if not hvs:
         return random_hv(0)
@@ -42,7 +50,7 @@ def bundle(hvs: list[np.ndarray]) -> np.ndarray:
     acc = np.zeros(D, dtype=np.int32)
     for h in hvs:
         acc += np.unpackbits(h)[:D].astype(np.int32) * 2 - 1   # 0/1 -> -1/+1
-    bits = (acc > 0).astype(np.uint8)
+    bits = np.where(acc > 0, 1, np.where(acc < 0, 0, _TIEBREAK)).astype(np.uint8)
     return np.packbits(bits)
 
 

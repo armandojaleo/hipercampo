@@ -32,6 +32,9 @@ NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
 SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
 SUPERSEDE_HINT_SIMILARITY = 0.72 # por encima -> avisamos de posible actualización
 SUPERSEDED_RECALL_PENALTY = 0.2  # cuánto se demueve un recuerdo superado al recuperar
+MIN_RECALL_SCORE = 0.03          # por debajo -> irrelevante; recall se abstiene
+REINFORCE_MIN_SCORE = 0.10       # solo se refuerza lo claramente relevante (no roce)
+UPDATE_MIN_SIMILARITY = 0.60     # hc_update no reemplaza si no hay match así de bueno
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
 CONSOLIDATE_SIMILARITY = 0.60    # fundir episodios así de parecidos
 DECAY_HALF_LIFE_DAYS = 14.0      # a qué ritmo se desvanece lo no reforzado
@@ -65,7 +68,8 @@ class Hipercampo:
     # 1 -------------------------------------------------------------------
     def remember(self, text: str, importance: float = 0.5,
                  confidence: float = 0.5) -> dict:
-        """Graba un episodio si es novedoso O sorprendente (error de predicción)."""
+        """Graba un episodio salvo doble veto: NO lo guarda si es redundante (ya hay
+        algo casi igual) NI si es predecible (el modelo de sorpresa ya lo esperaba)."""
         hv = encode_text(text)
         actives = self.store.all(only_active=True)
 
@@ -115,22 +119,28 @@ class Hipercampo:
                               "reemplazarlo en vez de acumular contradicciones.")
         return result
 
-    def update(self, target: str, new_text: str, importance: float = 0.7) -> dict:
-        """Reemplaza el recuerdo que mejor case con 'target' por 'new_text'. El viejo
-        no se borra: se marca como superado y se debilita (queda como historia).
-        Pensado para hechos que cambian ('el server estaba en Frankfurt' -> 'Dublín')."""
-        thv = encode_text(target)
-        candidatos = [r for r in self.store.all(only_active=False)
-                      if not r["superseded"]]
+    def update(self, target: str, new_text: str, importance: float = 0.7,
+               memory_id: int | None = None) -> dict:
+        """Reemplaza un hecho que cambió. Localiza el recuerdo a superar por
+        'memory_id' (exacto) o por el que mejor case con 'target'. Si NO hay un
+        match suficientemente bueno (< UPDATE_MIN_SIMILARITY) NO reemplaza nada:
+        guarda 'new_text' como recuerdo nuevo y lo avisa, para no pisar un recuerdo
+        ajeno por error. El superado no se borra: queda como historia, demovido."""
         best, best_sim = None, 0.0
-        for r in candidatos:
-            s = similarity(thv, self.store.hv_of(r))
-            if s > best_sim:
-                best_sim, best = s, r
+        if memory_id is not None:
+            best = self.store.get(memory_id)
+            best_sim = 1.0 if best is not None else 0.0
+        else:
+            thv = encode_text(target)
+            for r in self.store.all(only_active=False):
+                if r["superseded"]:
+                    continue
+                s = similarity(thv, self.store.hv_of(r))
+                if s > best_sim:
+                    best_sim, best = s, r
 
         new_hv = encode_text(new_text)
         self.surprise.learn(new_text)
-        # la versión vigente se asume fiable (confidence alta); la vieja se degrada
         new_id = self.store.add(new_text, new_hv, 1.0, importance, confidence=0.75)
         for r in self.store.all(only_active=True):
             if r["id"] != new_id:
@@ -138,22 +148,31 @@ class Hipercampo:
                 if s >= LINK_SIMILARITY:
                     self.store.link(new_id, r["id"], weight=s)
 
-        superseded = None
-        if best is not None:
+        # Solo superamos si el match es fiable; si no, no pisamos a nadie.
+        if best is not None and best_sim >= UPDATE_MIN_SIMILARITY:
             self.store.mark_superseded([best["id"]])
-            superseded = best["id"]
-        return {"updated": True, "new_id": new_id, "superseded_id": superseded,
-                "replaced_text": best["text"] if best else None,
-                "match_similarity": round(best_sim, 3)}
+            self.store.link(new_id, best["id"], weight=1.0)   # cadena de historia
+            return {"updated": True, "new_id": new_id, "superseded_id": best["id"],
+                    "replaced_text": best["text"], "match_similarity": round(best_sim, 3)}
+        return {"updated": False, "reason": "sin match fiable que reemplazar",
+                "new_id": new_id, "best_similarity": round(best_sim, 3),
+                "hint": "Guardado como recuerdo nuevo. Si querías reemplazar uno "
+                        "concreto, vuelve a llamar con memory_id."}
 
     # 2 -------------------------------------------------------------------
-    def recall(self, query: str, k: int = 5, hops: int = 1) -> list[dict]:
+    def recall(self, query: str, k: int = 5, hops: int = 1,
+               include_history: bool = False) -> list[dict]:
         """
         Recupera por similitud (semillas) + propagación de activación (asociados).
-        Refuerza lo recuperado: recordar algo lo hace más difícil de olvidar.
+        Puede devolver LISTA VACÍA si nada supera el umbral mínimo de relevancia
+        (saber decir "no tengo nada" evita reforzar falsos positivos por ruido).
+        Por defecto NO devuelve historia (episodios ya consolidados ni superados);
+        pon include_history=True para verla. Solo refuerza lo realmente devuelto.
         """
         qhv = encode_text(query)
         rows = self.store.all(only_active=False)
+        if not include_history:                      # nada de archivados ni superados
+            rows = [r for r in rows if not r["consolidated"] and not r["superseded"]]
         if not rows:
             return []
 
@@ -191,8 +210,13 @@ class Hipercampo:
             scored.append((score, act, r))
         scored.sort(key=lambda t: t[0], reverse=True)
 
-        top = scored[:k]
-        self.store.touch([r["id"] for _, _, r in top])   # reforzar lo usado
+        # ABSTENCIÓN: solo lo que supera el umbral mínimo de relevancia. Así una
+        # consulta sin relación real devuelve [] en vez de ruido, y no reforzamos
+        # falsos positivos (que si no, ganarían utilidad y se auto-protegerían).
+        top = [(s, a, r) for s, a, r in scored[:k] if s >= MIN_RECALL_SCORE]
+        # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
+        # para no darle utilidad a falsos positivos que luego se auto-protegerían.
+        self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
 
         return [
             {"id": r["id"], "text": r["text"], "kind": r["kind"],
@@ -204,11 +228,15 @@ class Hipercampo:
         ]
 
     # 3 -------------------------------------------------------------------
-    def consolidate(self) -> dict:
+    def consolidate(self, summarizer=None) -> dict:
         """
-        Fase de 'sueño': agrupa episodios muy parecidos, los funde en un recuerdo
-        semántico (superposición de sus hipervectores + texto unido) y archiva los
-        originales. Así el conocimiento se condensa y deja de ocupar contexto.
+        Fase de 'sueño': AGRUPA episodios muy parecidos en un recuerdo semántico
+        (superposición de sus hipervectores) y archiva los originales. Reduce el nº
+        de nodos activos y su hipervector condensa la estructura.
+
+        Honestidad: por defecto es agrupación ESTRUCTURAL; el texto se une, NO se
+        resume (no reduce tokens por sí solo). Pasa `summarizer(list[str])->str`
+        (p. ej. una llamada a un LLM) para condensar el texto de verdad.
         """
         eps = [r for r in self.store.all(kind="episodic", only_active=True)]
         used: set[int] = set()
@@ -232,14 +260,18 @@ class Hipercampo:
         archived = 0
         for group in clusters:
             hv = bundle([self.store.hv_of(g) for g in group])
-            text = "· " + "\n· ".join(g["text"] for g in group)
+            textos = [g["text"] for g in group]
+            if summarizer is not None:                    # condensación real (LLM)
+                cuerpo = summarizer(textos)
+                etiqueta = f"[resumen x{len(group)}]\n{cuerpo}"
+            else:                                         # agrupación estructural
+                etiqueta = "[agrupado x{}]\n· {}".format(len(group), "\n· ".join(textos))
             importance = max(g["importance"] for g in group)
-            confidence = max(g["confidence"] for g in group)
+            # confianza = media (una sola fuente muy fiable no debe inflar al grupo)
+            confidence = float(np.mean([g["confidence"] for g in group]))
             novelty = float(np.mean([g["novelty"] for g in group]))
-            sem_id = self.store.add(
-                f"[consolidado x{len(group)}]\n{text}", hv, novelty, importance,
-                confidence, kind="semantic",
-            )
+            sem_id = self.store.add(etiqueta, hv, novelty, importance,
+                                    confidence, kind="semantic")
             self.store.mark_consolidated([g["id"] for g in group])
             for g in group:                      # heredar asociaciones
                 for dst, w in self.store.neighbors(g["id"]):
@@ -262,10 +294,11 @@ class Hipercampo:
         to_prune: list[int] = []
 
         for r in self.store.all(only_active=False):
-            if r["kind"] == "semantic":
-                continue                                   # el conocimiento perdura
+            # El conocimiento semántico perdura MÁS (decae x5 más lento), pero no es
+            # inmortal: una consolidación mala u obsoleta también puede podarse.
+            vida = half * (5.0 if r["kind"] == "semantic" else 1.0)
             age = now - r["last_access"]
-            decayed = r["strength"] * (0.5 ** (age / half))
+            decayed = r["strength"] * (0.5 ** (age / vida))
             protected = r["importance"] >= 0.8
             candidato = decayed < FORGET_STRENGTH_FLOOR    # el tiempo lo marca
             poco_valioso = self.retention(r) < RETENTION_FLOOR   # los ejes deciden

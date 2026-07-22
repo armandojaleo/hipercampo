@@ -74,10 +74,13 @@ class Store:
     def link(self, src: int, dst: int, weight: float = 1.0):
         if src == dst:
             return
+        # Peso acotado a [0,1]: al repetir, se satura hacia 1 (no crece sin límite,
+        # que amplificaría la propagación en vez de atenuarla).
+        w = min(1.0, max(0.0, weight))
         self.db.execute(
             "INSERT INTO links(src,dst,weight) VALUES(?,?,?) "
-            "ON CONFLICT(src,dst) DO UPDATE SET weight = weight + ?",
-            (src, dst, weight, weight),
+            "ON CONFLICT(src,dst) DO UPDATE SET weight = weight + 0.3 * (1.0 - weight)",
+            (src, dst, w),
         )
         self.db.commit()
 

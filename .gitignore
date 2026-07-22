@@ -15,3 +15,8 @@ data/
 .DS_Store
 .idea/
 .vscode/
+
+# Configuración local del usuario (rutas y ajustes personales, no portables)
+.claude/
+.mcp.json
+*.bak-*

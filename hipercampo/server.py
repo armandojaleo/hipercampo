@@ -35,6 +35,10 @@ hc = Hipercampo(DB_PATH)
 mcp = FastMCP("hipercampo")
 
 
+def _clip01(x: float) -> float:
+    return min(1.0, max(0.0, float(x)))
+
+
 @mcp.tool()
 def hc_remember(text: str, importance: float = 0.5, confidence: float = 0.5) -> dict:
     """Guarda un recuerdo. Solo se graba si aporta información novedosa o sorprendente.
@@ -42,30 +46,34 @@ def hc_remember(text: str, importance: float = 0.5, confidence: float = 0.5) -> 
     olvido); confidence = cuán FIABLE/cierto es (pesa en el ranking de recall; baja
     para rumores o datos sin confirmar). Si se parece a algo ya guardado, avisa por
     si deberías usar hc_update."""
-    return hc.remember(text, importance, confidence)
+    return hc.remember(text, _clip01(importance), _clip01(confidence))
 
 
 @mcp.tool()
-def hc_recall(query: str, k: int = 5) -> list:
-    """Recupera los recuerdos relevantes para 'query'. Combina similitud directa
-    con propagación de activación por asociaciones. Recordar refuerza."""
-    return hc.recall(query, k)
+def hc_recall(query: str, k: int = 5, include_history: bool = False) -> list:
+    """Recupera los recuerdos relevantes para 'query'. Combina similitud directa con
+    propagación de activación. Puede devolver [] si nada es relevante (sabe abstenerse).
+    include_history=True incluye recuerdos ya consolidados o superados (la historia)."""
+    k = min(50, max(1, int(k)))
+    return hc.recall(query, k, include_history=include_history)
 
 
 @mcp.tool()
-def hc_update(target: str, new_text: str, importance: float = 0.7) -> dict:
-    """Actualiza un hecho que cambió. Busca el recuerdo que mejor case con 'target'
-    (descríbelo con tus palabras), lo marca como superado y guarda 'new_text' como
-    la versión vigente. Úsalo cuando algo CONTRADICE o ACTUALIZA lo que ya sabías
-    (p. ej. una preferencia que cambió, un dato que se movió). El viejo no se borra:
-    queda como historia pero deja de dominar la recuperación."""
-    return hc.update(target, new_text, importance)
+def hc_update(target: str = "", new_text: str = "", importance: float = 0.7,
+              memory_id: int | None = None) -> dict:
+    """Actualiza un hecho que cambió. Indica el recuerdo a reemplazar por 'memory_id'
+    (exacto, lo más seguro) o por 'target' (se busca el que mejor case). Si no hay un
+    match fiable, NO pisa nada: guarda 'new_text' como recuerdo nuevo y lo avisa.
+    Úsalo cuando algo CONTRADICE o ACTUALIZA lo que ya sabías. El viejo no se borra:
+    queda como historia, demovido."""
+    return hc.update(target, new_text, _clip01(importance), memory_id)
 
 
 @mcp.tool()
 def hc_consolidate() -> dict:
-    """Fase de sueño: agrupa episodios parecidos, los funde en conocimiento
-    semántico condensado y archiva los originales. Correr periódicamente."""
+    """Fase de sueño: AGRUPA episodios parecidos en un recuerdo semántico y archiva
+    los originales (reduce nodos activos; el texto se une, no se resume). Correr
+    periódicamente."""
     return hc.consolidate()
 
 

@@ -1,5 +1,7 @@
 # 🧠 hipercampo
 
+[![CI](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml/badge.svg)](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml)
+
 **Una memoria viva para Claude, basada en hipervectores — no en embeddings.**
 
 La mayoría de las memorias para LLMs son lo mismo: trocear texto, convertirlo en
@@ -12,8 +14,8 @@ que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 | Idea | Qué hace | Inspiración |
 |------|----------|-------------|
 | **VSA / hipervectores** | Recuerdos como vectores binarios de 10.000 bits con álgebra real (`bind`/`bundle`). Distingue *"el perro muerde al hombre"* de su inverso — cosa que un embedding denso difumina. Corre en CPU con popcount, sin GPU. | Kanerva (SDM), Plate (HRR) |
-| **Escritura por sorpresa** | Doble veto: no guarda lo **redundante** (ya hay algo parecido) ni lo **predecible** (un modelo de lenguaje incremental interno ya lo predecía, medido en *bits* — compresión/MDL). Ahí está el ahorro de tokens. | Error de predicción hipocampal; compresión-como-inteligencia (Hutter) |
-| **Consolidación ("sueño")** | Un proceso offline agrupa episodios parecidos, los funde en conocimiento semántico condensado y archiva los originales. | Replay hipocampo→córtex |
+| **Escritura por sorpresa** | Doble veto: no guarda lo **redundante** (ya hay algo parecido) ni lo **predecible** (un modelo de lenguaje incremental interno ya lo predecía, medido en *bits* — compresión/MDL). Ahí *apunta* el ahorro de tokens (aún no medido de extremo a extremo). | Error de predicción hipocampal; compresión-como-inteligencia (Hutter) |
+| **Consolidación ("sueño")** | Un proceso offline **agrupa** episodios parecidos en un recuerdo semántico (agrupación estructural: reduce nodos, el texto se une; con un `summarizer` opcional se resume de verdad) y archiva los originales. | Replay hipocampo→córtex |
 | **Olvido activo** | La fuerza de un recuerdo decae con el desuso; lo débil y poco importante se poda. La importancia alta protege. | Olvido adaptativo |
 
 > **Honestidad de ingeniería.** La sorpresa combina dos señales: *novedad léxica*
@@ -36,7 +38,7 @@ python scripts/demo.py                            # (opcional) ver el ciclo func
 claude mcp add hipercampo -- python -m hipercampo.server   # conectar a Claude Code
 ```
 
-Reinicia Claude Code y tendrás 5 herramientas nuevas (`hc_remember`, `hc_recall`,
+Reinicia Claude Code y tendrás 6 herramientas nuevas (`hc_remember`, `hc_recall`,
 `hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
 verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
 
@@ -68,7 +70,8 @@ python scripts/scenarios.py      # historia narrada: Claude recordando a un usua
 - **test_memory.py** — 10 casos realistas, uno por promesa (no duplica lo conocido,
   prioriza lo relevante, la propagación trae asociados, el sueño condensa, la
   importancia protege del olvido, la memoria sobrevive a un reinicio…).
-- **test_properties.py** — pruebas *generativas espontáneas*: cada invariante se
+- **test_properties.py** — pruebas *generativas* (8 semillas fijas y vocabulario
+  acotado, reproducibles; no es property-based amplio tipo Hypothesis): cada invariante se
   comprueba con 8 juegos de datos distintos inventados en el momento. Si alguna
   promesa se rompe con **algún** dato, el test enseña el contraejemplo. Ejemplos:
   *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera entre 25
@@ -174,7 +177,7 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 (O sin Docker: `command: "python"`, `args: ["-m", "hipercampo.server"]`, con
 `HIPERCAMPO_DB` apuntando a un fichero local.)
 
-Reinicia el cliente y Claude tendrá cinco herramientas nuevas.
+Reinicia el cliente y Claude tendrá seis herramientas nuevas.
 
 ---
 
@@ -200,8 +203,10 @@ sintéticos + 1 "aguja":
 |-----------|:---:|:---:|
 | 2.001 | ~124 ms | sí, posición #1 |
 
-La precisión **no se degrada** al crecer la memoria (la aguja sigue saliendo
-primera). Pero el recall es **lineal** (no hay índice ANN): a ~100k recuerdos serían
+En este test la aguja **sigue saliendo primera** al crecer la memoria (buena señal),
+pero no es una prueba general de que la precisión no se degrade: haría falta muchas
+consultas, distintas similitudes y baselines externos. El recall es **lineal** (no
+hay índice ANN): a ~100k recuerdos serían
 segundos. Para memoria personal/agente (cientos a pocos miles) va sobrado; a gran
 escala haría falta vectorizar el escaneo (popcount por bloques) o un índice. Es un
 límite conocido, no oculto.
