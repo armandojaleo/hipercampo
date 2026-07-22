@@ -47,6 +47,12 @@ predictable. Closes the four blockers raised in external review.
 - `hipercampo doctor` now reports schema version and health.
 - New suite `tests/test_estados.py` (13 tests) + 4 migration tests — **21 suites**.
 - **CI now runs on Windows and macOS**, not just Linux: hipercampo is a local app.
+  That alone caught three bugs that never reproduced on the dev machine.
+- **`hipercampo servers` / `hipercampo restart`**: an MCP server is a long-lived
+  process that loaded its code at startup, so after an upgrade it keeps serving the
+  old version and nothing looks wrong. These list the live servers with their start
+  time and terminate them; the MCP client relaunches them on next use, with the new
+  code. No dependencies (psutil if present, system tools otherwise).
 
 ## [Unreleased]
 

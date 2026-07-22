@@ -10,6 +10,8 @@ CLI de hipercampo — para usarlo desde el terminal y, sobre todo, desde HOOKS
     hipercampo sleep                 # consolidar + olvidar + soñar
     hipercampo stats                 # estado de la memoria
     hipercampo backup [destino]      # copia de seguridad consistente
+    hipercampo servers               # qué servidores MCP hay vivos y desde cuándo
+    hipercampo restart               # reiniciarlos tras actualizar (el cliente los relanza)
     hipercampo doctor                # diagnóstico: ruta, permisos, versión, deps
     hipercampo version
 
@@ -22,6 +24,7 @@ import json
 import os
 import re
 import sys
+import time
 
 try:                                                  # salida UTF-8 en Windows
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -97,6 +100,68 @@ def cmd_hook(_args) -> int:
     return 0
 
 
+def _describe(p: dict) -> str:
+    from . import __version__
+    cuando = (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(p["arranque"]))
+              if p.get("arranque") else "?")
+    edad = ""
+    if p.get("arranque"):
+        mins = (time.time() - p["arranque"]) / 60
+        edad = f" ({mins/60:.1f} h)" if mins >= 90 else f" ({mins:.0f} min)"
+    linea = f"  pid {p['pid']:<7} arrancado {cuando}{edad}"
+    if p.get("db"):
+        linea += f"\n{'':14}BD {p['db']}"
+    return linea
+
+
+def cmd_servers(_args) -> int:
+    """Qué servidores hay vivos. Sirve para ver de un vistazo si alguno lleva
+    demasiado tiempo en pie (= código viejo) o si se han acumulado huérfanos."""
+    from . import __version__
+    from .procs import listar
+    procesos = listar()
+    if not procesos:
+        print("No hay ningún servidor MCP de hipercampo en marcha.")
+        print("(el cliente lo arranca solo la primera vez que usa una herramienta)")
+        return 0
+    print(f"hipercampo {__version__} instalado · {len(procesos)} servidor(es) en marcha:")
+    for p in procesos:
+        print(_describe(p))
+    print("\nEl proceso carga el código al arrancar: si has actualizado hipercampo "
+          "después\nde esa hora, ese servidor sigue sirviendo la versión anterior. "
+          "`hipercampo restart`\nlos termina y el cliente los vuelve a levantar solo.")
+    return 0
+
+
+def cmd_restart(args) -> int:
+    """Termina los servidores para que el cliente los levante con el código actual."""
+    from .procs import listar, terminar
+    procesos = listar()
+    if not procesos:
+        print("No hay ningún servidor en marcha: no hay nada que reiniciar.")
+        print("El cliente arrancará uno nuevo (ya con el código actual) al usarlo.")
+        return 0
+    print(f"{len(procesos)} servidor(es) en marcha:")
+    for p in procesos:
+        print(_describe(p))
+    if args.dry_run:
+        print("\n(--dry-run: no se ha tocado nada)")
+        return 0
+
+    estado = terminar([p["pid"] for p in procesos])
+    print()
+    for pid, que in estado.items():
+        print(f"  pid {pid:<7} {que}")
+    quedan = [p for p in listar() if p["pid"] in estado]
+    if quedan:
+        print("\nNO se pudieron cerrar: " + ", ".join(str(p["pid"]) for p in quedan))
+        print("Quizá pertenecen a otro usuario; ciérralos a mano o reinicia el cliente.")
+        return 1
+    print("\nListo. NO hace falta arrancarlos: el cliente MCP levanta uno nuevo, con el\n"
+          "código actual, la próxima vez que use una herramienta de hipercampo.")
+    return 0
+
+
 def cmd_doctor(_args) -> int:
     """Diagnóstico rápido: ¿está todo en su sitio para funcionar?"""
     from . import __version__
@@ -142,6 +207,10 @@ def main(argv=None) -> int:
     dr.add_argument("--full", action="store_true",
                     help="integrity_check completo (más lento) en vez de quick_check")
     sub.add_parser("hook", help="modo sináptico: para el hook UserPromptSubmit")
+    sub.add_parser("servers", help="qué servidores MCP hay en marcha y desde cuándo")
+    rs = sub.add_parser("restart", help="reiniciar los servidores tras actualizar")
+    rs.add_argument("--dry-run", action="store_true",
+                    help="enseñar qué se cerraría, sin cerrar nada")
     sub.add_parser("version", help="versión instalada")
     for nombre, ayuda in (("assist", "qué toca hacer en este momento (hooks)"),
                           ("recall", "recuperar"), ("muse", "inspiración"),
@@ -171,6 +240,10 @@ def main(argv=None) -> int:
         return cmd_doctor(args)
     if args.cmd == "hook":
         return cmd_hook(args)
+    if args.cmd == "servers":
+        return cmd_servers(args)
+    if args.cmd == "restart":
+        return cmd_restart(args)
     if args.cmd == "backup":
         from .backup import backup
         print("Copia creada en:", backup(args.dest)); return 0

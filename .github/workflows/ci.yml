@@ -38,7 +38,7 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           set -e
-          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience estados properties; do
+          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience estados procs properties; do
             echo "::group::test_$t"
             python tests/test_$t.py
             echo "::endgroup::"
