@@ -216,6 +216,53 @@ Debe listar las 12 herramientas `hc_*`.
 
 ---
 
+## Modo SINÁPTICO (que la memoria dispare sola en cada turno)
+
+Por defecto, la memoria es *pull*: Claude decide cuándo llamarla. Con un **hook** de
+Claude Code puede dispararse **en cada mensaje tuyo**, como una sinapsis.
+
+hipercampo decide solo qué toca (`hipercampo assist`): recordar si preguntas,
+inspirar si estás atascado, sugerir guardar/actualizar si afirmas algo nuevo, o
+**callarse** si no hay nada relevante. Nunca escribe por su cuenta.
+
+En `~/.claude/settings.json` (o `.claude/settings.json` del proyecto):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hipercampo assist \"$CLAUDE_USER_PROMPT\" --plain"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+La salida del hook se añade al contexto del turno: Claude "recuerda" sin haber
+llamado a ninguna herramienta. Prueba antes a mano:
+
+```bash
+hipercampo assist "¿dónde está alojado el servidor?" --plain
+hipercampo assist "hoy hace sol"        # -> nothing: se calla, y está bien
+```
+
+> Ajusta el nombre de la variable del prompt a la que use tu versión de Claude Code
+> (`/hooks` te lo muestra). Si prefieres no depender de hooks, la herramienta
+> `hc_assist` hace lo mismo cuando Claude la llama al principio del turno.
+
+### Sueño autónomo
+
+Cada **50 escrituras** (variable `HIPERCAMPO_AUTOSLEEP_EVERY`, `0` lo desactiva)
+hipercampo **se mantiene sola**: consolida, adormece lo que ya no vale y propone
+puentes. Como un cerebro que duerme sin que se lo manden. También puedes pedírselo:
+`hipercampo sleep` o la herramienta `hc_sleep`.
+
 ## Controlar y respaldar la memoria
 
 Toda la memoria de hipercampo es **un único fichero SQLite**. Fácil de ver, mover,

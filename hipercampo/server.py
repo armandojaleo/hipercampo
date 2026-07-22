@@ -133,6 +133,24 @@ def hc_reject_bridge(a_id: int, b_id: int) -> dict:
 
 
 @mcp.tool()
+def hc_assist(message: str, k: int = 3) -> dict:
+    """¿Qué toca hacer en ESTE momento de la conversación? Dale el mensaje del
+    usuario y hipercampo decide solo: recordar si pregunta, inspirar si está
+    atascado, recomendar guardar/actualizar si afirma algo nuevo, o CALLARSE si no
+    hay nada relevante. Ejecuta las lecturas; las escrituras solo las recomienda
+    (nada entra en la memoria sin intención). Úsalo al principio de cada turno."""
+    return hc.assist(message, k)
+
+
+@mcp.tool()
+def hc_sleep() -> dict:
+    """Un ciclo de SUEÑO completo: consolida, olvida (adormece) y propone puentes.
+    hipercampo lo hace SOLO cada N escrituras (HIPERCAMPO_AUTOSLEEP_EVERY, 50 por
+    defecto); esta herramienta sirve para pedírselo cuando quieras."""
+    return hc.sleep()
+
+
+@mcp.tool()
 def hc_consolidate() -> dict:
     """Fase de sueño: AGRUPA episodios parecidos en un recuerdo semántico y archiva
     los originales (reduce nodos activos; el texto se une, no se resume). Correr

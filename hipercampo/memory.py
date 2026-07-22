@@ -55,6 +55,9 @@ MAX_TEXT_LEN = 20_000            # tope de longitud de un recuerdo (defensa)
 MAX_MEMORIES = int(os.environ.get("HIPERCAMPO_MAX_MEMORIES", "0") or "0")
 # Si está activo, los secretos se ENMASCARAN antes de guardar (no solo se avisa).
 REDACT_SECRETS = os.environ.get("HIPERCAMPO_REDACT_SECRETS") == "1"
+# SUEÑO AUTÓNOMO: cada cuántas escrituras la memoria se mantiene sola (consolida,
+# olvida y propone puentes) sin que nadie se lo pida. 0 = desactivado.
+AUTOSLEEP_EVERY = int(os.environ.get("HIPERCAMPO_AUTOSLEEP_EVERY", "50") or "0")
 
 
 def _clip01(x: float) -> float:
@@ -102,6 +105,12 @@ class Hipercampo:
 
     def ask_role(self, role: str, known: dict, at: float | None = None) -> dict:
         return self.roles.ask_role(role, known, at=at)
+
+    def assist(self, message: str, k: int = 3) -> dict:
+        """¿Qué toca hacer en ESTE momento de la conversación? Decide la operación
+        de memoria adecuada, ejecuta las lecturas y recomienda las escrituras."""
+        from .policy import decide
+        return decide(self, message, k=k)
 
     # --- los cuatro ejes, separados ------------------------------------
     @staticmethod
@@ -188,6 +197,7 @@ class Hipercampo:
                     self.store.link(mem_id, row["id"], weight=float(sims_act[i]),
                                     type="lexical")
         self.surprise.learn(text)                     # aprender tras confirmar
+        mantenimiento = self._autosleep()             # ¿le toca dormir sola?
 
         result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
                   "surprise": round(surprise, 3), "importance": importance}
@@ -199,6 +209,8 @@ class Hipercampo:
                 "almacenarlo, enmascararlo (HIPERCAMPO_REDACT_SECRETS=1) o cifrar.")
         if evictado is not None:
             result["evicted_id"] = evictado          # se podó el de menor retención
+        if mantenimiento:
+            result["mantenimiento"] = mantenimiento  # durmió sola (ver _autosleep)
 
         # Aviso de posible actualización/contradicción: si esto se parece mucho a un
         # recuerdo existente, quizá lo ACTUALICE. No decidimos nosotros (haría falta
@@ -581,6 +593,36 @@ class Hipercampo:
         return {"bridges": bridges, "dry_run": dry_run,
                 "nota": ("solo propuestas; usa dry_run=False para registrarlas como "
                          "hipótesis y hc_accept_bridge para confirmarlas")}
+
+    def sleep(self, dream_bridges: int = 3) -> dict:
+        """Un ciclo de sueño completo: consolidar → olvidar → soñar (propuestas).
+        Es lo que hipercampo hace SOLO cada AUTOSLEEP_EVERY escrituras."""
+        cons = self.consolidate()
+        olv = self.forget(dry_run=False)
+        sue = self.dream(max_bridges=dream_bridges, dry_run=False)
+        return {"consolidado": cons["clusters_fusionados"],
+                "adormecidos": olv["olvidados"],
+                "hipotesis": len(sue.get("bridges", []))}
+
+    def _autosleep(self) -> dict | None:
+        """INICIATIVA PROPIA: cuenta las escrituras y, al llegar al umbral, se mantiene
+        sola (como un cerebro que duerme sin que se lo manden). Devuelve el resumen
+        si durmió, o None. Nunca rompe la escritura: si falla, se ignora."""
+        if not AUTOSLEEP_EVERY:
+            return None
+        try:
+            n = int(self.store.get_meta("writes_since_sleep", "0") or 0) + 1
+            if n < AUTOSLEEP_EVERY:
+                self.store.set_meta("writes_since_sleep", n)
+                return None
+            self.store.set_meta("writes_since_sleep", 0)
+            self.store.set_meta("last_sleep", time.time())
+            resumen = self.sleep()
+            resumen["nota"] = ("mantenimiento automático tras "
+                               f"{AUTOSLEEP_EVERY} escrituras")
+            return resumen
+        except Exception:
+            return None                      # el mantenimiento nunca debe romper nada
 
     def accept_bridge(self, a: int, b: int) -> dict:
         """Confirma una hipótesis del sueño: pasa a ser asociación real y ya propaga."""

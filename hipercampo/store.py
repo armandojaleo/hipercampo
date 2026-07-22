@@ -54,6 +54,12 @@ CREATE TABLE IF NOT EXISTS facts (
     supersedes INTEGER,            -- a qué hecho sustituye (historia, no borrado)
     source     TEXT                -- procedencia (quién/qué lo afirmó)
 );
+CREATE TABLE IF NOT EXISTS meta (
+    namespace TEXT NOT NULL,
+    key       TEXT NOT NULL,
+    value     TEXT,
+    PRIMARY KEY (namespace, key)
+);
 """
 
 # Los índices van APARTE y se crean DESPUÉS de migrar: en una BD antigua las
@@ -178,6 +184,19 @@ class Store:
         )
         self._commit()
         return cur.lastrowid
+
+    # --- meta (contadores del propio sistema, por contexto) --------------
+    def get_meta(self, key: str, default=None):
+        r = self.db.execute("SELECT value FROM meta WHERE namespace=? AND key=?",
+                            (self.namespace, key)).fetchone()
+        return r[0] if r else default
+
+    def set_meta(self, key: str, value):
+        self.db.execute(
+            "INSERT INTO meta(namespace,key,value) VALUES(?,?,?) "
+            "ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value",
+            (self.namespace, key, str(value)))
+        self._commit()
 
     def close_fact(self, fact_id: int, when: float | None = None):
         """Cierra la vigencia de un hecho (deja de ser cierto AHORA, pero se conserva:
