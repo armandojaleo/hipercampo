@@ -166,11 +166,13 @@ def hc_forget(dry_run: bool = True) -> dict:
 
 
 @mcp.tool()
-def hc_health() -> dict:
+def hc_health(full: bool = False) -> dict:
     """¿Está sana la memoria? Comprueba integridad del fichero, esquema, lectura y
-    permisos de escritura. Si algo falla, las operaciones intentan reconectar solas
-    y avisan; usa esto para diagnosticar antes de dar por buena una respuesta."""
-    return hc.health()
+    escritura REAL (una escritura de prueba que se deshace, no solo permisos).
+    Informa también de la versión del esquema y del último sueño. Si algo falla,
+    las operaciones transitorias reconectan solas y avisan; los fallos permanentes
+    NO se reintentan. Usa full=True para un integrity_check completo (más lento).""" 
+    return hc.health(full)
 
 
 @mcp.tool()

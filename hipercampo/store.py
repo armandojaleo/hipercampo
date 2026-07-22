@@ -16,6 +16,23 @@ import numpy as np
 
 from .vsa import from_blob, to_blob
 
+# Precedencia de un enlace cuando se vuelve a observar el mismo par. Manda el de
+# mayor rango; a igualdad, gana lo que ya había (la evidencia no se pisa a sí misma).
+#
+#   4  evidencia observada (lexical | update | consolidation) confirmada
+#   3  hipótesis RECHAZADA — solo una observación real la resucita; volver a
+#      proponerla, no (si no, insistir bastaría para colar lo ya descartado)
+#   2  hipótesis de sueño ya CONFIRMADA
+#   1  hipótesis de sueño solo PROPUESTA (no propaga)
+def _rank(t: str, s: str) -> str:
+    return (f"CASE WHEN {t}<>'dream' THEN 4 "
+            f"WHEN {s}='rejected' THEN 3 "
+            f"WHEN {s}='proposed' THEN 1 ELSE 2 END")
+
+
+_RANK_NEW = _rank("excluded.type", "excluded.status")
+_RANK_OLD = _rank("links.type", "links.status")
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS memories (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,11 +126,16 @@ class Store:
         return stack_hvs([r["hv"] for r in rows])
 
     # --- salud y recuperación --------------------------------------------
-    def health(self) -> dict:
-        """¿Está sana la memoria? Integridad del fichero, esquema y escritura."""
+    def health(self, full: bool = False) -> dict:
+        """¿Está sana la memoria? Integridad del fichero, esquema y escritura REAL.
+
+        Por defecto usa `quick_check` (barato aunque la memoria crezca); con
+        `full=True` corre el `integrity_check` completo (`hipercampo doctor --full`)."""
         info = {"db": os.path.abspath(self.path), "namespace": self.namespace}
         try:
-            info["integridad"] = self.db.execute("PRAGMA integrity_check").fetchone()[0]
+            comprobacion = "integrity_check" if full else "quick_check"
+            info["integridad"] = self.db.execute(f"PRAGMA {comprobacion}").fetchone()[0]
+            info["comprobacion"] = comprobacion
         except Exception as e:
             info["integridad"] = f"ERROR: {e}"
         try:
@@ -128,8 +150,40 @@ class Store:
             info["lectura"] = "ok"
         except Exception as e:
             info["lectura"] = f"ERROR: {e}"
-        info["escribible"] = os.access(os.path.dirname(os.path.abspath(self.path)) or ".",
-                                       os.W_OK)
+        # Escritura REAL, no permisos del directorio: os.access no ve el disco lleno,
+        # ni un fichero .db de solo lectura, ni un WAL que no se puede crear. Escribimos
+        # de verdad dentro de un SAVEPOINT y lo deshacemos: no deja rastro.
+        try:
+            self.db.execute("SAVEPOINT hc_health")
+            self.db.execute(                       # sin set_meta: haría commit y
+                "INSERT INTO meta(namespace,key,value) "   # soltaría el SAVEPOINT
+                "VALUES(?,'_health_probe','1') "
+                "ON CONFLICT(namespace,key) DO UPDATE SET value='1'", (self.namespace,))
+            self.db.execute("ROLLBACK TO hc_health")
+            self.db.execute("RELEASE hc_health")
+            info["escribible"] = True
+        except Exception as e:
+            try:
+                self.db.execute("RELEASE hc_health")
+            except Exception:
+                pass
+            info["escribible"] = False
+            info["escritura_error"] = str(e)
+
+        for clave, etiqueta in (("schema_version", "version_esquema"),
+                                ("last_sleep_success", "ultimo_sueno_ok"),
+                                ("last_sleep_error", "ultimo_sueno_error"),
+                                ("writes_since_sleep", "escrituras_sin_dormir")):
+            try:
+                info[etiqueta] = self.get_meta(clave, None)
+            except Exception:
+                info[etiqueta] = None
+        try:
+            wal = os.path.abspath(self.path) + "-wal"
+            info["wal_bytes"] = os.path.getsize(wal) if os.path.exists(wal) else 0
+        except Exception:
+            info["wal_bytes"] = None
+
         info["sana"] = (info.get("integridad") == "ok" and info.get("esquema") == "ok"
                         and info.get("lectura") == "ok" and info["escribible"])
         return info
@@ -165,40 +219,106 @@ class Store:
             if self._txn_depth == 0:
                 self.db.commit()
 
-    def _migrate(self):
-        """Añade columnas nuevas a BDs creadas con versiones anteriores."""
-        cols = {r[1] for r in self.db.execute("PRAGMA table_info(memories)")}
-        if "superseded" not in cols:
-            self.db.execute(
-                "ALTER TABLE memories ADD COLUMN superseded INTEGER NOT NULL DEFAULT 0")
-        if "confidence" not in cols:
-            self.db.execute(
-                "ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 0.5")
-        if "namespace" not in cols:
-            self.db.execute(
-                "ALTER TABLE memories ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
-        if "dormant" not in cols:
-            self.db.execute(
-                "ALTER TABLE memories ADD COLUMN dormant INTEGER NOT NULL DEFAULT 0")
-        if "fact_id" not in cols:
-            self.db.execute("ALTER TABLE memories ADD COLUMN fact_id INTEGER")
-        lcols = {r[1] for r in self.db.execute("PRAGMA table_info(links)")}
-        if lcols and "namespace" not in lcols:
-            self.db.execute(
-                "ALTER TABLE links ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
-        if lcols and "type" not in lcols:
-            self.db.execute(
-                "ALTER TABLE links ADD COLUMN type TEXT NOT NULL DEFAULT 'lexical'")
-        if lcols and "status" not in lcols:
-            self.db.execute(
-                "ALTER TABLE links ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'")
-        if lcols and "created_at" not in lcols:
-            self.db.execute("ALTER TABLE links ADD COLUMN created_at REAL")
-        fcols = {r[1] for r in self.db.execute("PRAGMA table_info(facts)")}
+    def _columnas(self, tabla: str) -> set:
+        return {r[1] for r in self.db.execute(f"PRAGMA table_info({tabla})")}
+
+    def _añadir(self, tabla: str, columna: str, ddl: str):
+        """ALTER TABLE idempotente: si la columna ya está, no hace nada."""
+        cols = self._columnas(tabla)
+        if cols and columna not in cols:
+            self.db.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {ddl}")
+
+    # Migraciones VERSIONADAS. Cada una es idempotente y se aplica en una
+    # transacción; al terminar se graba `PRAGMA user_version`. Una BD antigua
+    # (user_version=0) las recorre todas: los pasos ya aplicados no hacen nada,
+    # así que reanudar tras una interrupción es seguro.
+    def _m001_confianza_y_relevo(self):
+        self._añadir("memories", "superseded", "INTEGER NOT NULL DEFAULT 0")
+        self._añadir("memories", "confidence", "REAL NOT NULL DEFAULT 0.5")
+
+    def _m002_namespaces(self):
+        self._añadir("memories", "namespace", "TEXT NOT NULL DEFAULT 'default'")
+        self._añadir("links", "namespace", "TEXT NOT NULL DEFAULT 'default'")
+
+    def _m003_latencia_y_enlaces_tipados(self):
+        self._añadir("memories", "dormant", "INTEGER NOT NULL DEFAULT 0")
+        self._añadir("links", "type", "TEXT NOT NULL DEFAULT 'lexical'")
+        self._añadir("links", "status", "TEXT NOT NULL DEFAULT 'confirmed'")
+        self._añadir("links", "created_at", "REAL")
+
+    def _m004_hechos_con_historia(self):
+        self._añadir("memories", "fact_id", "INTEGER")
         for col, ddl in (("valid_from", "REAL"), ("valid_to", "REAL"),
                          ("supersedes", "INTEGER"), ("source", "TEXT")):
-            if fcols and col not in fcols:
-                self.db.execute(f"ALTER TABLE facts ADD COLUMN {col} {ddl}")
+            self._añadir("facts", col, ddl)
+
+    def _m005_metadatos_de_salud(self):
+        # Un enlace solo puede estar en uno de estos estados; una BD antigua con
+        # basura queda normalizada antes de que la máquina de estados dependa de ella.
+        if self._columnas("links"):
+            self.db.execute("UPDATE links SET status='confirmed' "
+                            "WHERE status NOT IN ('proposed','confirmed','rejected')")
+
+    _MIGRACIONES = [
+        (1, "confianza_y_relevo", _m001_confianza_y_relevo),
+        (2, "namespaces", _m002_namespaces),
+        (3, "latencia_y_enlaces_tipados", _m003_latencia_y_enlaces_tipados),
+        (4, "hechos_con_historia", _m004_hechos_con_historia),
+        (5, "metadatos_de_salud", _m005_metadatos_de_salud),
+    ]
+    SCHEMA_VERSION = 5
+
+    def _copia_previa(self, version: int):
+        """Copia de seguridad ANTES de tocar el esquema de una BD con datos. Si algo
+        sale mal, los recuerdos siguen ahí. No se hace para una BD recién creada
+        (nada que perder) ni en memoria."""
+        if self.path in ("", ":memory:") or not os.path.exists(self.path):
+            return
+        destino = f"{self.path}.bak-v{version}"
+        if os.path.exists(destino):
+            return                                  # ya hay copia de este salto
+        try:
+            if not self.db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' "
+                    "AND name='memories'").fetchone():
+                return                              # BD nueva: nada que respaldar
+            copia = sqlite3.connect(destino)        # `with` haría commit, no close
+            try:
+                self.db.backup(copia)               # copia consistente, no cp
+            finally:
+                copia.close()
+        except Exception:
+            pass          # una copia imposible no debe impedir abrir la memoria
+
+    def _migrate(self):
+        """Lleva la BD hasta SCHEMA_VERSION, paso a paso y registrando la versión.
+
+        Antes se detectaban columnas sueltas sin dejar constancia de en qué versión
+        estaba el fichero; eso ya provocó un fallo al abrir bases antiguas. Ahora
+        cada paso es explícito, transaccional y comprobable."""
+        actual = self.db.execute("PRAGMA user_version").fetchone()[0]
+        if actual >= self.SCHEMA_VERSION:
+            return
+        self._copia_previa(actual)
+        for version, nombre, paso in self._MIGRACIONES:
+            if version <= actual:
+                continue
+            try:
+                self.db.execute("SAVEPOINT hc_migracion")
+                paso(self)
+                self.db.execute("RELEASE hc_migracion")
+                self.db.execute(f"PRAGMA user_version = {version}")
+                self.db.commit()
+            except Exception as e:
+                try:
+                    self.db.execute("ROLLBACK TO hc_migracion")
+                    self.db.execute("RELEASE hc_migracion")
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"falló la migración {version:03d}_{nombre}: {e} · "
+                    f"la BD sigue en la versión {actual}; hay una copia en "
+                    f"{self.path}.bak-v{actual}") from e
 
     # --- escritura -------------------------------------------------------
     def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic",
@@ -276,21 +396,42 @@ class Store:
         # que amplificaría la propagación en vez de atenuarla). Enlace etiquetado
         # con el namespace: nunca se cruzan contextos.
         w = min(1.0, max(0.0, weight))
+        # Al repetirse un enlace manda el de MAYOR rango (ver _RANK_SQL): una
+        # observación real ASCIENDE una vieja hipótesis (incluso rechazada), pero
+        # una hipótesis nunca degrada la evidencia ya confirmada. El peso solo se
+        # refuerza si el enlace resultante no queda rechazado: lo descartado no
+        # debe engordar a base de reproponerse.
         self.db.execute(
             "INSERT INTO links(src,dst,weight,namespace,type,status,created_at) "
             "VALUES(?,?,?,?,?,?,?) "
-            "ON CONFLICT(src,dst) DO UPDATE SET weight = weight + 0.3 * (1.0 - weight)",
+            "ON CONFLICT(src,dst) DO UPDATE SET "
+            f"  type   = CASE WHEN {_RANK_NEW} > {_RANK_OLD} THEN excluded.type"
+            "                 ELSE links.type END,"
+            f"  status = CASE WHEN {_RANK_NEW} > {_RANK_OLD} THEN excluded.status"
+            "                 ELSE links.status END,"
+            f"  weight = CASE WHEN {_RANK_NEW} > {_RANK_OLD} THEN excluded.weight"
+            "                 WHEN links.status='rejected' THEN links.weight"
+            "                 ELSE links.weight + 0.3 * (1.0 - links.weight) END",
             (src, dst, w, self.namespace, type, status, time.time()),
         )
         self._commit()
 
-    def set_link_status(self, a: int, b: int, status: str):
-        """Confirma o rechaza una hipótesis (enlace propuesto)."""
-        self.db.execute(
-            "UPDATE links SET status=? WHERE namespace=? AND "
-            "((src=? AND dst=?) OR (src=? AND dst=?))",
+    def set_link_status(self, a: int, b: int, status: str) -> int:
+        """Resuelve una hipótesis del sueño: proposed → confirmed | rejected.
+
+        SOLO toca enlaces `type='dream'` con `status='proposed'`: una asociación
+        observada o ya confirmada no se puede rechazar por accidente, y una
+        hipótesis ya resuelta no se re-resuelve. Devuelve cuántas filas cambió
+        (0 = no había tal propuesta)."""
+        if status not in ("confirmed", "rejected"):
+            raise ValueError(f"transición no permitida: proposed → {status}")
+        cur = self.db.execute(
+            "UPDATE links SET status=? WHERE namespace=? AND type='dream' "
+            "AND status='proposed' AND ((src=? AND dst=?) OR (src=? AND dst=?))",
             (status, self.namespace, a, b, b, a))
+        n = cur.rowcount
         self._commit()
+        return n
 
     def proposed_links(self) -> list[sqlite3.Row]:
         return self.db.execute(

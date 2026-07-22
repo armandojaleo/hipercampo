@@ -3,6 +3,47 @@
 All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.1.0a4] — 2026-07-22
+
+Hardening release. **No new cognitive features** — this one makes what exists
+predictable. Closes the four blockers raised in external review.
+
+### Fixed
+- **Link state machine.** The UPSERT only touched `weight`, so a dream hypothesis
+  could overwrite the `type`/`status` of confirmed evidence, and `set_link_status`
+  could reject *any* link between two memories — including a lexical one. Now a
+  strict precedence decides (observed evidence > rejected > confirmed hypothesis >
+  proposal): a real observation can **promote** an old rejected hypothesis, but
+  re-proposing something already rejected neither resurrects nor reinforces it.
+  `set_link_status` only ever moves `dream/proposed → confirmed | rejected`,
+  returns the affected row count, and `hc_accept_bridge` / `hc_reject_bridge`
+  now **report an error** instead of claiming success for a hypothesis that
+  doesn't exist.
+- **Retries are no longer blind.** `@resiliente` retried *any* `sqlite3.Error`,
+  which could duplicate a write that had actually committed. Only transient
+  failures (dropped connection, lock) are retried; corruption, read-only database,
+  full disk or a broken schema are reported without retrying (`"reintentado": false`).
+- **`hc_health` write check was a false positive.** It tested directory permissions
+  (`os.access`), which sees neither a full disk nor a read-only `.db`. It now does a
+  **real write** inside a `SAVEPOINT` and rolls it back. Default check is
+  `quick_check` (cheap as the memory grows); `integrity_check` on demand via
+  `hipercampo doctor --full` or `hc_health(full=True)`.
+- **Autosleep could lie.** It reset the write counter and stamped the sleep time
+  *before* knowing whether consolidate/forget/dream succeeded, and swallowed errors.
+  Now the counter resets **only on success**, and `last_sleep_attempt`,
+  `last_sleep_success` and `last_sleep_error` are recorded and surfaced by `hc_health`.
+- Backup connection was left open (`with sqlite3.connect(...)` commits, it doesn't
+  close) — a real file-handle leak on Windows.
+
+### Added
+- **Versioned migrations** (`PRAGMA user_version`, `SCHEMA_VERSION = 5`): five
+  explicit, idempotent, transactional steps instead of ad-hoc column sniffing.
+  A **backup is taken before touching the schema** (`<db>.bak-v<n>`), and an
+  interrupted migration can be resumed — already-applied steps are no-ops.
+- `hipercampo doctor` now reports schema version and health.
+- New suite `tests/test_estados.py` (13 tests) + 4 migration tests — **21 suites**.
+- **CI now runs on Windows and macOS**, not just Linux: hipercampo is a local app.
+
 ## [Unreleased]
 
 ### Added

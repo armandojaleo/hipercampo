@@ -118,6 +118,12 @@ def cmd_doctor(_args) -> int:
             print(f"dep        {etiqueta}: no instalado")
     try:
         hc = _hc()
+        salud = hc.store.health(full=getattr(_args, "full", False))
+        print(f"esquema    version {hc.store.db.execute('PRAGMA user_version').fetchone()[0]}"
+              f" (esperada {hc.store.SCHEMA_VERSION})")
+        print(f"salud      {'SANA' if salud['sana'] else 'CON PROBLEMAS'} · "
+              f"{salud['comprobacion']}={salud['integridad']} · "
+              f"escribible={salud['escribible']}")
         print("memoria    ", json.dumps(hc.stats(), ensure_ascii=False, default=str))
         hc.store.close()
         return 0
@@ -132,7 +138,9 @@ def main(argv=None) -> int:
     sub.add_parser("serve", help="arranca el servidor MCP (stdio)")
     sub.add_parser("stats", help="estado de la memoria")
     sub.add_parser("sleep", help="consolidar + olvidar + soñar")
-    sub.add_parser("doctor", help="diagnóstico del entorno")
+    dr = sub.add_parser("doctor", help="diagnóstico del entorno")
+    dr.add_argument("--full", action="store_true",
+                    help="integrity_check completo (más lento) en vez de quick_check")
     sub.add_parser("hook", help="modo sináptico: para el hook UserPromptSubmit")
     sub.add_parser("version", help="versión instalada")
     for nombre, ayuda in (("assist", "qué toca hacer en este momento (hooks)"),

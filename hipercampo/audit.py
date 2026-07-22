@@ -16,6 +16,7 @@ Formato legible, una línea por decisión:
 import os
 import sys
 import time
+import unicodedata
 from pathlib import Path
 
 _ENABLED = os.environ.get("HIPERCAMPO_LOG", "1") != "0"
@@ -35,6 +36,20 @@ def set_logfile(db_path: str) -> None:
         _PATH = None
 
 
+def _a_stderr(linea: str) -> None:
+    """Escribe a stderr sin romper ni ensuciar la salida. En Windows la consola suele
+    ser cp1252 y no sabe escribir 'ó' ni '·': salían como '?'. Si el destino no puede
+    con el texto, se degrada a ASCII legible ('abstención' -> 'abstencion') en vez de
+    emitir basura. El FICHERO sigue guardando el original en UTF-8."""
+    enc = getattr(sys.stderr, "encoding", None) or "utf-8"
+    try:
+        linea.encode(enc)
+    except (UnicodeEncodeError, LookupError):
+        plano = unicodedata.normalize("NFKD", linea.replace("·", "|"))
+        linea = plano.encode("ascii", "ignore").decode("ascii")
+    print(linea, file=sys.stderr, flush=True)
+
+
 def log(accion: str, detalle: str = "", **campos) -> None:
     """Registra una decisión. Nunca lanza: la observabilidad no puede romper nada."""
     if not _ENABLED:
@@ -44,7 +59,7 @@ def log(accion: str, detalle: str = "", **campos) -> None:
         linea = f"{time.strftime('%H:%M:%S')} {accion:<9} {detalle}"
         if extra:
             linea += f" · {extra}"
-        print(linea, file=sys.stderr, flush=True)
+        _a_stderr(linea)
         if _PATH is not None:
             with open(_PATH, "a", encoding="utf-8") as f:
                 f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {accion:<9} {detalle}"

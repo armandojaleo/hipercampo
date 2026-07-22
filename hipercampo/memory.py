@@ -36,9 +36,10 @@ NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
 SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
 SUPERSEDE_HINT_SIMILARITY = 0.72 # por encima -> avisamos de posible actualización
 SUPERSEDED_RECALL_PENALTY = 0.2  # cuánto se demueve un recuerdo superado al recuperar
-MIN_RECALL_SCORE = 0.03          # suelo absoluto mínimo de relevancia
+MIN_RECALL_SCORE = 0.03          # suelo por ITEM: por debajo no se incluye en la respuesta
+ANSWER_MIN_SCORE = 0.08          # suelo para RESPONDER: si ni el mejor llega, abstención
 RECALL_Z = 2.0                   # cuántas desviaciones sobre el ruido para NO abstenerse
-NOISE_MIN_N = 8                  # nº mínimo de recuerdos para aplicar el z-score
+NOISE_MIN_N = 5                  # nº mínimo de recuerdos DE LA COLA para aplicar el z-score
 REINFORCE_MIN_SCORE = 0.10       # solo se refuerza lo claramente relevante (no roce)
 UPDATE_MIN_SIMILARITY = 0.60     # hc_update no reemplaza si no hay match así de bueno
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
@@ -80,16 +81,41 @@ def creative_fit(similarity: float) -> float:
     return (DREAM_HIGH - similarity) / (DREAM_HIGH - DREAM_IDEAL)
 
 
+# Solo se reintenta lo TRANSITORIO. Repetir una escritura que quizá sí se confirmó
+# duplicaría recuerdos o aplicaría dos veces un refuerzo, así que ante corrupción,
+# base de solo lectura, disco lleno o error de esquema NO se reintenta: se avisa.
+_TRANSITORIOS = ("database is locked", "database table is locked", "database is busy",
+                 "cannot operate on a closed database", "unable to open database file")
+_NO_REINTENTAR = ("readonly", "attempt to write a readonly database", "disk i/o error",
+                  "database disk image is malformed", "disk is full", "no such column",
+                  "no such table", "file is not a database")
+
+
+def _es_transitorio(e: Exception) -> bool:
+    """La conexión caída llega como ProgrammingError, el bloqueo como
+    OperationalError: ambos son transitorios. Lo demás, por mensaje."""
+    msg = str(e).lower()
+    if any(p in msg for p in _NO_REINTENTAR):
+        return False
+    return any(p in msg for p in _TRANSITORIOS)
+
+
 def resiliente(fn):
-    """Si la base de datos falla (conexión caída, bloqueo, fichero movido), AVISA,
-    reconecta y REINTENTA una vez. Si vuelve a fallar, devuelve un error legible en
-    vez de tumbar el servidor: una memoria caída no debe llevarse por delante al
-    agente que la usa."""
+    """Si la base de datos falla por algo TRANSITORIO (conexión caída, bloqueo),
+    AVISA, reconecta y REINTENTA una vez. Si el fallo es permanente (corrupción,
+    solo lectura, esquema roto) NO reintenta —repetir una escritura podría
+    duplicarla— y devuelve un error legible en vez de tumbar el servidor: una
+    memoria caída no debe llevarse por delante al agente que la usa."""
     @functools.wraps(fn)
     def envoltura(self, *a, **kw):
         try:
             return fn(self, *a, **kw)
         except sqlite3.Error as e:
+            if not _es_transitorio(e):
+                audit.log("ERROR", f"{fn.__name__}: {e} · fallo NO transitorio, no reintento")
+                return {"error": f"memoria no disponible: {e}",
+                        "reintentado": False,
+                        "sugerencia": "ejecuta `hipercampo doctor` para diagnosticarla"}
             audit.log("ERROR", f"{fn.__name__}: {e} · reintentando tras reconectar")
             try:
                 self.store.reconnect()
@@ -97,6 +123,7 @@ def resiliente(fn):
             except Exception as e2:
                 audit.log("ERROR", f"{fn.__name__}: fallo tras reconectar: {e2}")
                 return {"error": f"memoria no disponible: {e2}",
+                        "reintentado": True,
                         "sugerencia": "ejecuta `hipercampo doctor` para diagnosticarla"}
     return envoltura
 
@@ -360,22 +387,34 @@ class Hipercampo:
             scored.append((score, act, r))
         scored.sort(key=lambda t: t[0], reverse=True)
 
-        # ABSTENCIÓN: solo lo que supera el umbral mínimo de relevancia. Así una
-        # consulta sin relación real devuelve [] en vez de ruido, y no reforzamos
-        # falsos positivos (que si no, ganarían utilidad y se auto-protegerían).
-        # ABSTENCIÓN relativa al RUIDO: con suficientes recuerdos, solo respondemos si
-        # el MEJOR destaca estadísticamente sobre el ruido (z-score). Si nada sobresale
-        # (consulta sin respuesta) -> []. Con pocos recuerdos, el z-score es inestable:
-        # se usa un suelo absoluto. Superada la puerta, se devuelven también los
-        # asociados legítimos (no se filtran uno a uno).
+        # ABSTENCIÓN en DOS puertas, porque ninguna sirve sola (medido):
+        #  a) SUELO ABSOLUTO. Ante una consulta ajena, TODAS las activaciones se
+        #     desploman a ~0. Ahí el contraste relativo engaña (el mejor de un
+        #     montón de ceros parece destacar muchísimo), así que solo un umbral
+        #     absoluto detecta el caso "no sé nada de esto".
+        #  b) Z-SCORE CONTRA LA COLA. El caso contrario: media docena de recuerdos
+        #     rozan la consulta por igual y ninguno responde de verdad. Eso solo lo
+        #     ve un criterio relativo. CLAVE: el ruido se estima con la COLA, EXCLUYENDO
+        #     a los propios candidatos. Incluirlos (como se hacía antes) infla mu y sd
+        #     con la misma señal que se juzga, y como el z máximo de una muestra entre
+        #     n es (n-1)/sqrt(n), con memorias pequeñas la puerta era INALCANZABLE:
+        #     se abstenía SIEMPRE. La cola necesita NOISE_MIN_N muestras para ser
+        #     estimador; si no llega, manda solo el suelo absoluto.
+        # Superada la puerta se devuelven también los asociados legítimos, que pueden
+        # ir por debajo de ANSWER_MIN_SCORE: solo el MEJOR tiene que justificar respuesta.
         top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
-        if len(scored) >= NOISE_MIN_N and top:
-            acts = np.array([a for _, a, _ in scored], dtype=np.float64)
-            mu, sd = float(acts.mean()), float(acts.std())
-            if top[0][1] < mu + RECALL_Z * sd:        # el mejor no sobresale del ruido
-                audit.log("recall", "abstención: nada destaca del ruido",
-                          n=len(scored))
-                top = []                              # abstención
+        if top:
+            mejor = max(a for _, a, _ in top)
+            cola = np.array([a for _, a, _ in scored[len(top):]], dtype=np.float64)
+            if mejor < ANSWER_MIN_SCORE:              # nada relevante en absoluto
+                audit.log("recall", "abstención: nada relevante", mejor=round(mejor, 3))
+                top = []
+            elif len(cola) >= NOISE_MIN_N:
+                mu, sd = float(cola.mean()), float(cola.std())
+                if mejor < mu + RECALL_Z * sd:        # el mejor no sobresale del ruido
+                    audit.log("recall", "abstención: nada destaca del ruido",
+                              n=len(scored))
+                    top = []                          # abstención
         # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
         # para no darle utilidad a falsos positivos que luego se auto-protegerían.
         self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
@@ -660,30 +699,55 @@ class Hipercampo:
             if n < AUTOSLEEP_EVERY:
                 self.store.set_meta("writes_since_sleep", n)
                 return None
-            self.store.set_meta("writes_since_sleep", 0)
-            self.store.set_meta("last_sleep", time.time())
+            # El contador NO se reinicia por intentarlo: solo si el sueño TERMINA.
+            # Si falla a mitad, la próxima escritura lo reintenta y queda registrado
+            # (mentir diciendo "he dormido" es peor que no dormir).
+            self.store.set_meta("last_sleep_attempt", time.time())
+            self.store.set_meta("writes_since_sleep", n)
             resumen = self.sleep()
+            if isinstance(resumen, dict) and "error" in resumen:
+                self.store.set_meta("last_sleep_error", resumen["error"])
+                audit.log("autosleep", f"NO durmió: {resumen['error']}")
+                return None
+            self.store.set_meta("writes_since_sleep", 0)
+            self.store.set_meta("last_sleep_success", time.time())
+            self.store.set_meta("last_sleep_error", "")
             resumen["nota"] = ("mantenimiento automático tras "
                                f"{AUTOSLEEP_EVERY} escrituras")
             audit.log("autosleep", "durmió sola", **resumen)
             return resumen
-        except Exception:
-            return None                      # el mantenimiento nunca debe romper nada
+        except Exception as e:
+            # el mantenimiento nunca debe romper la escritura, pero tampoco callarse
+            try:
+                self.store.set_meta("last_sleep_error", str(e))
+            except Exception:
+                pass
+            audit.log("autosleep", f"NO durmió: {e}")
+            return None
+
+    def _resolver_puente(self, a: int, b: int, estado: str) -> dict:
+        """proposed → confirmed | rejected. Si no había tal propuesta, lo dice: dar
+        éxito por algo que no ha pasado es peor que un error."""
+        if self.store.set_link_status(a, b, estado) == 0:
+            audit.log("bridge", f"sin efecto: no hay hipótesis pendiente {a}↔{b}")
+            return {"error": f"no hay una hipótesis pendiente entre {a} y {b}",
+                    "sugerencia": "usa hc_dream para ver las propuestas vigentes"}
+        audit.log("bridge", f"{estado}: {a}↔{b}")
+        return {estado: [a, b]}
 
     def accept_bridge(self, a: int, b: int) -> dict:
         """Confirma una hipótesis del sueño: pasa a ser asociación real y ya propaga."""
-        self.store.set_link_status(a, b, "confirmed")
-        return {"confirmed": [a, b]}
+        return self._resolver_puente(a, b, "confirmed")
 
     def reject_bridge(self, a: int, b: int) -> dict:
         """Descarta una hipótesis del sueño (no volverá a proponerse ni propagará)."""
-        self.store.set_link_status(a, b, "rejected")
-        return {"rejected": [a, b]}
+        return self._resolver_puente(a, b, "rejected")
 
     # utilidades ----------------------------------------------------------
-    def health(self) -> dict:
-        """¿Está sana la memoria? (integridad, esquema, permisos)."""
-        return self.store.health()
+    def health(self, full: bool = False) -> dict:
+        """¿Está sana la memoria? (integridad, esquema, escritura real, esquema
+        versionado y último sueño). full=True -> integrity_check completo."""
+        return self.store.health(full)
 
     @resiliente
     def stats(self) -> dict:

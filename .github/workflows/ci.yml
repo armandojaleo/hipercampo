@@ -8,11 +8,19 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # hipercampo es una app LOCAL: Windows y macOS no son opcionales.
+    # La matriz completa solo en la versión estable; los extremos, en Linux.
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.13"
     steps:
       - uses: actions/checkout@v4
 
@@ -25,9 +33,12 @@ jobs:
         run: pip install -e .
 
       - name: Test suite (todas las suites, incluidas las generativas)
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
           set -e
-          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience properties; do
+          for t in vsa semantic surprise memory update axes hardening namespaces calibration roles safety factstore guardrails muse dream migration facthistory policy resilience estados properties; do
             echo "::group::test_$t"
             python tests/test_$t.py
             echo "::endgroup::"

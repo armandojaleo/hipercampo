@@ -74,6 +74,57 @@ def test_migra_sin_perder_enlaces():
     hc.store.close(); _clean()
 
 
+def test_registra_la_version_del_esquema():
+    """Una BD migrada debe DECIR en qué versión está: sin eso no hay migración
+    reanudable ni forma de saber qué pasos faltan."""
+    from hipercampo.store import Store
+    _crear_bd_v0()
+    hc = Hipercampo(_DB, namespace="default")
+    v = hc.store.db.execute("PRAGMA user_version").fetchone()[0]
+    assert v == Store.SCHEMA_VERSION, f"esquema sin versionar: {v}"
+    hc.store.close(); _clean()
+
+
+def test_migrar_dos_veces_no_hace_nada_la_segunda():
+    """Idempotencia: reabrir una BD ya migrada no vuelve a tocar el esquema."""
+    _crear_bd_v0()
+    hc = Hipercampo(_DB, namespace="default"); hc.store.close()
+    hc = Hipercampo(_DB, namespace="default")     # segunda apertura
+    textos = [r["text"] for r in hc.store.all(only_active=False)]
+    assert any("version antigua" in t for t in textos)
+    assert hc.health()["sana"] is True
+    hc.store.close(); _clean()
+
+
+def test_deja_copia_de_seguridad_antes_de_migrar():
+    """Si la migración destruyera algo, los recuerdos siguen en la copia."""
+    _crear_bd_v0()
+    hc = Hipercampo(_DB, namespace="default")
+    hc.store.close()
+    copia = Path(_DB + ".bak-v0")
+    assert copia.exists(), "migró una BD con datos sin respaldarla"
+    db = sqlite3.connect(str(copia))
+    n = db.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+    db.close(); copia.unlink(missing_ok=True)
+    assert n >= 1, "la copia previa está vacía"
+    _clean()
+
+
+def test_normaliza_estados_de_enlace_invalidos():
+    """Una BD vieja con estados raros queda normalizada (migración 005)."""
+    _crear_bd_v0()
+    db = sqlite3.connect(_DB)
+    now = time.time()
+    db.execute("INSERT INTO memories(text,hv,created,last_access) VALUES(?,?,?,?)",
+               ("segundo recuerdo viejo", b"" * 1250, now, now))
+    db.execute("INSERT INTO links(src,dst,weight) VALUES(1,2,0.8)")
+    db.commit(); db.close()
+    hc = Hipercampo(_DB, namespace="default")
+    estados = {r[0] for r in hc.store.db.execute("SELECT status FROM links")}
+    assert estados <= {"proposed", "confirmed", "rejected"}, estados
+    hc.store.close(); _clean()
+
+
 def test_puede_escribir_tras_migrar():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")
