@@ -289,6 +289,25 @@ class Store:
     ]
     SCHEMA_VERSION = 6
 
+    # Columnas que _SCHEMA crea de fábrica: si están TODAS, la BD ya nació al día.
+    _COLUMNAS_ACTUALES = {
+        "memories": {"superseded", "confidence", "namespace", "dormant", "fact_id"},
+        "links": {"namespace", "type", "status", "created_at"},
+        "facts": {"valid_from", "valid_to", "supersedes", "source"},
+    }
+
+    def _al_dia(self) -> bool:
+        """¿La BD acaba de nacer con el esquema actual? Exigimos las columnas de
+        fábrica Y que esté vacía: una base heredada a medio migrar (con las columnas
+        ya añadidas pero la versión sin sellar) debe recorrer los pasos igualmente."""
+        try:
+            if not all(esperadas <= self._columnas(tabla)
+                       for tabla, esperadas in self._COLUMNAS_ACTUALES.items()):
+                return False
+            return not self.db.execute("SELECT 1 FROM memories LIMIT 1").fetchone()
+        except sqlite3.Error:
+            return False
+
     def _copia_previa(self, version: int):
         """Copia de seguridad ANTES de tocar el esquema de una BD con datos. Si algo
         sale mal, los recuerdos siguen ahí. No se hace para una BD recién creada
@@ -320,6 +339,17 @@ class Store:
         actual = self.db.execute("PRAGMA user_version").fetchone()[0]
         if actual >= self.SCHEMA_VERSION:
             return
+        # Una BD recién creada por _SCHEMA ya nace con el esquema al día: no hay
+        # nada que migrar, solo que sellarlo. Sin esto, varios procesos abriendo a
+        # la vez una base nueva se pelean por el lock de escritura para nada.
+        if self._al_dia():
+            try:
+                self.db.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
+                self.db.commit()
+            except sqlite3.Error:
+                pass                       # otro llegó primero: igual de bien
+            return
+
         self._copia_previa(actual)
         for version, nombre, paso in self._MIGRACIONES:
             if version <= actual:

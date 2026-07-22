@@ -137,6 +137,37 @@ def test_la_bd_migrada_pasa_integrity_check():
     hc.store.close(); _clean()
 
 
+def test_varios_procesos_abren_una_bd_nueva_a_la_vez():
+    """Cuatro hilos abriendo la MISMA base recién creada no deben pelearse por el
+    lock migrando lo que no hay que migrar (lo destapó CI en Linux)."""
+    import threading
+    _clean()
+    errores = []
+
+    def abrir(i):
+        try:
+            hc = Hipercampo(_DB, namespace=f"n{i}")
+            hc.remember(f"recuerdo del hilo numero {i} para probar concurrencia", 0.5)
+            hc.store.close()
+        except Exception as e:                       # noqa: BLE001
+            errores.append(f"hilo {i}: {e}")
+
+    hilos = [threading.Thread(target=abrir, args=(i,)) for i in range(4)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+    assert not errores, errores
+    hc = Hipercampo(_DB, namespace="n0")
+    assert hc.store.db.execute("PRAGMA user_version").fetchone()[0] == Store_version()
+    hc.store.close(); _clean()
+
+
+def Store_version():
+    from hipercampo.store import Store
+    return Store.SCHEMA_VERSION
+
+
 def test_puede_escribir_tras_migrar():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")

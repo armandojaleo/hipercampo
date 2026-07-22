@@ -25,7 +25,7 @@ import time
 import numpy as np
 
 from . import audit
-from .encoder import encode_text
+from .encoder import encode_text, semantic_active
 from .safety import redact_secrets, scan_injection, scan_secrets
 from .store import Store
 from .surprise import SurpriseModel
@@ -39,6 +39,14 @@ SUPERSEDED_RECALL_PENALTY = 0.2  # cuánto se demueve un recuerdo superado al re
 MIN_RECALL_SCORE = 0.03          # suelo por ITEM: por debajo no se incluye en la respuesta
 ANSWER_MIN_SCORE = 0.08          # suelo para RESPONDER: si ni el mejor llega, abstención
 RECALL_Z = 2.0                   # cuántas desviaciones sobre el ruido para NO abstenerse
+# El gancho semántico COMPRIME las activaciones (mezcla un vector denso donde casi
+# todo se parece un poco a casi todo): medido sobre el mismo corpus, los aciertos
+# bajan de 0.12-0.30 a 0.09-0.21 y se pegan al ruido, dejando un margen de 0.017 con
+# los umbrales léxicos. Con la escala aplastada el suelo absoluto discrimina peor y
+# el contraste relativo discrimina MEJOR, así que en este régimen se baja el suelo y
+# se exige más z. Cada par está medido en su propio régimen; no son intercambiables.
+ANSWER_MIN_SCORE_SEM = 0.05
+RECALL_Z_SEM = 2.5
 NOISE_MIN_N = 5                  # nº mínimo de recuerdos DE LA COLA para aplicar el z-score
 REINFORCE_MIN_SCORE = 0.10       # solo se refuerza lo claramente relevante (no roce)
 UPDATE_MIN_SIMILARITY = 0.60     # hc_update no reemplaza si no hay match así de bueno
@@ -414,14 +422,16 @@ class Hipercampo:
         top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
         if top:
             mejor = float(directa[0])                 # el mejor ANCLA directo
+            suelo, zmin = ((ANSWER_MIN_SCORE_SEM, RECALL_Z_SEM) if semantic_active()
+                           else (ANSWER_MIN_SCORE, RECALL_Z))
             n_excl = min(len(top), max(1, len(directa) - NOISE_MIN_N))
             cola = directa[n_excl:]
-            if mejor < ANSWER_MIN_SCORE:              # nada relevante en absoluto
+            if mejor < suelo:                         # nada relevante en absoluto
                 audit.log("recall", "abstención: nada relevante", mejor=round(mejor, 3))
                 top = []
             elif len(cola) >= NOISE_MIN_N:
                 mu, sd = float(cola.mean()), float(cola.std())
-                if mejor < mu + RECALL_Z * sd:        # el mejor no sobresale del ruido
+                if mejor < mu + zmin * sd:            # el mejor no sobresale del ruido
                     audit.log("recall", "abstención: nada destaca del ruido",
                               n=len(scored))
                     top = []                          # abstención
