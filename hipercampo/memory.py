@@ -35,7 +35,9 @@ SUPERSEDED_RECALL_PENALTY = 0.2  # cuánto se demueve un recuerdo superado al re
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
 CONSOLIDATE_SIMILARITY = 0.60    # fundir episodios así de parecidos
 DECAY_HALF_LIFE_DAYS = 14.0      # a qué ritmo se desvanece lo no reforzado
-FORGET_STRENGTH_FLOOR = 0.15     # por debajo de esto y sin uso -> se poda
+FORGET_STRENGTH_FLOOR = 0.15     # por debajo de esto y sin uso -> candidato a poda
+RETENTION_FLOOR = 0.40           # valor (4 ejes) mínimo para NO olvidar
+UTILITY_CAP = 5                  # nº de usos que ya cuenta como "utilidad plena"
 
 
 class Hipercampo:
@@ -47,8 +49,22 @@ class Hipercampo:
         for row in self.store.all(only_active=False):
             self.surprise.learn(row["text"])
 
+    # --- los cuatro ejes, separados ------------------------------------
+    @staticmethod
+    def utility(row) -> float:
+        """Utilidad: cuánto se ha USADO de verdad (0..1). Derivada, no declarada."""
+        return min(row["access_count"], UTILITY_CAP) / UTILITY_CAP
+
+    def retention(self, row) -> float:
+        """Cuánto MERECE conservarse, combinando ejes DISTINTOS y transparentes:
+        importancia (cuánto importa) + fiabilidad (cuán cierto) + utilidad (cuánto
+        se usa). No mezcla la fuerza/decaimiento (eso es el tiempo, no el valor)."""
+        return (0.4 * row["importance"] + 0.3 * row["confidence"]
+                + 0.3 * self.utility(row))
+
     # 1 -------------------------------------------------------------------
-    def remember(self, text: str, importance: float = 0.5) -> dict:
+    def remember(self, text: str, importance: float = 0.5,
+                 confidence: float = 0.5) -> dict:
         """Graba un episodio si es novedoso O sorprendente (error de predicción)."""
         hv = encode_text(text)
         actives = self.store.all(only_active=True)
@@ -76,7 +92,7 @@ class Hipercampo:
                     "novelty": round(novelty, 3), "surprise": round(surprise, 3),
                     "reinforced_id": best_id}
 
-        mem_id = self.store.add(text, hv, max(novelty, surprise), importance)
+        mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
 
         # Tejer asociaciones con lo parecido (grafo para la propagación).
         for row in actives:
@@ -114,7 +130,8 @@ class Hipercampo:
 
         new_hv = encode_text(new_text)
         self.surprise.learn(new_text)
-        new_id = self.store.add(new_text, new_hv, 1.0, importance)
+        # la versión vigente se asume fiable (confidence alta); la vieja se degrada
+        new_id = self.store.add(new_text, new_hv, 1.0, importance, confidence=0.75)
         for r in self.store.all(only_active=True):
             if r["id"] != new_id:
                 s = similarity(new_hv, self.store.hv_of(r))
@@ -168,6 +185,7 @@ class Hipercampo:
         for mid, act in activation.items():
             r = by_id[mid]
             score = act * (0.7 + 0.3 * min(r["strength"], 3.0) / 3.0)
+            score *= (0.6 + 0.4 * r["confidence"])    # la FIABILIDAD pesa en el ranking
             if r["superseded"]:                       # lo reemplazado no debe dominar
                 score *= SUPERSEDED_RECALL_PENALTY
             scored.append((score, act, r))
@@ -179,7 +197,9 @@ class Hipercampo:
         return [
             {"id": r["id"], "text": r["text"], "kind": r["kind"],
              "score": round(score, 3), "activation": round(act, 3),
-             "strength": round(r["strength"], 2)}
+             "strength": round(r["strength"], 2),
+             "confidence": round(r["confidence"], 2),
+             "utility": round(self.utility(r), 2)}
             for score, act, r in top
         ]
 
@@ -214,10 +234,11 @@ class Hipercampo:
             hv = bundle([self.store.hv_of(g) for g in group])
             text = "· " + "\n· ".join(g["text"] for g in group)
             importance = max(g["importance"] for g in group)
+            confidence = max(g["confidence"] for g in group)
             novelty = float(np.mean([g["novelty"] for g in group]))
             sem_id = self.store.add(
                 f"[consolidado x{len(group)}]\n{text}", hv, novelty, importance,
-                kind="semantic",
+                confidence, kind="semantic",
             )
             self.store.mark_consolidated([g["id"] for g in group])
             for g in group:                      # heredar asociaciones
@@ -231,9 +252,10 @@ class Hipercampo:
     # 4 -------------------------------------------------------------------
     def forget(self, dry_run: bool = False) -> dict:
         """
-        Olvido activo: la fuerza decae exponencialmente con el tiempo sin uso.
-        Lo que cae por debajo del suelo (y no es importante ni consolidado)
-        se poda. La importancia alta protege del olvido.
+        Olvido activo con CUATRO EJES. El tiempo (decaimiento) solo marca
+        CANDIDATOS; quien decide es la RETENCIÓN (importancia + fiabilidad +
+        utilidad). Así no se olvida algo poco consultado pero importante o fiable,
+        ni algo trivial solo porque se usó una vez. La importancia alta protege.
         """
         now = time.time()
         half = DECAY_HALF_LIFE_DAYS * 86400
@@ -245,7 +267,9 @@ class Hipercampo:
             age = now - r["last_access"]
             decayed = r["strength"] * (0.5 ** (age / half))
             protected = r["importance"] >= 0.8
-            if decayed < FORGET_STRENGTH_FLOOR and not protected:
+            candidato = decayed < FORGET_STRENGTH_FLOOR    # el tiempo lo marca
+            poco_valioso = self.retention(r) < RETENTION_FLOOR   # los ejes deciden
+            if candidato and poco_valioso and not protected:
                 to_prune.append(r["id"])
             elif not dry_run:
                 self.store.set_strength(r["id"], decayed)

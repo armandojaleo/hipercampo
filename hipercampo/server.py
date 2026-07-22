@@ -36,11 +36,13 @@ mcp = FastMCP("hipercampo")
 
 
 @mcp.tool()
-def hc_remember(text: str, importance: float = 0.5) -> dict:
-    """Guarda un recuerdo. Solo se graba si aporta información novedosa;
-    lo redundante refuerza el recuerdo ya existente. importance (0-1) protege
-    del olvido: usa >=0.8 para lo que nunca debe perderse."""
-    return hc.remember(text, importance)
+def hc_remember(text: str, importance: float = 0.5, confidence: float = 0.5) -> dict:
+    """Guarda un recuerdo. Solo se graba si aporta información novedosa o sorprendente.
+    Dos ejes independientes (0-1): importance = cuánto IMPORTA (>=0.8 lo protege del
+    olvido); confidence = cuán FIABLE/cierto es (pesa en el ranking de recall; baja
+    para rumores o datos sin confirmar). Si se parece a algo ya guardado, avisa por
+    si deberías usar hc_update."""
+    return hc.remember(text, importance, confidence)
 
 
 @mcp.tool()

@@ -1,10 +1,11 @@
 {
   "mcpServers": {
-    "hipercampo": {
+    "proyecto": {
       "command": "C:\\Python313\\python.exe",
       "args": ["-m", "hipercampo.server"],
       "env": {
-        "HIPERCAMPO_DB": "C:\\Users\\Vega\\.hipercampo\\hipercampo.db"
+        "HIPERCAMPO_DB": "C:\\Users\\Vega\\.hipercampo\\proj-hipercampo.db",
+        "HIPERCAMPO_SEMANTIC": "1"
       }
     }
   }

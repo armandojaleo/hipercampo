@@ -182,7 +182,7 @@ Reinicia el cliente y Claude tendrá cinco herramientas nuevas.
 
 | Herramienta | Para qué |
 |-------------|----------|
-| `hc_remember(text, importance)` | Guarda algo (solo si es novedoso). `importance>=0.8` lo protege del olvido. Avisa si se parece a un recuerdo existente. |
+| `hc_remember(text, importance, confidence)` | Guarda algo (si es novedoso/sorprendente). `importance` = cuánto importa (≥0.8 protege del olvido); `confidence` = cuán fiable/cierto (pesa en el ranking). Avisa si se parece a algo ya guardado. |
 | `hc_recall(query, k)` | Recupera por similitud **+ propagación de activación** por asociaciones. |
 | `hc_update(target, new_text)` | **Actualiza un hecho que cambió**: reemplaza el recuerdo que case con `target` (el viejo queda como historia, demovido). Para contradicciones. |
 | `hc_consolidate()` | Fase de sueño: funde episodios en conocimiento semántico. |
@@ -251,6 +251,30 @@ texto ──▶ encoder.py ──▶ hipervector (10.000 bits)
 
 Kanerva (*Sparse Distributed Memory*), Plate (*Holographic Reduced Representations*),
 la librería **torchhd**, y la línea de trabajo Titans / MIRAS / HippoRAG (2024-2026).
+
+## Los cuatro ejes de un recuerdo (novedad ≠ importancia ≠ fiabilidad ≠ utilidad)
+
+Un buen sistema de memoria no debe confundir estas cuatro cosas, y hipercampo las
+trata por separado, cada una con su efecto propio:
+
+| Eje | Qué mide | Quién lo pone | Para qué se usa |
+|-----|----------|--------------|-----------------|
+| **novedad / sorpresa** | ¿es nuevo o predecible? (error de predicción, MDL) | derivado | decidir si **escribir** |
+| **importancia** | ¿cuánto importa? | quien lo dice (`importance`) | **proteger** del olvido |
+| **fiabilidad** | ¿cuán cierto/creíble? | quien lo dice (`confidence`) | **ranking** en la recuperación |
+| **utilidad** | ¿cuánto se usa de verdad? | derivado (`access_count`) | **proteger** del olvido por uso |
+
+El olvido combina los tres últimos en una *retención* transparente
+(`0.4·importancia + 0.3·fiabilidad + 0.3·utilidad`): el tiempo solo marca
+candidatos, pero es el **valor** lo que decide. Así no se pierde algo poco
+consultado pero importante, ni sobrevive algo trivial por haberse usado una vez.
+
+## Memoria compartida vs. por proyecto (híbrida)
+
+Como la BD es un fichero, puedes tener **varias**: una *personal* compartida entre
+todos tus proyectos (quién eres, preferencias) y una *por proyecto* para lo técnico,
+levantando dos servidores MCP con distinto `HIPERCAMPO_DB`. Ver
+[INSTALL.md](INSTALL.md).
 
 ## Seguridad
 

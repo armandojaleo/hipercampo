@@ -109,6 +109,43 @@ rutas absolutas del ejecutable de Python y de `HIPERCAMPO_DB`. Reinicia Claude C
 > Puedes tener ambos (global + `.mcp.json` del repo): si apuntan a la misma BD y
 > comando, es inofensivo. El `.mcp.json` del repo es útil para quien clone el proyecto.
 
+### Híbrida: memoria personal + memoria por proyecto (recomendada con varios proyectos)
+
+Dos servidores con **BD distinta**, para que lo técnico de un proyecto no se mezcle
+con otro pero Claude te siga conociendo en todos:
+
+**1) Personal (global, `~/.claude.json`)** — un servidor `memoria` con su propia BD:
+
+```json
+"mcpServers": {
+  "memoria": {
+    "command": "C:/Python313/python.exe",
+    "args": ["-m", "hipercampo.server"],
+    "env": { "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/personal.db" }
+  }
+}
+```
+
+**2) Por proyecto (`.mcp.json` en la raíz de cada proyecto)** — un servidor
+`proyecto` con una BD propia por proyecto:
+
+```json
+{
+  "mcpServers": {
+    "proyecto": {
+      "command": "C:/Python313/python.exe",
+      "args": ["-m", "hipercampo.server"],
+      "env": { "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/proj-NOMBRE.db" }
+    }
+  }
+}
+```
+
+Cambia `proj-NOMBRE.db` por proyecto (`proj-mplayer.db`, `proj-web.db`...). Claude
+verá dos juegos de herramientas (`memoria` y `proyecto`) y elegirá dónde guardar
+cada cosa. Para copiar tu memoria actual a la personal: `python -m hipercampo.backup
+C:/Users/tu/.hipercampo/personal.db` (con `HIPERCAMPO_DB` apuntando a la vieja).
+
 ### Claude Desktop
 
 Edita el archivo de configuración:

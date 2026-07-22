@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS memories (
     kind         TEXT    NOT NULL DEFAULT 'episodic',   -- episodic | semantic
     hv           BLOB    NOT NULL,
     novelty      REAL    NOT NULL DEFAULT 1.0,          -- sorpresa al nacer
-    importance   REAL    NOT NULL DEFAULT 0.5,          -- juicio humano/agente
+    importance   REAL    NOT NULL DEFAULT 0.5,          -- cuánto importa (quien lo dice)
+    confidence   REAL    NOT NULL DEFAULT 0.5,          -- fiabilidad / cuán cierto es
     strength     REAL    NOT NULL DEFAULT 1.0,          -- se refuerza y decae
     access_count INTEGER NOT NULL DEFAULT 0,
     created      REAL    NOT NULL,
@@ -55,14 +56,17 @@ class Store:
         if "superseded" not in cols:
             self.db.execute(
                 "ALTER TABLE memories ADD COLUMN superseded INTEGER NOT NULL DEFAULT 0")
+        if "confidence" not in cols:
+            self.db.execute(
+                "ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 0.5")
 
     # --- escritura -------------------------------------------------------
-    def add(self, text, hv, novelty, importance, kind="episodic") -> int:
+    def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic") -> int:
         now = time.time()
         cur = self.db.execute(
-            "INSERT INTO memories(text,kind,hv,novelty,importance,strength,"
-            "created,last_access) VALUES(?,?,?,?,?,?,?,?)",
-            (text, kind, to_blob(hv), novelty, importance, 1.0, now, now),
+            "INSERT INTO memories(text,kind,hv,novelty,importance,confidence,strength,"
+            "created,last_access) VALUES(?,?,?,?,?,?,?,?,?)",
+            (text, kind, to_blob(hv), novelty, importance, confidence, 1.0, now, now),
         )
         self.db.commit()
         return cur.lastrowid
@@ -102,7 +106,8 @@ class Store:
         """Marca recuerdos como reemplazados por otro más nuevo y los debilita
         (no se borran: quedan como historia, pero dejan de dominar la recuperación)."""
         self.db.executemany(
-            "UPDATE memories SET superseded = 1, strength = MIN(strength, 0.3) WHERE id = ?",
+            "UPDATE memories SET superseded = 1, strength = MIN(strength, 0.3), "
+            "confidence = MIN(confidence, 0.3) WHERE id = ?",
             [(i,) for i in ids],
         )
         self.db.commit()
