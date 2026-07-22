@@ -79,7 +79,7 @@ python tests/test_properties.py   # invariantes con datos fabricados (8 rondas)
 python scripts/scenarios.py       # historia narrada: Claude recordando a un usuario
 ```
 
-18 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
+19 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
 comprobadas: *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera
 entre 25 distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *un
 contexto no ve ni puede modificar lo de otro*, *una transacción fallida no deja rastro*.
@@ -128,8 +128,8 @@ personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, n
 | `hc_update(target, new_text, memory_id)` | **Actualiza un hecho que cambió** (supersesión segura; el viejo queda como historia). |
 | `hc_consolidate()` | Fase de sueño: agrupa episodios en conocimiento semántico. |
 | `hc_forget(dry_run)` | Olvido activo. `dry_run=True` ensaya sin borrar. |
-| `hc_remember_fact(subject, predicate, object, …)` | Guarda un **hecho estructurado** (VSA composicional). |
-| `hc_ask_role(role, …campos conocidos…)` | Pregunta un campo sabiendo otros: *"¿quién muerde al hombre?"* → unbinding. |
+| `hc_remember_fact(subject, predicate, object, …)` | Guarda un **hecho estructurado** (VSA composicional). Si actualiza un hecho vigente, el anterior no se borra: se cierra su vigencia y queda como **historia**. |
+| `hc_ask_role(role, …campos conocidos…, days_ago)` | Pregunta un campo sabiendo otros. Responde lo **vigente**; con `days_ago` responde qué era cierto entonces. |
 | `hc_stats()` | Estado de la memoria (incluye la ruta de la BD). |
 
 Guardrails (entorno): `HIPERCAMPO_MAX_MEMORIES` acota los recuerdos por contexto

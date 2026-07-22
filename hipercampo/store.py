@@ -45,10 +45,14 @@ CREATE TABLE IF NOT EXISTS links (
     PRIMARY KEY (src, dst)
 );
 CREATE TABLE IF NOT EXISTS facts (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    namespace TEXT    NOT NULL DEFAULT 'default',
-    fields    TEXT    NOT NULL,   -- JSON {rol: valor}
-    hv        BLOB    NOT NULL    -- hipervector role-filler (bind/bundle)
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    namespace  TEXT    NOT NULL DEFAULT 'default',
+    fields     TEXT    NOT NULL,   -- JSON {rol: valor}
+    hv         BLOB    NOT NULL,   -- hipervector role-filler (bind/bundle)
+    valid_from REAL,               -- desde cuándo es cierto
+    valid_to   REAL,               -- hasta cuándo (NULL = vigente ahora)
+    supersedes INTEGER,            -- a qué hecho sustituye (historia, no borrado)
+    source     TEXT                -- procedencia (quién/qué lo afirmó)
 );
 """
 
@@ -138,6 +142,11 @@ class Store:
                 "ALTER TABLE links ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'")
         if lcols and "created_at" not in lcols:
             self.db.execute("ALTER TABLE links ADD COLUMN created_at REAL")
+        fcols = {r[1] for r in self.db.execute("PRAGMA table_info(facts)")}
+        for col, ddl in (("valid_from", "REAL"), ("valid_to", "REAL"),
+                         ("supersedes", "INTEGER"), ("source", "TEXT")):
+            if fcols and col not in fcols:
+                self.db.execute(f"ALTER TABLE facts ADD COLUMN {col} {ddl}")
 
     # --- escritura -------------------------------------------------------
     def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic",
@@ -159,18 +168,37 @@ class Store:
             "AND (dormant=1 OR superseded=1)", (self.namespace,)).fetchall()
         return {r[0] for r in rows}
 
-    def add_fact(self, fields_json: str, hv) -> int:
+    def add_fact(self, fields_json: str, hv, source: str | None = None,
+                 supersedes: int | None = None, valid_from: float | None = None) -> int:
         cur = self.db.execute(
-            "INSERT INTO facts(namespace, fields, hv) VALUES(?,?,?)",
-            (self.namespace, fields_json, to_blob(hv)),
+            "INSERT INTO facts(namespace, fields, hv, valid_from, supersedes, source) "
+            "VALUES(?,?,?,?,?,?)",
+            (self.namespace, fields_json, to_blob(hv),
+             valid_from if valid_from is not None else time.time(), supersedes, source),
         )
         self._commit()
         return cur.lastrowid
 
-    def all_facts(self) -> list[sqlite3.Row]:
-        return self.db.execute(
-            "SELECT * FROM facts WHERE namespace = ?", (self.namespace,)
-        ).fetchall()
+    def close_fact(self, fact_id: int, when: float | None = None):
+        """Cierra la vigencia de un hecho (deja de ser cierto AHORA, pero se conserva:
+        es historia, no una contradicción destruida)."""
+        self.db.execute(
+            "UPDATE facts SET valid_to = ? WHERE id = ? AND namespace = ? AND valid_to IS NULL",
+            (when if when is not None else time.time(), fact_id, self.namespace))
+        self._commit()
+
+    def all_facts(self, only_current: bool = False, at: float | None = None
+                  ) -> list[sqlite3.Row]:
+        """Hechos del contexto. `only_current`: solo los vigentes. `at`: los que eran
+        ciertos en ese instante (consulta histórica)."""
+        q = "SELECT * FROM facts WHERE namespace = ?"
+        args: list = [self.namespace]
+        if at is not None:
+            q += " AND (valid_from IS NULL OR valid_from <= ?) AND (valid_to IS NULL OR valid_to > ?)"
+            args += [at, at]
+        elif only_current:
+            q += " AND valid_to IS NULL"
+        return self.db.execute(q, args).fetchall()
 
     def link(self, src: int, dst: int, weight: float = 1.0,
              type: str = "lexical", status: str = "confirmed"):

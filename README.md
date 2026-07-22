@@ -79,7 +79,7 @@ python tests/test_properties.py   # invariants over fabricated data (8 rounds)
 python scripts/scenarios.py       # narrated story: Claude remembering a user
 ```
 
-18 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
+19 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
 *a duplicate never creates a second memory*, *a needle is retrieved among 25
 distractors*, *forgetting never deletes something with importance ≥ 0.8*, *one
 context can neither see nor modify another's data*, *a failed transaction leaves no trace*.
@@ -128,8 +128,8 @@ thousands); at ~100k you'd want an index. A known limit, not hidden.
 | `hc_update(target, new_text, memory_id)` | **Update a fact that changed** (safe supersession; the old one stays as history). |
 | `hc_consolidate()` | Sleep phase: group episodes into semantic knowledge. |
 | `hc_forget(dry_run)` | Active forgetting. `dry_run=True` rehearses without deleting. |
-| `hc_remember_fact(subject, predicate, object, …)` | Store a **structured fact** (compositional VSA). |
-| `hc_ask_role(role, …known fields…)` | Ask for a field knowing others: *"who bites the man?"* → unbinding. |
+| `hc_remember_fact(subject, predicate, object, …)` | Store a **structured fact** (compositional VSA). If it updates a current fact, the old one isn't deleted — its validity is closed and it becomes **history**. |
+| `hc_ask_role(role, …known fields…, days_ago)` | Ask for a field knowing others: *"who bites the man?"* → unbinding. Answers what's **currently true**; `days_ago` asks what was true then. |
 | `hc_stats()` | Memory state (includes the DB path). |
 
 Guardrails (env): `HIPERCAMPO_MAX_MEMORIES` caps memories per context (evicts the

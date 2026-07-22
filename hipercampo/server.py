@@ -78,20 +78,25 @@ def hc_remember_fact(subject: str = "", predicate: str = "", object: str = "",
                      time: str = "", source: str = "") -> dict:
     """Guarda un HECHO estructurado (memoria composicional VSA). Rellena los campos
     que apliquen (al menos 2): subject/predicate/object y opcionalmente time/source.
-    Luego podrás preguntar por un campo conociendo otros con hc_ask_role
-    ("¿quién MUERDE al HOMBRE?"). Distingue estructura que un embedding difumina."""
+    Si actualiza a un hecho vigente (mismo sujeto y predicado, otro objeto), el
+    anterior NO se borra: se cierra su vigencia y queda como HISTORIA consultable."""
     return hc.remember_fact({"subject": subject, "predicate": predicate,
-                             "object": object, "time": time, "source": source})
+                             "object": object, "time": time, "source": source},
+                            source=source or None)
 
 
 @mcp.tool()
 def hc_ask_role(role: str, subject: str = "", predicate: str = "", object: str = "",
-                time: str = "", source: str = "") -> dict:
+                time: str = "", source: str = "", days_ago: float = 0.0) -> dict:
     """Pregunta por un CAMPO de un hecho conociendo otros. 'role' es el campo que
     quieres (subject/predicate/object/time/source); rellena los que SÍ sabes. Ej.:
-    role='subject', predicate='muerde', object='hombre' -> '¿quién muerde al hombre?'."""
+    role='subject', predicate='muerde', object='hombre' -> '¿quién muerde al hombre?'.
+    Devuelve lo VIGENTE; usa days_ago>0 para preguntar qué era cierto entonces
+    ("¿dónde estaba el servidor hace 90 días?"). Se abstiene si no lo sabe."""
+    import time as _t
+    at = (_t.time() - days_ago * 86400) if days_ago else None
     return hc.ask_role(role, {"subject": subject, "predicate": predicate,
-                              "object": object, "time": time, "source": source})
+                              "object": object, "time": time, "source": source}, at=at)
 
 
 @mcp.tool()

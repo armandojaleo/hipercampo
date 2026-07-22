@@ -97,6 +97,7 @@ class RoleMemory:
         self._ids: list[int] = []
         self._fields: list[dict] = []
         self._hvs: list[np.ndarray] = []
+        self._valid_to: list = []                    # None = vigente
         for row in self.store.all_facts():           # calentar desde lo guardado
             fields = json.loads(row["fields"])
             for v in fields.values():
@@ -104,9 +105,23 @@ class RoleMemory:
             self._ids.append(row["id"])
             self._fields.append(fields)
             self._hvs.append(from_blob(row["hv"]))
+            self._valid_to.append(row["valid_to"])
+
+    def _contradice(self, nuevo: dict) -> list[int]:
+        """Hechos VIGENTES con el mismo sujeto y predicado pero distinto objeto: no
+        son un error, son la versión anterior de la verdad."""
+        s, p, o = nuevo.get("subject"), nuevo.get("predicate"), nuevo.get("object")
+        if not (s and p and o):
+            return []
+        fuera = []
+        for i, f in enumerate(self._fields):
+            if self._valid_to[i] is None and f.get("subject") == s \
+               and f.get("predicate") == p and f.get("object") != o:
+                fuera.append(i)
+        return fuera
 
     def remember_fact(self, fields: dict, importance: float = 0.6,
-                      confidence: float = 0.6) -> dict:
+                      confidence: float = 0.6, source: str | None = None) -> dict:
         """Guarda un hecho estructurado Y su 'sombra textual' en la memoria viva, para
         que participe del ciclo completo (recall, muse, consolidación, olvido)."""
         clean = {r: str(v).strip() for r, v in fields.items()
@@ -116,15 +131,29 @@ class RoleMemory:
         hv = encode_fact(clean, self.im)
         # texto natural del hecho, en orden de rol (sujeto predicado objeto tiempo fuente)
         texto = " ".join(clean[r] for r in ROLES if r in clean)
+        # ¿actualiza a un hecho vigente? (mismo sujeto+predicado, otro objeto)
+        previos = self._contradice(clean)
         with self.store.transaction():                       # hecho + sombra, atómico
-            fid = self.store.add_fact(json.dumps(clean, ensure_ascii=False), hv)
+            supersede_id = self._ids[previos[0]] if previos else None
+            fid = self.store.add_fact(json.dumps(clean, ensure_ascii=False), hv,
+                                      source=source, supersedes=supersede_id)
             mem_id = self.store.add(texto, encode_text(texto), 1.0, importance,
                                     confidence, fact_id=fid)
-        self._ids.append(fid); self._fields.append(clean); self._hvs.append(hv)
-        return {"stored": True, "id": fid, "memory_id": mem_id, "text": texto,
-                "fields": clean}
+            for i in previos:                    # la verdad anterior se CIERRA, no se borra
+                self.store.close_fact(self._ids[i])
+                self._valid_to[i] = True         # marcado local: ya no vigente
+        self._ids.append(fid); self._fields.append(clean)
+        self._hvs.append(hv); self._valid_to.append(None)
+        res = {"stored": True, "id": fid, "memory_id": mem_id, "text": texto,
+               "fields": clean}
+        if previos:
+            res["supersedes"] = [self._ids[i] for i in previos]
+            res["nota"] = ("la versión anterior queda como HISTORIA (vigencia cerrada), "
+                           "no se borra: puedes consultarla con `at`")
+        return res
 
-    def ask_role(self, role: str, known: dict, top: int = 1) -> dict:
+    def ask_role(self, role: str, known: dict, top: int = 1,
+                 at: float | None = None) -> dict:
         """Devuelve el valor del 'role' del hecho que mejor encaja con 'known'. Se
         ABSTIENE (answer=None, unknown=True) si no hay un hecho que encaje de verdad o
         si el unbinding no recupera un valor con claridad y margen."""
@@ -139,11 +168,14 @@ class RoleMemory:
         # nada a la memoria de ítems (no contaminar el cleanup con términos ajenos).
         q = bundle([bind(ROLES[r], encode_text(v)) for r, v in known.items()])
         sims = similarity_batch(q, stack_hvs([h.tobytes() for h in self._hvs]))
-        # los hechos cuya sombra textual se olvidó (latente/superada) no son vigentes
-        olvidados = self.store.dormant_fact_ids()
-        if olvidados:
-            sims = np.array([-1.0 if fid in olvidados else s
-                             for fid, s in zip(self._ids, sims)])
+        # VIGENCIA: por defecto solo lo cierto AHORA; con `at`, lo cierto entonces.
+        if at is not None:
+            validos = {r["id"] for r in self.store.all_facts(at=at)}
+        else:
+            validos = {r["id"] for r in self.store.all_facts(only_current=True)}
+        olvidados = self.store.dormant_fact_ids()   # su sombra textual se olvidó
+        sims = np.array([-1.0 if (fid not in validos or fid in olvidados) else s
+                         for fid, s in zip(self._ids, sims)])
         j = int(np.argmax(sims))
         match = float(sims[j])
         # abstención 1: ningún hecho encaja de verdad con lo conocido

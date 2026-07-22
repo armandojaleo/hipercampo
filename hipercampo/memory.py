@@ -96,11 +96,12 @@ class Hipercampo:
         self.roles = RoleMemory(self.store)   # memoria composicional de hechos
 
     def remember_fact(self, fields: dict, importance: float = 0.6,
-                      confidence: float = 0.6) -> dict:
-        return self.roles.remember_fact(fields, _clip01(importance), _clip01(confidence))
+                      confidence: float = 0.6, source: str | None = None) -> dict:
+        return self.roles.remember_fact(fields, _clip01(importance), _clip01(confidence),
+                                        source)
 
-    def ask_role(self, role: str, known: dict) -> dict:
-        return self.roles.ask_role(role, known)
+    def ask_role(self, role: str, known: dict, at: float | None = None) -> dict:
+        return self.roles.ask_role(role, known, at=at)
 
     # --- los cuatro ejes, separados ------------------------------------
     @staticmethod
