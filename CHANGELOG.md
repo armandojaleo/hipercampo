@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0a5] — 2026-07-22
 
 ### Added
 - **Cross-project memory (linked contexts, read-only)**: `linked=` /
