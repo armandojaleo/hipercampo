@@ -85,8 +85,9 @@ class Hipercampo:
         from .roles import RoleMemory
         self.roles = RoleMemory(self.store)   # memoria composicional de hechos
 
-    def remember_fact(self, fields: dict) -> dict:
-        return self.roles.remember_fact(fields)
+    def remember_fact(self, fields: dict, importance: float = 0.6,
+                      confidence: float = 0.6) -> dict:
+        return self.roles.remember_fact(fields, _clip01(importance), _clip01(confidence))
 
     def ask_role(self, role: str, known: dict) -> dict:
         return self.roles.ask_role(role, known)
@@ -153,16 +154,19 @@ class Hipercampo:
         # enlaces colgantes. Nunca se evicta lo protegido ni el match actual.
         evictado = None
         if MAX_MEMORIES:
-            todos = self.store.all(only_active=False)
+            # cuenta FÍSICA (incluye latentes): si no, los dormidos no contarían y la
+            # base podría crecer sin freno. Se poda primero lo latente de menor valor.
+            todos = self.store.all(only_active=False, include_dormant=True)
             if len(todos) >= MAX_MEMORIES:
                 podables = [r for r in todos
                             if r["kind"] == "episodic" and r["importance"] < 0.8
                             and r["id"] != best_id]
+                podables.sort(key=lambda r: (not r["dormant"], self.retention(r)))
                 if not podables:
                     self.surprise.learn(text)
                     return {"stored": False, "reason": "memoria llena (todo protegido)",
                             "novelty": round(novelty, 3), "surprise": round(surprise, 3)}
-                evictado = min(podables, key=self.retention)["id"]
+                evictado = podables[0]["id"]      # latente de menor retención primero
 
         with self.store.transaction():                # todo o nada
             if evictado is not None:
@@ -558,5 +562,6 @@ class Hipercampo:
         arch = [r for r in rows if r["consolidated"]]
         return {"episodicos_activos": len(ep), "semanticos": len(sem),
                 "archivados": len(arch), "latentes": len(dormidos) - len(rows),
-                "total": len(rows),
+                "total": len(rows),                  # vigentes (sin latentes)
+                "total_fisico": len(dormidos),       # filas reales en disco
                 "db": os.path.abspath(self.store.path)}

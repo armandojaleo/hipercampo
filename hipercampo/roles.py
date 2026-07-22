@@ -105,15 +105,24 @@ class RoleMemory:
             self._fields.append(fields)
             self._hvs.append(from_blob(row["hv"]))
 
-    def remember_fact(self, fields: dict) -> dict:
+    def remember_fact(self, fields: dict, importance: float = 0.6,
+                      confidence: float = 0.6) -> dict:
+        """Guarda un hecho estructurado Y su 'sombra textual' en la memoria viva, para
+        que participe del ciclo completo (recall, muse, consolidación, olvido)."""
         clean = {r: str(v).strip() for r, v in fields.items()
                  if r in ROLES and str(v).strip()}
         if len(clean) < 2:
             return {"stored": False, "reason": "un hecho necesita al menos 2 campos"}
         hv = encode_fact(clean, self.im)
-        fid = self.store.add_fact(json.dumps(clean, ensure_ascii=False), hv)
+        # texto natural del hecho, en orden de rol (sujeto predicado objeto tiempo fuente)
+        texto = " ".join(clean[r] for r in ROLES if r in clean)
+        with self.store.transaction():                       # hecho + sombra, atómico
+            fid = self.store.add_fact(json.dumps(clean, ensure_ascii=False), hv)
+            mem_id = self.store.add(texto, encode_text(texto), 1.0, importance,
+                                    confidence, fact_id=fid)
         self._ids.append(fid); self._fields.append(clean); self._hvs.append(hv)
-        return {"stored": True, "id": fid, "fields": clean}
+        return {"stored": True, "id": fid, "memory_id": mem_id, "text": texto,
+                "fields": clean}
 
     def ask_role(self, role: str, known: dict, top: int = 1) -> dict:
         """Devuelve el valor del 'role' del hecho que mejor encaja con 'known'. Se
@@ -130,6 +139,11 @@ class RoleMemory:
         # nada a la memoria de ítems (no contaminar el cleanup con términos ajenos).
         q = bundle([bind(ROLES[r], encode_text(v)) for r, v in known.items()])
         sims = similarity_batch(q, stack_hvs([h.tobytes() for h in self._hvs]))
+        # los hechos cuya sombra textual se olvidó (latente/superada) no son vigentes
+        olvidados = self.store.dormant_fact_ids()
+        if olvidados:
+            sims = np.array([-1.0 if fid in olvidados else s
+                             for fid, s in zip(self._ids, sims)])
         j = int(np.argmax(sims))
         match = float(sims[j])
         # abstención 1: ningún hecho encaja de verdad con lo conocido

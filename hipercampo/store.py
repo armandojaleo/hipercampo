@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS memories (
     consolidated INTEGER NOT NULL DEFAULT 0,            -- ya absorbido en semántico
     superseded   INTEGER NOT NULL DEFAULT 0,            -- reemplazado por uno más nuevo
     dormant      INTEGER NOT NULL DEFAULT 0,            -- olvidado-pero-no-borrado (latente)
+    fact_id      INTEGER,                               -- sombra textual de un hecho VSA
     namespace    TEXT    NOT NULL DEFAULT 'default'     -- aislamiento por inquilino
 );
 CREATE TABLE IF NOT EXISTS links (
@@ -46,6 +47,12 @@ CREATE TABLE IF NOT EXISTS facts (
     fields    TEXT    NOT NULL,   -- JSON {rol: valor}
     hv        BLOB    NOT NULL    -- hipervector role-filler (bind/bundle)
 );
+"""
+
+# Los índices van APARTE y se crean DESPUÉS de migrar: en una BD antigua las
+# columnas que indexan (namespace…) aún no existen, y crear el índice antes
+# rompería con "no such column".
+_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_kind ON memories(namespace, kind, consolidated);
 CREATE INDEX IF NOT EXISTS idx_links_ns ON links(namespace);
 CREATE INDEX IF NOT EXISTS idx_facts_ns ON facts(namespace);
@@ -71,8 +78,9 @@ class Store:
             pass
         self.db.execute("PRAGMA synchronous=NORMAL")
         self._txn_depth = 0
-        self.db.executescript(_SCHEMA)
-        self._migrate()
+        self.db.executescript(_SCHEMA)     # 1) tablas (IF NOT EXISTS)
+        self._migrate()                    # 2) columnas nuevas en BDs antiguas
+        self.db.executescript(_INDEXES)    # 3) índices, ya con las columnas presentes
         self.db.commit()
 
     # --- transacciones (reentrantes vía contador de profundidad) ---------
@@ -113,22 +121,32 @@ class Store:
         if "dormant" not in cols:
             self.db.execute(
                 "ALTER TABLE memories ADD COLUMN dormant INTEGER NOT NULL DEFAULT 0")
+        if "fact_id" not in cols:
+            self.db.execute("ALTER TABLE memories ADD COLUMN fact_id INTEGER")
         lcols = {r[1] for r in self.db.execute("PRAGMA table_info(links)")}
         if lcols and "namespace" not in lcols:
             self.db.execute(
                 "ALTER TABLE links ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
 
     # --- escritura -------------------------------------------------------
-    def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic") -> int:
+    def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic",
+            fact_id=None) -> int:
         now = time.time()
         cur = self.db.execute(
             "INSERT INTO memories(text,kind,hv,novelty,importance,confidence,strength,"
-            "created,last_access,namespace) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            "created,last_access,namespace,fact_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
             (text, kind, to_blob(hv), novelty, importance, confidence, 1.0, now, now,
-             self.namespace),
+             self.namespace, fact_id),
         )
         self._commit()
         return cur.lastrowid
+
+    def dormant_fact_ids(self) -> set:
+        """ids de hechos cuya sombra textual está latente o superada (no vigentes)."""
+        rows = self.db.execute(
+            "SELECT fact_id FROM memories WHERE namespace=? AND fact_id IS NOT NULL "
+            "AND (dormant=1 OR superseded=1)", (self.namespace,)).fetchall()
+        return {r[0] for r in rows}
 
     def add_fact(self, fields_json: str, hv) -> int:
         cur = self.db.execute(
