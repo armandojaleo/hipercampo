@@ -30,8 +30,10 @@ Revisiones externas (jul 2026) proponen cinco saltos. No todos valen lo mismo:
 4. **Vectores de tamaño dinámico** — NO por ahora: los 5 roles medidos bastan para
    hechos atómicos, y la solución a "un contrato entero" no es un vector más
    gordo, sino trocear en hechos (que ya existe). Coste alto, beneficio dudoso.
-5. **Multi-tenant cloud / cifrado homomórfico** — NO: fuera de alcance por diseño
-   (ver arriba). hipercampo compite en ser la mejor memoria LOCAL, no un SaaS.
+5. **Multi-tenant cloud / cifrado homomórfico** — NO en este repo: fuera de
+   alcance por diseño (ver arriba). La vía honesta es un **spin-off con
+   financiación** si algún día llega — declarado en el README. El núcleo local
+   y MIT no cambia.
 
 La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 abajo.
 

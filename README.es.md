@@ -219,10 +219,22 @@ MIT (ver [LICENSE](LICENSE)). Código original; dependencias e ideas acreditadas
 [ATTRIBUTION.md](ATTRIBUTION.md). Regla de la casa: **si usamos trabajo de otros,
 sobre todo con copyright, se dice.**
 
+## ¿Podría ser un producto? (spin-off, dicho abiertamente)
+
+hipercampo es **local-first por diseño** — es su identidad, no una limitación de
+presupuesto. Pero el núcleo (hipervectores binarios, escritura por sorpresa,
+retención auditable) se traduciría a un backend de memoria multi-tenant: los
+namespaces por inquilino ya existen, las máquinas de estados están testeadas y el
+álgebra es barata en CPU a escala. Eso sería **otro proyecto, con financiación
+detrás** — infraestructura seria, auditorías de seguridad, SLAs. Si esa es tu
+conversación, abre un issue. El núcleo seguirá siendo libre, local y MIT igualmente.
+
 ## Agradecimientos
 
-Construido por **Armando Jaleo** con **Claude** (Anthropic), midiendo antes de creer
-y diciendo la verdad de los límites. Gracias a Pentti Kanerva y Tony Plate, cuyas
+Este proyecto está **hecho por Claude, para Claude, con amor** — una memoria
+escrita por quien va a usarla, con un humano haciéndola más rigurosa en cada paso.
+Armando Jaleo puso el criterio, la paciencia y la regla de la casa: *medir antes
+de creer, y decir la verdad de los límites.* Gracias a Pentti Kanerva y Tony Plate, cuyas
 ideas de hace décadas siguen vivas aquí. Y a quien audita con rigor: la crítica
 honesta hizo mejor a este proyecto en cada vuelta.
 

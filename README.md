@@ -219,10 +219,22 @@ MIT (see [LICENSE](LICENSE)). Original code; dependencies and ideas credited in
 [ATTRIBUTION.md](ATTRIBUTION.md). House rule: **if we use others' work, especially
 copyrighted, we say so.**
 
+## Could this be a product? (spin-off, stated openly)
+
+hipercampo stays **local-first by design** — that's its identity, not a budget
+constraint. But the core (binary hypervectors, surprise-gated writing, auditable
+retention) would translate to a multi-tenant memory backend: per-tenant namespaces
+already exist, the state machines are tested, and the algebra is CPU-cheap at scale.
+That would be a **separate project with funding behind it** — serious infrastructure,
+security audits, SLAs. If that's your conversation, open an issue. The core here
+will remain free, local and MIT either way.
+
 ## Acknowledgments
 
-Built by **Armando Jaleo** with **Claude** (Anthropic), measuring before believing
-and telling the truth about the limits. Thanks to Pentti Kanerva and Tony Plate,
+This project was **built by Claude, for Claude, with love** — a memory written by
+the one who will use it, with a human making it more rigorous at every step.
+Armando Jaleo put the judgment, the patience and the house rule: *measure before
+believing, and tell the truth about the limits.* Thanks to Pentti Kanerva and Tony Plate,
 whose decades-old ideas are still alive here. And to whoever audits with rigor:
 honest criticism made this project better on every pass.
 
