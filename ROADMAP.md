@@ -60,9 +60,13 @@ separar contextos *dentro de una misma máquina*:
 - ⚪ Endurecer contra inyección vía memoria a nivel de cliente (ver [SECURITY.md](SECURITY.md)).
 
 ## Fase 5 — La ventaja diferencial (VSA de verdad)
-- ⚪ **Memoria composicional con roles**: `SUJETO⊗ · PREDICADO⊗ · OBJETO⊗ · TIEMPO⊗ ·
-  FUENTE⊗`, con recuperación por *unbinding* ("¿quién mordió a quién?"), no solo por
-  similitud global. Es lo que separaría hipercampo de un índice léxico.
+- 🟢 **Memoria composicional con roles** (`hipercampo/roles.py`): `SUJETO⊗ ·
+  PREDICADO⊗ · OBJETO⊗ · TIEMPO⊗ · FUENTE⊗`, con recuperación por *unbinding*
+  ("¿quién mordió a quién?"). Medido: recupera el valor correcto por rol con margen
+  claro (0.74 vs 0.54) y capacidad hasta 5 roles; distingue el hecho de su inverso.
+  Tests en `tests/test_roles.py`, demo en `scripts/roles_demo.py`.
+- ⚪ Integrar los role-records en el ciclo de memoria (guardar/consultar hechos
+  estructurados vía MCP: `hc_remember_fact` / `hc_ask_role`) y persistir la item memory.
 - ⚪ Consolidación con **resumen real** (summarizer LLM — el gancho ya existe),
   detección de conflictos, procedencia y validez temporal (`valid_from`/`valid_to`).
 - ⚪ Relaciones tipadas y dirigidas (`supports`, `contradicts`, `updates`, `caused_by`).

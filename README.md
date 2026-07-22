@@ -130,6 +130,27 @@ Forgetting combines the last three into a transparent *retention*
 (`0.4·importance + 0.3·reliability + 0.3·utility`): time only flags candidates, but
 **value** decides.
 
+## Compositional memory with roles (the differentiator)
+
+The thing embeddings **can't** do: ask *who did what to whom* and get the right
+answer by role. A fact is encoded by binding each value to its ROLE and bundling —
+then you recover any field by *unbinding* (`hipercampo/roles.py`):
+
+```python
+from hipercampo.roles import ItemMemory, encode_fact, query_role
+im = ItemMemory()
+fact = encode_fact({"subject": "dog", "predicate": "bites", "object": "man"}, im)
+query_role(fact, "subject", im)   # -> [("dog", 0.74)]
+query_role(fact, "object",  im)   # -> [("man", 0.76)]
+```
+
+`python scripts/roles_demo.py` shows the punchline: *"dog bites man"* and *"man bites
+dog"* have the **same values** but the recovered subject/object are **swapped** — a
+dense embedding places them at nearly the same point; VSA keeps them distinct.
+Measured: correct filler recovered per role with a clear margin (0.74 vs 0.54),
+capacity up to 5 roles. Wiring these role-records into the live MCP cycle is next
+(see [ROADMAP.md](ROADMAP.md)).
+
 ## Contexts, Docker, security
 
 - **Contexts**: namespaces (`HIPERCAMPO_NAMESPACE`) to isolate projects/profiles in

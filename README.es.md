@@ -130,6 +130,27 @@ El olvido combina los tres últimos en una *retención* transparente
 (`0.4·importancia + 0.3·fiabilidad + 0.3·utilidad`): el tiempo marca candidatos,
 pero el **valor** decide.
 
+## Memoria composicional con roles (el diferenciador)
+
+Lo que los embeddings **no** pueden: preguntar *quién hizo qué a quién* y acertar
+por rol. Un hecho se codifica ligando cada valor a su ROL y agrupando; luego se
+recupera cualquier campo por *unbinding* (`hipercampo/roles.py`):
+
+```python
+from hipercampo.roles import ItemMemory, encode_fact, query_role
+im = ItemMemory()
+hecho = encode_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"}, im)
+query_role(hecho, "subject", im)   # -> [("perro", 0.74)]
+query_role(hecho, "object",  im)   # -> [("hombre", 0.76)]
+```
+
+`python scripts/roles_demo.py` enseña la clave: *"perro muerde hombre"* y *"hombre
+muerde perro"* tienen los **mismos valores** pero el sujeto/objeto recuperados están
+**invertidos** — un embedding denso los pone casi en el mismo punto; VSA los mantiene
+distintos. Medido: recupera el valor correcto por rol con margen claro (0.74 vs 0.54)
+y capacidad hasta 5 roles. Integrarlo en el ciclo MCP vivo es el siguiente paso
+(ver [ROADMAP.md](ROADMAP.md)).
+
 ## Contextos, Docker, seguridad
 
 - **Contextos**: namespaces (`HIPERCAMPO_NAMESPACE`) para aislar proyectos/perfiles
