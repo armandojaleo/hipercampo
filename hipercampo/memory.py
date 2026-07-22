@@ -25,7 +25,7 @@ import numpy as np
 from .encoder import encode_text
 from .store import Store
 from .surprise import SurpriseModel
-from .vsa import bundle, similarity
+from .vsa import bundle, similarity, similarity_batch, stack_hvs
 
 # --- parámetros de criterio (aquí es donde manda el juicio humano) -------
 NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
@@ -73,11 +73,12 @@ class Hipercampo:
         hv = encode_text(text)
         actives = self.store.all(only_active=True)
 
+        # escaneo de novedad vectorizado (similitud contra todo de una vez)
+        sims_act = similarity_batch(hv, stack_hvs([r["hv"] for r in actives]))
         best_id, best_sim = None, 0.0
-        for row in actives:
-            s = similarity(hv, self.store.hv_of(row))
-            if s > best_sim:
-                best_sim, best_id = s, row["id"]
+        if len(sims_act):
+            j = int(np.argmax(sims_act))
+            best_sim, best_id = float(sims_act[j]), actives[j]["id"]
 
         novelty = 1.0 - best_sim                      # ¿hay algo parecido ya?
         surprise = self.surprise.surprise(text)       # ¿era predecible? (bits, MDL)
@@ -98,11 +99,10 @@ class Hipercampo:
 
         mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
 
-        # Tejer asociaciones con lo parecido (grafo para la propagación).
-        for row in actives:
-            s = similarity(hv, self.store.hv_of(row))
-            if s >= LINK_SIMILARITY:
-                self.store.link(mem_id, row["id"], weight=s)
+        # Tejer asociaciones con lo parecido (reutiliza las similitudes ya calculadas).
+        for i, row in enumerate(actives):
+            if sims_act[i] >= LINK_SIMILARITY:
+                self.store.link(mem_id, row["id"], weight=float(sims_act[i]))
 
         result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
                   "surprise": round(surprise, 3), "importance": importance}
@@ -176,14 +176,14 @@ class Hipercampo:
         if not rows:
             return []
 
-        # activación inicial = similitud con la consulta, AFILADA.
+        # activación inicial = similitud con la consulta, AFILADA (vectorizada).
         # En VSA lo no-relacionado vive en ~0.5, así que reescalamos
         # 0.5 -> 0 y 1.0 -> 1 para que el ranking tenga contraste real.
-        activation: dict[int, float] = {}
         by_id = {r["id"]: r for r in rows}
-        for r in rows:
-            sim = similarity(qhv, self.store.hv_of(r))
-            activation[r["id"]] = max(0.0, 2.0 * (sim - 0.5))
+        sims = similarity_batch(qhv, stack_hvs([r["hv"] for r in rows]))
+        activation: dict[int, float] = {
+            r["id"]: max(0.0, 2.0 * (float(sims[i]) - 0.5)) for i, r in enumerate(rows)
+        }
 
         # propagación: la chispa salta a los vecinos, atenuada
         seeds = sorted(activation, key=activation.get, reverse=True)[:k]

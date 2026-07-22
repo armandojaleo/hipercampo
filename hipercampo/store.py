@@ -50,8 +50,14 @@ class Store:
         # escribe, sin corromper. Base para acceso concurrente (multiusuario).
         self.db = sqlite3.connect(path, timeout=30.0)
         self.db.row_factory = sqlite3.Row
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA busy_timeout=30000")
+        self.db.execute("PRAGMA busy_timeout=30000")     # esperar ante bloqueo
+        try:
+            # WAL es persistente a nivel de fichero: basta que lo fije una conexión.
+            # Cambiarlo exige lock exclusivo, así que bajo concurrencia puede chocar;
+            # es best-effort (si otro lo está fijando, seguimos igual).
+            self.db.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError:
+            pass
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(_SCHEMA)
         self._migrate()

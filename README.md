@@ -199,14 +199,17 @@ Reinicia el cliente y Claude tendrá seis herramientas nuevas.
 `python scripts/stress.py` mide calidad; para el coste, un test con 2000 recuerdos
 sintéticos + 1 "aguja":
 
-| Recuerdos | Recall (escaneo lineal, CPU) | ¿Encuentra la aguja? |
+| Recuerdos | `recall()` completo (CPU) | ¿Encuentra la aguja? |
 |-----------|:---:|:---:|
-| 2.001 | ~124 ms | sí, posición #1 |
+| 2.000 | ~40 ms | sí, posición #1 |
+| 10.000 | ~164 ms | sí, posición #1 |
 
-En este test la aguja **sigue saliendo primera** al crecer la memoria (buena señal),
-pero no es una prueba general de que la precisión no se degrade: haría falta muchas
-consultas, distintas similitudes y baselines externos. El recall es **lineal** (no
-hay índice ANN): a ~100k recuerdos serían
+El escaneo de similitud está **vectorizado** (XOR de toda la matriz + popcount nativo
+de NumPy 2.0, con tabla de respaldo): ~5× más rápido que fila-a-fila. En este test la
+aguja **sigue saliendo primera** al crecer la memoria (buena señal), pero no es una
+prueba general de que la precisión no se degrade: haría falta muchas consultas,
+distintas similitudes y baselines externos. El recall sigue siendo **lineal** (no hay
+índice ANN): a ~100k recuerdos serían
 segundos. Para memoria personal/agente (cientos a pocos miles) va sobrado; a gran
 escala haría falta vectorizar el escaneo (popcount por bloques) o un índice. Es un
 límite conocido, no oculto.

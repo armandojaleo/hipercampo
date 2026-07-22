@@ -29,9 +29,9 @@ Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
   latencia p50/p95, tokens metidos en contexto.
 
 ## Fase 3 — Rendimiento a escala
-- ⚪ Sustituir el escaneo lineal: **popcount vectorizado** (XOR de toda la matriz de
-  hipervectores de golpe) o índice LSH sobre los binarios. Objetivo: 100k+ en <100ms.
-- ⚪ Índice por namespace; carga perezosa; medición de memoria/almacenamiento.
+- 🟢 **Escaneo vectorizado**: XOR de toda la matriz + popcount nativo (NumPy 2.0) con
+  tabla de respaldo. ~5× más rápido (10k: 224→47 ms). recall() 2k ~40ms, 10k ~164ms.
+- ⚪ Índice LSH sobre los binarios para sublineal a 100k+; carga perezosa de la matriz.
 
 ## Fase 4 — Aislamiento local (NO servidor multiusuario)
 Fuera de alcance auth/cifrado/Postgres/red: cada usuario es local. Lo útil aquí es

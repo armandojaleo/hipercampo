@@ -73,6 +73,34 @@ def similarity(a: np.ndarray, b: np.ndarray) -> float:
     return 1.0 - hamming(a, b) / D
 
 
+# popcount vectorizado: nativo (NumPy>=2.0, en C) o tabla de 256 bytes de respaldo.
+_POPCOUNT = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint16)
+_HAS_NATIVE_POPCOUNT = hasattr(np, "bitwise_count")
+
+
+def _popcount_rows(x: np.ndarray) -> np.ndarray:
+    if _HAS_NATIVE_POPCOUNT:
+        return np.bitwise_count(x).sum(axis=1)       # C nativo, sin alocar LUT gather
+    return _POPCOUNT[x].sum(axis=1)
+
+
+def similarity_batch(q: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    """Similitud de 'q' (uint8[1250]) contra CADA fila de 'matrix' (N x 1250), de
+    una sola vez. Sustituye el bucle fila-a-fila por operaciones vectorizadas: XOR
+    con broadcast + popcount. Escala mucho mejor con N."""
+    if matrix.size == 0:
+        return np.empty(0, dtype=np.float64)
+    dist = _popcount_rows(np.bitwise_xor(matrix, q))  # (N,) distancia de Hamming
+    return 1.0 - dist / D
+
+
+def stack_hvs(blobs) -> np.ndarray:
+    """Apila una lista de hipervectores empaquetados en una matriz (N x 1250)."""
+    if not blobs:
+        return np.empty((0, _BYTES), dtype=np.uint8)
+    return np.frombuffer(b"".join(blobs), dtype=np.uint8).reshape(len(blobs), _BYTES)
+
+
 def to_blob(hv: np.ndarray) -> bytes:
     return hv.tobytes()
 
