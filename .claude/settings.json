@@ -1,4 +1,7 @@
 {
+  "env": {
+    "HIPERCAMPO_LINKED": "*"
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
