@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS memories (
     created      REAL    NOT NULL,
     last_access  REAL    NOT NULL,
     consolidated INTEGER NOT NULL DEFAULT 0,            -- ya absorbido en semántico
-    superseded   INTEGER NOT NULL DEFAULT 0             -- reemplazado por uno más nuevo
+    superseded   INTEGER NOT NULL DEFAULT 0,            -- reemplazado por uno más nuevo
+    namespace    TEXT    NOT NULL DEFAULT 'default'     -- aislamiento por inquilino
 );
 CREATE TABLE IF NOT EXISTS links (
     src    INTEGER NOT NULL,
@@ -36,16 +37,22 @@ CREATE TABLE IF NOT EXISTS links (
     weight REAL    NOT NULL DEFAULT 1.0,
     PRIMARY KEY (src, dst)
 );
-CREATE INDEX IF NOT EXISTS idx_kind ON memories(kind, consolidated);
+CREATE INDEX IF NOT EXISTS idx_kind ON memories(namespace, kind, consolidated);
 """
 
 
 class Store:
-    def __init__(self, path: str = "data/hipercampo.db"):
+    def __init__(self, path: str = "data/hipercampo.db", namespace: str = "default"):
         self.path = path
+        self.namespace = namespace
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(path)
+        # WAL + espera ante bloqueo: varios procesos/hilos pueden leer mientras uno
+        # escribe, sin corromper. Base para acceso concurrente (multiusuario).
+        self.db = sqlite3.connect(path, timeout=30.0)
         self.db.row_factory = sqlite3.Row
+        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA busy_timeout=30000")
+        self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(_SCHEMA)
         self._migrate()
         self.db.commit()
@@ -59,14 +66,18 @@ class Store:
         if "confidence" not in cols:
             self.db.execute(
                 "ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 0.5")
+        if "namespace" not in cols:
+            self.db.execute(
+                "ALTER TABLE memories ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
 
     # --- escritura -------------------------------------------------------
     def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic") -> int:
         now = time.time()
         cur = self.db.execute(
             "INSERT INTO memories(text,kind,hv,novelty,importance,confidence,strength,"
-            "created,last_access) VALUES(?,?,?,?,?,?,?,?,?)",
-            (text, kind, to_blob(hv), novelty, importance, confidence, 1.0, now, now),
+            "created,last_access,namespace) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (text, kind, to_blob(hv), novelty, importance, confidence, 1.0, now, now,
+             self.namespace),
         )
         self.db.commit()
         return cur.lastrowid
@@ -127,10 +138,10 @@ class Store:
                             [(i, i) for i in ids])
         self.db.commit()
 
-    # --- lectura ---------------------------------------------------------
+    # --- lectura (siempre acotada al namespace del store) ----------------
     def all(self, kind=None, only_active=True) -> list[sqlite3.Row]:
-        q = "SELECT * FROM memories WHERE 1=1"
-        args: list = []
+        q = "SELECT * FROM memories WHERE namespace = ?"
+        args: list = [self.namespace]
         if kind:
             q += " AND kind = ?"
             args.append(kind)
@@ -139,7 +150,11 @@ class Store:
         return self.db.execute(q, args).fetchall()
 
     def get(self, mem_id: int):
-        return self.db.execute("SELECT * FROM memories WHERE id=?", (mem_id,)).fetchone()
+        # También acotado al namespace: un inquilino no puede leer id de otro.
+        return self.db.execute(
+            "SELECT * FROM memories WHERE id=? AND namespace=?",
+            (mem_id, self.namespace),
+        ).fetchone()
 
     def neighbors(self, mem_id: int) -> list[tuple[int, float]]:
         rows = self.db.execute(

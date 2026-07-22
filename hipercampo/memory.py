@@ -44,8 +44,8 @@ UTILITY_CAP = 5                  # nº de usos que ya cuenta como "utilidad plen
 
 
 class Hipercampo:
-    def __init__(self, path="data/hipercampo.db"):
-        self.store = Store(path)
+    def __init__(self, path="data/hipercampo.db", namespace="default"):
+        self.store = Store(path, namespace=namespace)
         # Modelo de sorpresa: se "calienta" reproduciendo la memoria existente,
         # así lo ya guardado no vuelve a considerarse sorprendente tras un reinicio.
         self.surprise = SurpriseModel()

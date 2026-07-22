@@ -31,7 +31,11 @@ if os.environ.get("HIPERCAMPO_SEMANTIC") == "1":
           file=sys.stderr)
 
 DB_PATH = db_path()
-hc = Hipercampo(DB_PATH)
+# Namespace (inquilino) del servidor. Aísla los recuerdos por usuario/proyecto en
+# una misma BD. En un servicio multiusuario real vendría de la identidad autenticada;
+# aquí, del entorno (un proceso por inquilino) como primer paso.
+NAMESPACE = os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+hc = Hipercampo(DB_PATH, namespace=NAMESPACE)
 mcp = FastMCP("hipercampo")
 
 
