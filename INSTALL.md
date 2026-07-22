@@ -89,7 +89,7 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 }
 ```
 
-Reinicia Claude Code. Deberías ver 12 herramientas: `hc_remember`, `hc_recall`,
+Reinicia Claude Code. Deberías ver 15 herramientas: `hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`,
 `hc_remember_fact`, `hc_ask_role`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
@@ -212,7 +212,7 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-Debe listar las 12 herramientas `hc_*`.
+Debe listar las 15 herramientas `hc_*`.
 
 ---
 
@@ -278,6 +278,17 @@ hipercampo doctor        # ruta de la BD, permisos, versión, dependencias
 
 Se desactiva con `HIPERCAMPO_LOG=0`.
 
+### ¿Está sana la memoria?
+
+```bash
+hipercampo doctor          # entorno: ruta, permisos, dependencias, estado
+```
+
+o la herramienta **`hc_health`** desde el chat: comprueba integridad del fichero,
+esquema, lectura y permiso de escritura. Si la base de datos falla en medio de una
+operación, hipercampo **avisa en el registro, reconecta y reintenta una vez**; si aun
+así no puede, devuelve un error legible en vez de tirar el servidor MCP.
+
 ### Sueño autónomo
 
 Cada **50 escrituras** (variable `HIPERCAMPO_AUTOSLEEP_EVERY`, `0` lo desactiva)
@@ -304,7 +315,7 @@ devuelve el campo `db` con la ruta absoluta.
 
 ### Controlar su uso desde Claude
 
-Las 12 herramientas te dan control total, sin tocar código:
+Las 15 herramientas te dan control total, sin tocar código:
 
 | Quieres… | Pídele a Claude (usa la tool) |
 |----------|-------------------------------|

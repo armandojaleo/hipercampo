@@ -166,6 +166,14 @@ def hc_forget(dry_run: bool = True) -> dict:
 
 
 @mcp.tool()
+def hc_health() -> dict:
+    """¿Está sana la memoria? Comprueba integridad del fichero, esquema, lectura y
+    permisos de escritura. Si algo falla, las operaciones intentan reconectar solas
+    y avisan; usa esto para diagnosticar antes de dar por buena una respuesta."""
+    return hc.health()
+
+
+@mcp.tool()
 def hc_stats() -> dict:
     """Estado actual de la memoria (episódicos, semánticos, archivados)."""
     return hc.stats()

@@ -17,7 +17,9 @@ por NOVEDAD = 1 - (máxima similitud con lo ya sabido). Es una aproximación
 defendible; el gancho para una sorpresa real (error de predicción) queda abierto.
 """
 
+import functools
 import os
+import sqlite3
 import time
 
 import numpy as np
@@ -78,6 +80,27 @@ def creative_fit(similarity: float) -> float:
     return (DREAM_HIGH - similarity) / (DREAM_HIGH - DREAM_IDEAL)
 
 
+def resiliente(fn):
+    """Si la base de datos falla (conexión caída, bloqueo, fichero movido), AVISA,
+    reconecta y REINTENTA una vez. Si vuelve a fallar, devuelve un error legible en
+    vez de tumbar el servidor: una memoria caída no debe llevarse por delante al
+    agente que la usa."""
+    @functools.wraps(fn)
+    def envoltura(self, *a, **kw):
+        try:
+            return fn(self, *a, **kw)
+        except sqlite3.Error as e:
+            audit.log("ERROR", f"{fn.__name__}: {e} · reintentando tras reconectar")
+            try:
+                self.store.reconnect()
+                return fn(self, *a, **kw)
+            except Exception as e2:
+                audit.log("ERROR", f"{fn.__name__}: fallo tras reconectar: {e2}")
+                return {"error": f"memoria no disponible: {e2}",
+                        "sugerencia": "ejecuta `hipercampo doctor` para diagnosticarla"}
+    return envoltura
+
+
 def _validate_text(text: str) -> str:
     if not isinstance(text, str):
         raise ValueError("el texto debe ser una cadena")
@@ -108,6 +131,7 @@ class Hipercampo:
     def ask_role(self, role: str, known: dict, at: float | None = None) -> dict:
         return self.roles.ask_role(role, known, at=at)
 
+    @resiliente
     def assist(self, message: str, k: int = 3) -> dict:
         """¿Qué toca hacer en ESTE momento de la conversación? Decide la operación
         de memoria adecuada, ejecuta las lecturas y recomienda las escrituras."""
@@ -128,6 +152,7 @@ class Hipercampo:
                 + 0.3 * self.utility(row))
 
     # 1 -------------------------------------------------------------------
+    @resiliente
     def remember(self, text: str, importance: float = 0.5,
                  confidence: float = 0.5) -> dict:
         """Graba un episodio salvo doble veto: NO lo guarda si es redundante (ya hay
@@ -143,7 +168,7 @@ class Hipercampo:
         actives = self.store.all(only_active=True)
 
         # escaneo de novedad vectorizado (similitud contra todo de una vez)
-        sims_act = similarity_batch(hv, stack_hvs([r["hv"] for r in actives]))
+        sims_act = similarity_batch(hv, self.store.matrix(actives))
         best_id, best_sim = None, 0.0
         if len(sims_act):
             j = int(np.argmax(sims_act))
@@ -230,6 +255,7 @@ class Hipercampo:
                               "reemplazarlo en vez de acumular contradicciones.")
         return result
 
+    @resiliente
     def update(self, target: str, new_text: str, importance: float = 0.7,
                memory_id: int | None = None, confidence: float = 0.75) -> dict:
         """Reemplaza un hecho que cambió. Localiza el recuerdo a superar por
@@ -279,6 +305,7 @@ class Hipercampo:
                         "concreto, vuelve a llamar con memory_id."}
 
     # 2 -------------------------------------------------------------------
+    @resiliente
     def recall(self, query: str, k: int = 5, hops: int = 1,
                include_history: bool = False) -> list[dict]:
         """
@@ -303,7 +330,7 @@ class Hipercampo:
         # En VSA lo no-relacionado vive en ~0.5, así que reescalamos
         # 0.5 -> 0 y 1.0 -> 1 para que el ranking tenga contraste real.
         by_id = {r["id"]: r for r in rows}
-        sims = similarity_batch(qhv, stack_hvs([r["hv"] for r in rows]))
+        sims = similarity_batch(qhv, self.store.matrix(rows))
         activation: dict[int, float] = {
             r["id"]: max(0.0, 2.0 * (float(sims[i]) - 0.5)) for i, r in enumerate(rows)
         }
@@ -371,6 +398,7 @@ class Hipercampo:
         return salida
 
     # 3 -------------------------------------------------------------------
+    @resiliente
     def consolidate(self, summarizer=None) -> dict:
         """
         Fase de 'sueño': AGRUPA episodios muy parecidos en un recuerdo semántico
@@ -432,6 +460,7 @@ class Hipercampo:
         return {"clusters_fusionados": made, "episodios_archivados": archived}
 
     # 4 -------------------------------------------------------------------
+    @resiliente
     def forget(self, dry_run: bool = False) -> dict:
         """
         Olvido activo con CUATRO EJES. El tiempo (decaimiento) solo marca
@@ -468,6 +497,7 @@ class Hipercampo:
                 "nota": "latentes, no borrados; pueden resurgir con muse"}
 
     # 5 · RECUERDO INSPIRADOR --------------------------------------------
+    @resiliente
     def muse(self, query: str, k: int = 3, hops: int = 3) -> list[dict]:
         """Recuperación CREATIVA: en vez del match obvio, busca conexiones
         INDIRECTAS (alcanzadas por asociación, no por parecido directo) e incluye
@@ -482,7 +512,7 @@ class Hipercampo:
         if not rows:
             return []
         by_id = {r["id"]: r for r in rows}
-        sims = similarity_batch(qhv, stack_hvs([r["hv"] for r in rows]))
+        sims = similarity_batch(qhv, self.store.matrix(rows))
         directo = {r["id"]: max(0.0, 2.0 * (float(sims[i]) - 0.5))
                    for i, r in enumerate(rows)}
 
@@ -545,6 +575,7 @@ class Hipercampo:
                 "resurgido": bool(r["dormant"])})
         return salida
 
+    @resiliente
     def dream(self, max_bridges: int = 5, dry_run: bool = True) -> dict:
         """Sueño CREATIVO: mientras 'duerme', propone PUENTES entre recuerdos que
         comparten un ASOCIADO COMÚN pero NO están conectados entre sí (analogía: A y B
@@ -607,6 +638,7 @@ class Hipercampo:
                 "nota": ("solo propuestas; usa dry_run=False para registrarlas como "
                          "hipótesis y hc_accept_bridge para confirmarlas")}
 
+    @resiliente
     def sleep(self, dream_bridges: int = 3) -> dict:
         """Un ciclo de sueño completo: consolidar → olvidar → soñar (propuestas).
         Es lo que hipercampo hace SOLO cada AUTOSLEEP_EVERY escrituras."""
@@ -649,6 +681,11 @@ class Hipercampo:
         return {"rejected": [a, b]}
 
     # utilidades ----------------------------------------------------------
+    def health(self) -> dict:
+        """¿Está sana la memoria? (integridad, esquema, permisos)."""
+        return self.store.health()
+
+    @resiliente
     def stats(self) -> dict:
         rows = self.store.all(only_active=False)
         dormidos = self.store.all(only_active=False, include_dormant=True)

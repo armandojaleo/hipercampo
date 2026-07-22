@@ -6,6 +6,7 @@ activación.
 Un solo fichero .db portátil. En Docker vive en el volumen /data.
 """
 
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -77,9 +78,14 @@ class Store:
         self.path = path
         self.namespace = namespace
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._txn_depth = 0
+        self._connect()
+
+    def _connect(self) -> None:
+        """Abre la conexión y deja el esquema al día. Reutilizable para reconectar."""
         # WAL + espera ante bloqueo: varios procesos/hilos pueden leer mientras uno
-        # escribe, sin corromper. Base para acceso concurrente (multiusuario).
-        self.db = sqlite3.connect(path, timeout=30.0)
+        # escribe, sin corromper. Base para acceso concurrente.
+        self.db = sqlite3.connect(self.path, timeout=30.0)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA busy_timeout=30000")     # esperar ante bloqueo
         try:
@@ -95,6 +101,46 @@ class Store:
         self._migrate()                    # 2) columnas nuevas en BDs antiguas
         self.db.executescript(_INDEXES)    # 3) índices, ya con las columnas presentes
         self.db.commit()
+
+    def matrix(self, rows) -> np.ndarray:
+        """Matriz (N x 1250) con los hipervectores de esas filas, para comparar de
+        una vez con similarity_batch. Evita repetir el mismo apilado por todo el código."""
+        from .vsa import stack_hvs
+        return stack_hvs([r["hv"] for r in rows])
+
+    # --- salud y recuperación --------------------------------------------
+    def health(self) -> dict:
+        """¿Está sana la memoria? Integridad del fichero, esquema y escritura."""
+        info = {"db": os.path.abspath(self.path), "namespace": self.namespace}
+        try:
+            info["integridad"] = self.db.execute("PRAGMA integrity_check").fetchone()[0]
+        except Exception as e:
+            info["integridad"] = f"ERROR: {e}"
+        try:
+            tablas = {r[0] for r in self.db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            faltan = {"memories", "links", "facts", "meta"} - tablas
+            info["esquema"] = "ok" if not faltan else f"faltan tablas: {sorted(faltan)}"
+        except Exception as e:
+            info["esquema"] = f"ERROR: {e}"
+        try:
+            self.db.execute("SELECT 1 FROM memories LIMIT 1").fetchone()
+            info["lectura"] = "ok"
+        except Exception as e:
+            info["lectura"] = f"ERROR: {e}"
+        info["escribible"] = os.access(os.path.dirname(os.path.abspath(self.path)) or ".",
+                                       os.W_OK)
+        info["sana"] = (info.get("integridad") == "ok" and info.get("esquema") == "ok"
+                        and info.get("lectura") == "ok" and info["escribible"])
+        return info
+
+    def reconnect(self) -> None:
+        """Reabre la conexión (recuperación ante un fallo de la BD)."""
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        self._connect()
 
     # --- transacciones (reentrantes vía contador de profundidad) ---------
     def _commit(self):

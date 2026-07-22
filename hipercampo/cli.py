@@ -20,6 +20,7 @@ HIPERCAMPO_AUTOSLEEP_EVERY, HIPERCAMPO_MAX_MEMORIES, HIPERCAMPO_REDACT_SECRETS.
 import argparse
 import json
 import os
+import re
 import sys
 
 try:                                                  # salida UTF-8 en Windows
@@ -61,6 +62,9 @@ def cmd_hook(_args) -> int:
         if isinstance(v, str) and v.strip():
             prompt = v.strip()
             break
+    # El IDE puede colar bloques propios (<ide_opened_file>, <system-reminder>…):
+    # no son texto del usuario, así que no deben decidir qué recuerda hipercampo.
+    prompt = re.sub(r"<[a-zA-Z_-]+>.*?</[a-zA-Z_-]+>", " ", prompt, flags=re.S).strip()
     if not prompt:
         print("{}")
         return 0

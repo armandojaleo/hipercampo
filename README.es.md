@@ -45,9 +45,9 @@ cd hipercampo && pip install -e .
 python scripts/demo.py                # ver el ciclo funcionando
 ```
 
-Reinicia Claude Code y tendrás 12 herramientas de memoria (`hc_remember`, `hc_recall`,
+Reinicia Claude Code y tendrás 15 herramientas de memoria (`hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
-`hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
+`hc_assist`, `hc_sleep`, `hc_consolidate`, `hc_forget`, `hc_health`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
 verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
 
 ---
@@ -79,7 +79,7 @@ python tests/test_properties.py   # invariantes con datos fabricados (8 rondas)
 python scripts/scenarios.py       # historia narrada: Claude recordando a un usuario
 ```
 
-19 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
+20 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
 comprobadas: *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera
 entre 25 distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *un
 contexto no ve ni puede modificar lo de otro*, *una transacción fallida no deja rastro*.
@@ -184,16 +184,25 @@ y capacidad hasta 5 roles. Integrarlo en el ciclo MCP vivo es el siguiente paso
 ## Arquitectura
 
 ```
-texto ──▶ encoder.py ──▶ hipervector (10.000 bits)
-                              │
+texto ──▶ encoder.py ──▶ hipervector (10.000 bits)   semantic.py  puente denso
+                              │                                   opcional (SimHash)
         vsa.py  (bind / bundle / permute / popcount vectorizado)
                               │
+      roles.py  ── hechos composicionales (role-filler, vigencia temporal)
+                              │
      memory.py  ── sorpresa · recuerdo+propagación · sueño · olvido · 4 ejes
-                              │
+                              │      └── safety.py (secretos / inyección), config.py (entorno)
       store.py  ── SQLite WAL (recuerdos + grafo, aislado por namespace, transaccional)
+                              │      └── backup.py (copia consistente), audit.py (registro)
+     policy.py  ── qué toca en ESTE turno (lecturas se ejecutan, escrituras se sugieren)
                               │
-     server.py  ── MCP (stdio) ──▶ Claude
+     server.py  ── MCP (stdio) ──▶ Claude      cli.py ── terminal + `hipercampo hook`
 ```
+
+Toda operación pública va envuelta en `@resiliente`: si SQLite falla, **avisa en el
+registro, reconecta y reintenta una vez**; si aun así falla, devuelve un error legible
+en vez de reventar. `hc_health` (o `hipercampo doctor`) informa de integridad, esquema,
+lectura y permiso de escritura.
 
 ## Trabajo relacionado y posicionamiento honesto
 
