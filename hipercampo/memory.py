@@ -102,27 +102,32 @@ class Hipercampo:
 
         novelty = 1.0 - best_sim                      # ¿hay algo parecido ya?
         surprise = self.surprise.surprise(text)       # ¿era predecible? (bits, MDL)
-        self.surprise.learn(text)                     # lo visto deja de sorprender
+        # el modelo APRENDE y observa siempre (lo visto deja de sorprender), pero
+        # tras la escritura para no quedar por delante de la BD si algo falla.
+        self.surprise.observe(surprise)
 
-        # DOBLE VETO (la tesis del ahorro de tokens): saltamos lo que NO aporta,
-        # sea porque ya lo tenemos (redundante) o porque el modelo ya lo predecía
-        # (conocimiento trivial). Solo guardamos lo novedoso Y sorprendente.
+        # DOBLE VETO (la tesis del ahorro de tokens): saltamos lo que NO aporta, sea
+        # porque ya lo tenemos (redundante) o porque el modelo ya lo predecía (umbral
+        # ADAPTATIVO por percentil). Solo guardamos lo novedoso Y sorprendente.
         redundante = best_id is not None and novelty < NOVELTY_WRITE_THRESHOLD
-        predecible = surprise < SURPRISE_WRITE_THRESHOLD
+        predecible = self.surprise.predictable(surprise)
         if redundante or predecible:
-            if best_id is not None:
+            # refuerzo SOLO si es redundante (similitud real); si solo era predecible,
+            # el "mejor" match puede ser un parecido débil que no debemos reforzar.
+            if redundante:
                 self.store.reinforce(best_id)
+            self.surprise.learn(text)
             return {"stored": False,
                     "reason": "redundante" if redundante else "predecible",
                     "novelty": round(novelty, 3), "surprise": round(surprise, 3),
-                    "reinforced_id": best_id}
+                    "reinforced_id": best_id if redundante else None}
 
-        mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
-
-        # Tejer asociaciones con lo parecido (reutiliza las similitudes ya calculadas).
-        for i, row in enumerate(actives):
-            if sims_act[i] >= LINK_SIMILARITY:
-                self.store.link(mem_id, row["id"], weight=float(sims_act[i]))
+        with self.store.transaction():                # escritura atómica
+            mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
+            for i, row in enumerate(actives):         # asociaciones (sims ya calculadas)
+                if sims_act[i] >= LINK_SIMILARITY:
+                    self.store.link(mem_id, row["id"], weight=float(sims_act[i]))
+        self.surprise.learn(text)                     # aprender tras confirmar
 
         result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
                   "surprise": round(surprise, 3), "importance": importance}
@@ -164,7 +169,6 @@ class Hipercampo:
                     best_sim, best = s, r
 
         new_hv = encode_text(new_text)
-        self.surprise.learn(new_text)
         confiable = best is not None and best_sim >= UPDATE_MIN_SIMILARITY
 
         with self.store.transaction():                    # todo o nada
@@ -177,6 +181,7 @@ class Hipercampo:
             if confiable:
                 self.store.mark_superseded([best["id"]])
                 self.store.link(new_id, best["id"], weight=1.0)   # cadena de historia
+        self.surprise.learn(new_text)                     # aprender tras confirmar
 
         if confiable:
             return {"updated": True, "new_id": new_id, "superseded_id": best["id"],
@@ -198,7 +203,9 @@ class Hipercampo:
         """
         k = max(1, min(int(k), 100))
         hops = max(0, min(int(hops), 5))
-        qhv = encode_text(query or "")
+        if not isinstance(query, str) or not query.strip():
+            return []                                # consulta vacía -> sin resultados
+        qhv = encode_text(query)
         rows = self.store.all(only_active=False)
         if not include_history:                      # nada de archivados ni superados
             rows = [r for r in rows if not r["consolidated"] and not r["superseded"]]
@@ -275,12 +282,17 @@ class Hipercampo:
             if r["id"] in used:
                 continue
             group = [r]
+            group_hvs = [self.store.hv_of(r)]
             used.add(r["id"])
             for other in eps:
                 if other["id"] in used:
                     continue
-                if similarity(self.store.hv_of(r), self.store.hv_of(other)) >= CONSOLIDATE_SIMILARITY:
+                ohv = self.store.hv_of(other)
+                # cohesión: debe parecerse a TODOS los del grupo, no solo al primero
+                # (evita cadenas A~B, A~C con B≁C que agruparían cosas dispares).
+                if all(similarity(ohv, g) >= CONSOLIDATE_SIMILARITY for g in group_hvs):
                     group.append(other)
+                    group_hvs.append(ohv)
                     used.add(other["id"])
             if len(group) >= 2:
                 clusters.append(group)

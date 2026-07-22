@@ -24,13 +24,16 @@ Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
 - ⚪ Migraciones versionadas (tabla `schema_version`) en vez de `ALTER TABLE` ad-hoc.
 - ⚪ `VACUUM` / borrado seguro para `hc_forget`.
 
-## Fase 1b — Calibrar la sorpresa (punto científico débil, pendiente)
-- ⚪ El veto por "predecible" usa un umbral absoluto (`0.05`) que casi nunca se cruza:
-  hoy el duplicado se rechaza por *similitud*, no por *predictibilidad*. Calibrar con
-  un criterio **relativo** (percentil del historial reciente), medido, no adivinado.
-- ⚪ **Persistencia real** del modelo de sorpresa: hoy, tras reiniciar, se reconstruye
-  SOLO desde los recuerdos guardados; lo visto-y-rechazado no persiste. Persistir los
-  contadores unigrama/bigrama por namespace.
+## Fase 1b — Calibrar la sorpresa
+- 🟢 **Umbral adaptativo**: "predecible" = cuantil inferior de la sorpresa reciente
+  (respaldo absoluto con poco historial). Test que demuestra que el veto ES
+  alcanzable con secuencias realistas (`tests/test_calibration.py`).
+- 🟢 Aprender **después** del commit (el modelo no se adelanta a la BD si hay rollback)
+  y reforzar solo si es redundante (no por un match débil al vetar por predecible).
+- ⚪ **Persistencia real** de los contadores unigrama/bigrama por namespace (hoy se
+  reconstruye solo desde lo guardado; lo visto-y-rechazado no persiste al reiniciar).
+- ⚪ Calibrar `MIN_RECALL_SCORE` midiendo la **tasa de falsas recuperaciones** al crecer
+  N (no solo Recall@k).
 
 ## Fase 2 — Credibilidad: demostrar la calidad
 - ⚪ **Benchmark contra baselines externos**: BM25 (SQLite FTS5), embeddings+coseno,

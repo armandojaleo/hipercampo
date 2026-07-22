@@ -22,7 +22,7 @@ Persistir los contadores es un pendiente del roadmap (Fase 1b).
 
 import math
 import re
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 
 _word = re.compile(r"\w+", re.UNICODE)
 
@@ -35,11 +35,20 @@ _BITS_FULL = math.log2(_V0)
 class SurpriseModel:
     """Modelo de lenguaje online (unigrama + bigrama con backoff interpolado)."""
 
+    # Umbral ADAPTATIVO: en vez de un absoluto fijo (que casi nunca se cruza),
+    # "predecible" = estar en el cuantil inferior de la sorpresa reciente. Se calibra
+    # solo al dominio. Con poco historial cae a un absoluto de respaldo.
+    _HISTORY = 300
+    _PREDICTABLE_PERCENTILE = 20      # cuantil inferior que se considera predecible
+    _MIN_HISTORY = 40                 # hasta tener esto, usar el absoluto de respaldo
+    _ABS_FALLBACK = 0.05
+
     def __init__(self):
         self.uni: Counter = Counter()
         self.bi: dict[str, Counter] = defaultdict(Counter)
         self.total = 0
         self.vocab: set[str] = set()
+        self._recent: deque = deque(maxlen=self._HISTORY)   # sorpresas recientes
 
     # Suavizado pequeño sobre un vocabulario "imaginado" _V0: en frío, un token
     # nuevo es muy improbable (~1/_V0 -> muy sorprendente); con la repetición, la
@@ -70,6 +79,19 @@ class SurpriseModel:
     def surprise(self, text: str) -> float:
         """Sorpresa normalizada en [0,1]: bits/token relativos a algo totalmente nuevo."""
         return min(1.0, self.bits(text) / _BITS_FULL)
+
+    def observe(self, s: float) -> None:
+        """Registra una sorpresa en el historial reciente (para el umbral adaptativo)."""
+        self._recent.append(float(s))
+
+    def predictable(self, s: float) -> bool:
+        """¿Es 's' predecible? Adaptativo: por debajo del cuantil inferior de la
+        sorpresa reciente. Con poco historial, cae a un umbral absoluto de respaldo."""
+        if len(self._recent) < self._MIN_HISTORY:
+            return s < self._ABS_FALLBACK
+        import numpy as np
+        umbral = float(np.percentile(list(self._recent), self._PREDICTABLE_PERCENTILE))
+        return s <= umbral
 
     def learn(self, text: str) -> None:
         """Incorpora el texto al modelo: lo que se ve, deja de sorprender."""

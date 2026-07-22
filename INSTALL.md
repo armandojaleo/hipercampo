@@ -109,10 +109,29 @@ rutas absolutas del ejecutable de Python y de `HIPERCAMPO_DB`. Reinicia Claude C
 > Puedes tener ambos (global + `.mcp.json` del repo): si apuntan a la misma BD y
 > comando, es inofensivo. El `.mcp.json` del repo es útil para quien clone el proyecto.
 
-### Híbrida: memoria personal + memoria por proyecto (recomendada con varios proyectos)
+### Aislar contextos: namespaces (recomendado) o ficheros distintos
 
-Dos servidores con **BD distinta**, para que lo técnico de un proyecto no se mezcle
-con otro pero Claude te siga conociendo en todos:
+Dos formas de que lo de un proyecto no se mezcle con otro (local-first, ambas válidas):
+
+**Opción A — namespaces (una sola BD).** Añade `HIPERCAMPO_NAMESPACE` al `env` de
+cada servidor. Cada recuerdo lleva su contexto y **nada cruza** (lecturas, escrituras
+por id y enlaces, todo acotado):
+
+```json
+"env": {
+  "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/hipercampo.db",
+  "HIPERCAMPO_NAMESPACE": "mplayer"
+}
+```
+
+**Opción B — ficheros distintos.** Un `HIPERCAMPO_DB` por proyecto (abajo). Es
+aislamiento **local entre contextos**, no una frontera de seguridad multiusuario
+(ver [SECURITY.md](SECURITY.md)).
+
+### Híbrida: memoria personal + memoria por proyecto
+
+Dos servidores con **BD distinta** (o mismo fichero y distinto namespace), para que
+lo técnico de un proyecto no se mezcle con otro pero Claude te siga conociendo:
 
 **1) Personal (global, `~/.claude.json`)** — un servidor `memoria` con su propia BD:
 

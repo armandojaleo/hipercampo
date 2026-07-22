@@ -62,30 +62,33 @@ class Store:
         except sqlite3.OperationalError:
             pass
         self.db.execute("PRAGMA synchronous=NORMAL")
-        self._in_txn = False
+        self._txn_depth = 0
         self.db.executescript(_SCHEMA)
         self._migrate()
         self.db.commit()
 
-    # --- transacciones ---------------------------------------------------
+    # --- transacciones (reentrantes vía contador de profundidad) ---------
     def _commit(self):
         """Commit salvo que estemos dentro de una transacción mayor (atomicidad)."""
-        if not self._in_txn:
+        if self._txn_depth == 0:
             self.db.commit()
 
     @contextmanager
     def transaction(self):
-        """Agrupa varias operaciones en una sola transacción atómica: si algo falla
-        a mitad, se revierte todo (update/consolidate no dejan estados a medias)."""
-        self._in_txn = True
+        """Agrupa operaciones en una transacción atómica: si algo falla a mitad, se
+        revierte todo. Reentrante: solo la más externa confirma o revierte."""
+        self._txn_depth += 1
         try:
             yield
-            self.db.commit()
         except Exception:
-            self.db.rollback()
+            if self._txn_depth == 1:
+                self.db.rollback()
+            self._txn_depth -= 1
             raise
-        finally:
-            self._in_txn = False
+        else:
+            self._txn_depth -= 1
+            if self._txn_depth == 0:
+                self.db.commit()
 
     def _migrate(self):
         """Añade columnas nuevas a BDs creadas con versiones anteriores."""
