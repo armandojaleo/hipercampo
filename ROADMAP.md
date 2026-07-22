@@ -1,8 +1,13 @@
-# Roadmap hacia producción (servicio multiusuario)
+# Roadmap hacia producción (local-first)
 
-hipercampo hoy es **usable en local, mono-usuario**. El objetivo es un **servicio
-multiusuario** fiable. Esto es honesto sobre lo que falta y en qué orden. No es un
-fin de semana: son meses e implica decisiones de infraestructura.
+**Meta: la mejor memoria local para un agente.** Cada usuario aloja hipercampo en
+SU máquina, con SU fichero de memoria. No hay servidor central ni multiusuario: eso
+sería coste e infraestructura innecesarios. Local-first = privado por diseño, gratis
+de operar, sin datos de terceros que custodiar.
+
+Por eso **queda fuera de alcance** (a propósito): autenticación, cifrado gestionado,
+Postgres compartido, transporte de red, hosting multiusuario. Si alguien quisiera un
+SaaS encima, sería otro proyecto; el núcleo se mantiene local y simple.
 
 Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
 
@@ -28,16 +33,13 @@ Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
   hipervectores de golpe) o índice LSH sobre los binarios. Objetivo: 100k+ en <100ms.
 - ⚪ Índice por namespace; carga perezosa; medición de memoria/almacenamiento.
 
-## Fase 4 — Seguridad y multi-tenencia real
-- 🟡 Namespaces en el modelo de datos (hecho); falta que el namespace venga de una
-  **identidad autenticada**, no del entorno.
-- ⚪ **Transporte de red** (MCP sobre HTTP/SSE) en vez de un proceso stdio por cliente.
-- ⚪ **AuthN/AuthZ** por inquilino (tokens); rate limiting.
-- ⚪ **Cifrado en reposo** (SQLCipher o a nivel de aplicación).
-- ⚪ Decisión de motor: SQLite por inquilino vs **Postgres** compartido para alta
-  concurrencia. (SQLite escala sorprendentemente bien por-fichero; Postgres si hay
-  miles de inquilinos concurrentes.)
-- ⚪ Endurecer contra inyección vía memoria (ver [SECURITY.md](SECURITY.md)).
+## Fase 4 — Aislamiento local (NO servidor multiusuario)
+Fuera de alcance auth/cifrado/Postgres/red: cada usuario es local. Lo útil aquí es
+separar contextos *dentro de una misma máquina*:
+- 🟢 **Namespaces**: aislar proyectos/contextos en una misma BD (p. ej. personal vs
+  M Player) sin levantar varios servidores. Ya implementado.
+- ⚪ Selección de namespace cómoda (por proyecto) desde el cliente.
+- ⚪ Endurecer contra inyección vía memoria a nivel de cliente (ver [SECURITY.md](SECURITY.md)).
 
 ## Fase 5 — La ventaja diferencial (VSA de verdad)
 - ⚪ **Memoria composicional con roles**: `SUJETO⊗ · PREDICADO⊗ · OBJETO⊗ · TIEMPO⊗ ·
