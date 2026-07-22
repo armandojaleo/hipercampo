@@ -214,6 +214,31 @@ segundos. Para memoria personal/agente (cientos a pocos miles) va sobrado; a gra
 escala haría falta vectorizar el escaneo (popcount por bloques) o un índice. Es un
 límite conocido, no oculto.
 
+## Comparativa con baselines (Fase 2)
+
+`python scripts/baselines.py [--semantic]` enfrenta hipercampo a los métodos
+estándar sobre el mismo corpus (10 hechos + 10 distractores confusos). MRR por
+categoría + tasa de **falsa recuperación** (consultas ajenas que devuelven algo):
+
+| método | keyword | typo | synonym | global | falsaRec |
+|--------|:---:|:---:|:---:|:---:|:---:|
+| BM25 (léxico exacto) | 1.00 | 0.77 | 0.33 | 0.70 | 1.00 |
+| embeddings + coseno | 0.95 | 0.88 | 0.79 | 0.87 | **0.20** |
+| hipercampo (léxico) | 1.00 | 0.95 | 0.37 | 0.77 | 1.00 |
+| **hipercampo + semántico** | 1.00 | 0.95 | **0.90** | **0.95** | 1.00 |
+
+Lectura honesta:
+- **En ranking (MRR), hipercampo+semántico gana** (0.95): junta la precisión léxica
+  (keyword/typo) con el alcance semántico (sinónimos). En léxico puro ya supera a
+  BM25, sobre todo en **erratas** (0.95 vs 0.77) gracias a los trigramas de carácter.
+- **En abstención, pierde**: embeddings rechaza negativas con su umbral de coseno
+  (falsaRec 0.20); hipercampo aún no (1.00). Hay que calibrar `MIN_RECALL_SCORE`.
+- **Ablación**: quitar la propagación no cambió el resultado *en este corpus* (las
+  asociaciones no eran necesarias aquí); habría que probarla donde el multi-salto importe.
+
+Caveat: corpus **pequeño y sintético**, propio. Es una señal, no una prueba a escala;
+faltan datasets estándar (LongMemEval) y más consultas. Ver [ROADMAP.md](ROADMAP.md).
+
 ## Trabajo relacionado y posicionamiento honesto
 
 hipercampo **no inventa** la computación hiperdimensional (HDC/VSA existe desde los

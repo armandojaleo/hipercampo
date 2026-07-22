@@ -47,3 +47,5 @@ jobs:
         run: python scripts/benchmark.py
       - name: Banco de estrés (10 hechos + 10 distractores confusos)
         run: python scripts/stress.py
+      - name: Comparativa con baselines (BM25 vs hipercampo, léxico)
+        run: python scripts/baselines.py

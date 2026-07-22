@@ -36,12 +36,15 @@ Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
   N (no solo Recall@k).
 
 ## Fase 2 — Credibilidad: demostrar la calidad
-- ⚪ **Benchmark contra baselines externos**: BM25 (SQLite FTS5), embeddings+coseno,
-  híbrido. Sobre datasets estándar (LongMemEval, MemoryAgentBench), no solo el propio.
-- ⚪ **Ablaciones**: sin sorpresa / sin propagación / sin consolidación / sin confianza,
-  para aislar qué aporta cada pieza (y si VSA es la causa real de la mejora).
-- ⚪ Métricas: Recall@k, MRR, precisión de abstención, actualización correcta,
-  latencia p50/p95, tokens metidos en contexto.
+- 🟢 **Baselines** (`scripts/baselines.py`): BM25 y embeddings+coseno vs hipercampo.
+  Resultado medido: hipercampo+semántico gana en MRR global (0.95 vs 0.87 de
+  embeddings); en léxico ya supera a BM25 (erratas 0.95 vs 0.77). Pierde en
+  abstención (falsaRec 1.00 vs 0.20) -> calibrar `MIN_RECALL_SCORE`.
+- 🟡 **Ablación**: sin propagación (medida: no cambia en este corpus). Faltan
+  sin-sorpresa / sin-consolidación / sin-confianza aisladas.
+- ⚪ Sobre datasets **estándar** (LongMemEval, MemoryAgentBench), no solo el propio.
+- ⚪ Métricas extra: precisión de abstención calibrada, tokens metidos en contexto,
+  latencia p50/p95.
 
 ## Fase 3 — Rendimiento a escala
 - 🟢 **Escaneo vectorizado**: XOR de toda la matriz + popcount nativo (NumPy 2.0) con
