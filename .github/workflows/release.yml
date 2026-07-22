@@ -1,0 +1,32 @@
+name: Release to PyPI
+
+# Publica en PyPI al empujar un tag vX.Y.Z. Usa "trusted publishing" (OIDC): sin
+# tokens ni secretos. Requiere una configuración ÚNICA en PyPI (ver más abajo).
+#
+# Pasos de un solo uso (los hace el dueño del paquete):
+#   1. Crear el proyecto/nombre "hipercampo" en https://pypi.org
+#   2. En "Publishing", añadir un Trusted Publisher de GitHub Actions:
+#        owner: armandojaleo   repo: hipercampo   workflow: release.yml
+#   3. A partir de ahí, cada tag vX.Y.Z publica solo.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # necesario para trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build
+        run: |
+          pip install build
+          python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
