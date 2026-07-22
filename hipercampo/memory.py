@@ -457,7 +457,12 @@ class Hipercampo:
                     top = []                          # abstención
         # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
         # para no darle utilidad a falsos positivos que luego se auto-protegerían.
-        self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
+        try:
+            self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
+        except sqlite3.Error as e:
+            # El refuerzo es deseable, no imprescindible: en una BD de solo lectura
+            # (o llena) LEER debe seguir funcionando aunque no se pueda reforzar.
+            audit.log("recall", f"sin refuerzo ({e}); sigo en solo lectura")
 
         audit.log("recall", f"{len(top)} resultado(s)", consulta=query[:40])
         salida = []

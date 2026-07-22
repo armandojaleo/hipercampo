@@ -119,10 +119,26 @@ class Store:
             pass
         self.db.execute("PRAGMA synchronous=NORMAL")
         self._txn_depth = 0
-        self.db.executescript(_SCHEMA)     # 1) tablas (IF NOT EXISTS)
-        self._migrate()                    # 2) columnas nuevas en BDs antiguas
-        self.db.executescript(_INDEXES)    # 3) índices, ya con las columnas presentes
-        self.db.commit()
+        try:
+            self.db.executescript(_SCHEMA)     # 1) tablas (IF NOT EXISTS)
+            self._migrate()                    # 2) columnas nuevas en BDs antiguas
+            self.db.executescript(_INDEXES)    # 3) índices, ya con las columnas presentes
+            self.db.commit()
+        except sqlite3.OperationalError as e:
+            # Una BD de SOLO LECTURA debe poder abrirse para leer: si el esquema ya
+            # está al día no hay nada que escribir, así que el fallo es inocuo. Si el
+            # esquema NO está (BD antigua en un medio de solo lectura), sí es fatal:
+            # sin migrar no podemos servirla con garantías.
+            if "readonly" not in str(e).lower() or not self._al_dia_o_vacia():
+                raise
+
+    def _al_dia_o_vacia(self) -> bool:
+        """¿Se puede operar en solo lectura? Sí, si el esquema ya es el actual."""
+        try:
+            return all(esperadas <= self._columnas(tabla)
+                       for tabla, esperadas in self._COLUMNAS_ACTUALES.items())
+        except sqlite3.Error:
+            return False
 
     def matrix(self, rows) -> np.ndarray:
         """Matriz (N x 1250) con los hipervectores de esas filas, para comparar de

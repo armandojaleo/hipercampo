@@ -40,7 +40,10 @@ def limpiar() -> None:
         _abierta = None
     if _ruta:
         for suf in ("", "-wal", "-shm"):
-            Path(_ruta + suf).unlink(missing_ok=True)
+            try:
+                Path(_ruta + suf).unlink(missing_ok=True)
+            except PermissionError:
+                pass          # otro handle vivo (Windows): se limpiará a la próxima
 
 
 def ejecutar(globs) -> int:
