@@ -105,6 +105,15 @@ def hc_muse(query: str, k: int = 3) -> list:
 
 
 @mcp.tool()
+def hc_dream(max_bridges: int = 5) -> dict:
+    """Sueño CREATIVO: propone PUENTES entre recuerdos lejanos pero conectables
+    (hipótesis que quizá no sabías), tejiendo enlaces débiles para futuras
+    asociaciones. Como incubar de noche y despertar con ideas nuevas. Ejecútalo tras
+    consolidar/olvidar, o cuando busques conexiones inesperadas en tu memoria."""
+    return hc.dream(max_bridges)
+
+
+@mcp.tool()
 def hc_consolidate() -> dict:
     """Fase de sueño: AGRUPA episodios parecidos en un recuerdo semántico y archiva
     los originales (reduce nodos activos; el texto se une, no se resume). Correr

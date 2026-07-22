@@ -40,8 +40,9 @@ python scripts/demo.py                            # (opcional) ver el ciclo func
 claude mcp add hipercampo -- python -m hipercampo.server   # conectar a Claude Code
 ```
 
-Reinicia Claude Code y tendrás 6 herramientas nuevas (`hc_remember`, `hc_recall`,
-`hc_update`, `hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
+Reinicia Claude Code y tendrás 10 herramientas de memoria (`hc_remember`, `hc_recall`,
+`hc_muse`, `hc_dream`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
+`hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
 verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
 
 ---
@@ -73,7 +74,7 @@ python tests/test_properties.py   # invariantes con datos fabricados (8 rondas)
 python scripts/scenarios.py       # historia narrada: Claude recordando a un usuario
 ```
 
-10 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
+16 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
 comprobadas: *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera
 entre 25 distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *un
 contexto no ve ni puede modificar lo de otro*, *una transacción fallida no deja rastro*.
@@ -117,6 +118,7 @@ personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, n
 | `hc_remember(text, importance, confidence)` | Guarda algo (si es novedoso/sorprendente). `importance` = cuánto importa (≥0.8 protege del olvido); `confidence` = cuán fiable (pesa en el ranking). |
 | `hc_recall(query, k, include_history)` | Recupera por similitud + propagación. Puede **abstenerse** (devolver `[]`). |
 | `hc_muse(query, k)` | **Recuerdo inspirador**: trae conexiones *indirectas* y recuerdos **latentes** que pueden resurgir y atar ideas. Para intuición/brainstorming. |
+| `hc_dream(max_bridges)` | **Sueño creativo**: propone *puentes* entre recuerdos con un asociado común que no están enlazados — hipótesis para revisar "por la mañana". |
 | `hc_update(target, new_text, memory_id)` | **Actualiza un hecho que cambió** (supersesión segura; el viejo queda como historia). |
 | `hc_consolidate()` | Fase de sueño: agrupa episodios en conocimiento semántico. |
 | `hc_forget(dry_run)` | Olvido activo. `dry_run=True` ensaya sin borrar. |

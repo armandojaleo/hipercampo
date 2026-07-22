@@ -86,7 +86,7 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 }
 ```
 
-Reinicia Claude Code. Deberías ver 6 herramientas: `hc_remember`, `hc_recall`,
+Reinicia Claude Code. Deberías ver 10 herramientas: `hc_remember`, `hc_recall`,
 `hc_update`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
 ### Memoria compartida entre TODOS los proyectos (global)
@@ -208,7 +208,7 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-Debe listar las 6 herramientas `hc_*`.
+Debe listar las 10 herramientas `hc_*`.
 
 ---
 
@@ -231,7 +231,7 @@ devuelve el campo `db` con la ruta absoluta.
 
 ### Controlar su uso desde Claude
 
-Las 6 herramientas te dan control total, sin tocar código:
+Las 10 herramientas te dan control total, sin tocar código:
 
 | Quieres… | Pídele a Claude (usa la tool) |
 |----------|-------------------------------|

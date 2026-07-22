@@ -33,7 +33,9 @@ NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
 SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
 SUPERSEDE_HINT_SIMILARITY = 0.72 # por encima -> avisamos de posible actualización
 SUPERSEDED_RECALL_PENALTY = 0.2  # cuánto se demueve un recuerdo superado al recuperar
-MIN_RECALL_SCORE = 0.03          # por debajo -> irrelevante; recall se abstiene
+MIN_RECALL_SCORE = 0.03          # suelo absoluto mínimo de relevancia
+RECALL_Z = 2.0                   # cuántas desviaciones sobre el ruido para NO abstenerse
+NOISE_MIN_N = 8                  # nº mínimo de recuerdos para aplicar el z-score
 REINFORCE_MIN_SCORE = 0.10       # solo se refuerza lo claramente relevante (no roce)
 UPDATE_MIN_SIMILARITY = 0.60     # hc_update no reemplaza si no hay match así de bueno
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
@@ -42,6 +44,11 @@ DECAY_HALF_LIFE_DAYS = 14.0      # a qué ritmo se desvanece lo no reforzado
 FORGET_STRENGTH_FLOOR = 0.15     # por debajo de esto y sin uso -> candidato a poda
 RETENTION_FLOOR = 0.40           # valor (4 ejes) mínimo para NO olvidar
 UTILITY_CAP = 5                  # nº de usos que ya cuenta como "utilidad plena"
+DREAM_LOW = 0.55                 # zona dulce de la asociación remota (mín)
+DREAM_HIGH = 0.72                # zona dulce (máx): ni redundante ni ajeno
+DREAM_IDEAL = 0.63               # similitud ideal para un puente creativo
+MIN_MUSE_GAIN = 0.05             # ganancia mínima por asociación para muse (indirecto)
+MUSE_DORMANT_FLOOR = 0.12        # un latente directamente relevante puede resurgir
 MAX_TEXT_LEN = 20_000            # tope de longitud de un recuerdo (defensa)
 # Tope de recuerdos por contexto (0 = sin límite). Al llegar, se poda el de menor
 # retención (importancia+fiabilidad+utilidad), nunca lo protegido (importance>=0.8).
@@ -121,15 +128,12 @@ class Hipercampo:
 
         novelty = 1.0 - best_sim                      # ¿hay algo parecido ya?
         surprise = self.surprise.surprise(text)       # ¿era predecible? (bits, MDL)
-        # el modelo APRENDE y observa siempre (lo visto deja de sorprender), pero
-        # tras la escritura para no quedar por delante de la BD si algo falla.
-        self.surprise.observe(surprise)
 
-        # DOBLE VETO (la tesis del ahorro de tokens): saltamos lo que NO aporta, sea
-        # porque ya lo tenemos (redundante) o porque el modelo ya lo predecía (umbral
-        # ADAPTATIVO por percentil). Solo guardamos lo novedoso Y sorprendente.
+        # DOBLE VETO. Se decide 'predecible' con el historial PREVIO; luego se observa
+        # (para no meter la muestra actual en la distribución que la juzga a sí misma).
         redundante = best_id is not None and novelty < NOVELTY_WRITE_THRESHOLD
         predecible = self.surprise.predictable(surprise)
+        self.surprise.observe(surprise)
         if redundante or predecible:
             # refuerzo SOLO si es redundante (similitud real); si solo era predecible,
             # el "mejor" match puede ser un parecido débil que no debemos reforzar.
@@ -144,27 +148,28 @@ class Hipercampo:
                 r["secret_warning"] = secretos
             return r
 
-        # Tope de contexto: si está lleno, poda el recuerdo de MENOR retención
-        # (nunca lo protegido). Mantiene la memoria acotada sin crecer sin freno.
+        # Escritura ATÓMICA: evicción (si el contexto está lleno) + alta + enlaces,
+        # todo en una transacción -> si algo falla, no se pierde el evictado ni quedan
+        # enlaces colgantes. Nunca se evicta lo protegido ni el match actual.
         evictado = None
         if MAX_MEMORIES:
             todos = self.store.all(only_active=False)
             if len(todos) >= MAX_MEMORIES:
                 podables = [r for r in todos
                             if r["kind"] == "episodic" and r["importance"] < 0.8
-                            and r["id"] != best_id]      # no evictar el match actual
-                if podables:
-                    evictado = min(podables, key=self.retention)["id"]
-                    self.store.delete([evictado])
-                else:
+                            and r["id"] != best_id]
+                if not podables:
                     self.surprise.learn(text)
                     return {"stored": False, "reason": "memoria llena (todo protegido)",
                             "novelty": round(novelty, 3), "surprise": round(surprise, 3)}
+                evictado = min(podables, key=self.retention)["id"]
 
-        with self.store.transaction():                # escritura atómica
+        with self.store.transaction():                # todo o nada
+            if evictado is not None:
+                self.store.delete([evictado])
             mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
             for i, row in enumerate(actives):         # asociaciones (sims ya calculadas)
-                if sims_act[i] >= LINK_SIMILARITY:
+                if row["id"] != evictado and sims_act[i] >= LINK_SIMILARITY:
                     self.store.link(mem_id, row["id"], weight=float(sims_act[i]))
         self.surprise.learn(text)                     # aprender tras confirmar
 
@@ -296,7 +301,17 @@ class Hipercampo:
         # ABSTENCIÓN: solo lo que supera el umbral mínimo de relevancia. Así una
         # consulta sin relación real devuelve [] en vez de ruido, y no reforzamos
         # falsos positivos (que si no, ganarían utilidad y se auto-protegerían).
-        top = [(s, a, r) for s, a, r in scored[:k] if s >= MIN_RECALL_SCORE]
+        # ABSTENCIÓN relativa al RUIDO: con suficientes recuerdos, solo respondemos si
+        # el MEJOR destaca estadísticamente sobre el ruido (z-score). Si nada sobresale
+        # (consulta sin respuesta) -> []. Con pocos recuerdos, el z-score es inestable:
+        # se usa un suelo absoluto. Superada la puerta, se devuelven también los
+        # asociados legítimos (no se filtran uno a uno).
+        top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
+        if len(scored) >= NOISE_MIN_N and top:
+            acts = np.array([a for _, a, _ in scored], dtype=np.float64)
+            mu, sd = float(acts.mean()), float(acts.std())
+            if top[0][1] < mu + RECALL_Z * sd:        # el mejor no sobresale del ruido
+                top = []                              # abstención
         # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
         # para no darle utilidad a falsos positivos que luego se auto-protegerían.
         self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
@@ -449,35 +464,90 @@ class Hipercampo:
                             nxt.append(dst)
             frontier = nxt
 
-        # score CREATIVO: premia lo alcanzado por asociación (indirecto) y lo latente;
-        # penaliza el match directo y obvio (eso ya lo da un recall normal).
+        # score CREATIVO honesto: GANANCIA por asociación = cuánto aportó la propagación
+        # POR ENCIMA de la similitud directa. Un match directo (gain≈0) NO cuenta como
+        # descubrimiento indirecto. Un latente DIRECTAMENTE relevante sí puede resurgir,
+        # pero se etiqueta como "latente relevante", no como conexión indirecta.
         creativos = []
         for mid, act in activacion.items():
             r = by_id[mid]
-            indirecto = act - 0.7 * directo[mid]          # ganancia por asociación
-            bonus = 1.0 + (0.6 if r["dormant"] else 0.0)  # lo latente inspira más
-            score = indirecto * bonus
-            if score > 0 and directo[mid] < 0.9:          # nada de coincidencias obvias
-                creativos.append((score, act, r))
+            gain = max(0.0, act - directo[mid])           # aporte de la ASOCIACIÓN
+            resurge = bool(r["dormant"])
+            if gain >= MIN_MUSE_GAIN:
+                score = gain * (1.6 if resurge else 1.0)
+                via = "asociación indirecta"
+            elif resurge and directo[mid] >= MUSE_DORMANT_FLOOR:
+                score = directo[mid] * 0.5
+                via = "latente relevante"
+            else:
+                continue                                  # ni indirecto ni latente útil
+            creativos.append((score, act, r, gain, via))
         creativos.sort(key=lambda t: t[0], reverse=True)
         top = creativos[:k]
 
-        # un recuerdo latente que resurge se DESPIERTA (vuelve a la memoria viva)
-        resurgidos = [r["id"] for _, _, r in top if r["dormant"]]
+        # Solo se DESPIERTA un latente si resurgió por asociación real (gain fuerte),
+        # no por una coincidencia débil aislada (evita reactivaciones espurias).
+        resurgidos = [r["id"] for _, _, r, gain, _ in top
+                      if r["dormant"] and gain >= MIN_MUSE_GAIN]
         if resurgidos:
             self.store.reactivate(resurgidos)
 
         salida = []
-        for score, act, r in top:
+        for score, act, r, gain, via in top:
             mid = r["id"]
             puente = by_id[parent[mid]]["text"] if parent.get(mid) in by_id else None
             salida.append({
                 "id": mid, "text": r["text"], "kind": r["kind"],
-                "score": round(score, 3),
-                "via": "asociación indirecta" if directo[mid] < 0.15 else "similitud+asociación",
+                "score": round(score, 3), "association_gain": round(gain, 3),
+                "via": via,
                 "conectado_por": puente,          # el recuerdo puente (el porqué)
                 "resurgido": bool(r["dormant"])})
         return salida
+
+    def dream(self, max_bridges: int = 5) -> dict:
+        """Sueño CREATIVO: mientras 'duerme', propone PUENTES entre recuerdos que
+        comparten un ASOCIADO COMÚN pero NO están conectados entre sí (analogía: A y B
+        evocan ambos a X, quizá A y B se relacionen). Incluye latentes. Teje un enlace
+        débil y devuelve las hipótesis —conexiones que no sabías— para 'la mañana'."""
+        rows = [r for r in self.store.all(only_active=False, include_dormant=True)
+                if not r["superseded"]]
+        by_id = {r["id"]: r for r in rows}
+        neigh = {r["id"]: [d for d, _ in self.store.neighbors(r["id"]) if d in by_id]
+                 for r in rows}
+        linked = set()
+        for x, ns in neigh.items():
+            for d in ns:
+                linked.add(frozenset((x, d)))
+
+        # pares (a,b) con un vecino común x, aún no enlazados entre sí
+        puentes: dict[frozenset, int] = {}
+        for x, ns in neigh.items():
+            for i in range(len(ns)):
+                for j in range(i + 1, len(ns)):
+                    pair = frozenset((ns[i], ns[j]))
+                    if pair not in linked and pair not in puentes:
+                        puentes[pair] = x
+
+        scored = []
+        for pair, x in puentes.items():
+            a, b = tuple(pair)
+            s_ab = similarity(by_id[a]["hv"] if False else self.store.hv_of(by_id[a]),
+                              self.store.hv_of(by_id[b]))
+            latente = by_id[a]["dormant"] or by_id[b]["dormant"]
+            # salto creativo: cuanto MÁS distintos son a y b (menor s_ab), más novedoso
+            scored.append((1.0 - s_ab + (0.15 if latente else 0.0), a, b, x))
+        scored.sort(key=lambda t: t[0], reverse=True)
+
+        bridges = []
+        with self.store.transaction():
+            for _, a, b, x in scored[:max_bridges]:
+                self.store.link(a, b, weight=0.5)      # puente débil (asociación nueva)
+                bridges.append({
+                    "a": by_id[a]["text"], "b": by_id[b]["text"],
+                    "via": by_id[x]["text"],
+                    "hypothesis": f"«{by_id[a]['text'][:60]}» y «{by_id[b]['text'][:60]}» "
+                                  f"quizá se relacionan (ambos evocan «{by_id[x]['text'][:50]}»)"})
+        return {"bridges": bridges}
 
     # utilidades ----------------------------------------------------------
     def stats(self) -> dict:

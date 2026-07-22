@@ -40,8 +40,9 @@ python scripts/demo.py                            # (optional) watch the cycle r
 claude mcp add hipercampo -- python -m hipercampo.server   # connect to Claude Code
 ```
 
-Restart Claude Code and you'll have 6 new tools (`hc_remember`, `hc_recall`,
-`hc_update`, `hc_consolidate`, `hc_forget`, `hc_stats`). For Docker, Claude Desktop,
+Restart Claude Code and you'll have 10 memory tools (`hc_remember`, `hc_recall`,
+`hc_muse`, `hc_dream`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
+`hc_consolidate`, `hc_forget`, `hc_stats`). For Docker, Claude Desktop,
 `.mcp.json`, verification and troubleshooting → **[INSTALL.md](INSTALL.md)**.
 
 ---
@@ -73,7 +74,7 @@ python tests/test_properties.py   # invariants over fabricated data (8 rounds)
 python scripts/scenarios.py       # narrated story: Claude remembering a user
 ```
 
-10 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
+16 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
 *a duplicate never creates a second memory*, *a needle is retrieved among 25
 distractors*, *forgetting never deletes something with importance ≥ 0.8*, *one
 context can neither see nor modify another's data*, *a failed transaction leaves no trace*.
@@ -87,16 +88,16 @@ methods on the same corpus (10 facts + 10 confusable distractors). MRR per categ
 | method | keyword | typo | synonym | global | falseRec |
 |--------|:---:|:---:|:---:|:---:|:---:|
 | BM25 (exact lexical) | 1.00 | 0.77 | 0.33 | 0.70 | 1.00 |
-| embeddings + cosine | 0.95 | 0.88 | 0.79 | 0.87 | **0.20** |
-| hipercampo (lexical) | 1.00 | 0.95 | 0.37 | 0.77 | 1.00 |
-| **hipercampo + semantic** | 1.00 | 0.95 | **0.90** | **0.95** | 1.00 |
+| embeddings + cosine | 0.95 | 0.88 | 0.79 | 0.87 | 0.20 |
+| hipercampo (lexical) | 1.00 | 0.91 | 0.51 | 0.81 | **0.20** |
+| **hipercampo + semantic** | 1.00 | 0.95 | **0.90** | **0.95** | ~0.20 |
 
 Honest reading:
 - **On ranking (MRR), hipercampo+semantic wins** (0.95): it fuses lexical precision
   (keyword/typo) with semantic reach (synonyms). In pure-lexical mode it already
-  beats BM25, especially on **typos** (0.95 vs 0.77) thanks to character trigrams.
-- **On abstention, it loses**: embeddings reject negatives with a cosine threshold
-  (falseRec 0.20); hipercampo doesn't yet (1.00). `MIN_RECALL_SCORE` needs calibration.
+  beats BM25, especially on **typos** thanks to character trigrams.
+- **Abstention now works**: a noise-relative (z-score) threshold brings false-recall
+  down to **0.20**, on par with embeddings' cosine cutoff (was 1.00).
 - The corpus is **small and synthetic**: a signal, not proof at scale. See [ROADMAP.md](ROADMAP.md).
 
 ## Scale & latency (measured)
@@ -117,6 +118,7 @@ thousands); at ~100k you'd want an index. A known limit, not hidden.
 | `hc_remember(text, importance, confidence)` | Store something (if novel/surprising). `importance` = how much it matters (≥0.8 protects from forgetting); `confidence` = how reliable (weights ranking). |
 | `hc_recall(query, k, include_history)` | Retrieve by similarity + spreading activation. Can **abstain** (return `[]`). |
 | `hc_muse(query, k)` | **Creative recall**: surfaces *indirect* connections and **dormant** memories that can resurface and tie ideas together. For insight/brainstorming. |
+| `hc_dream(max_bridges)` | **Creative sleep**: proposes *bridges* between memories that share a common associate but aren't linked — hypotheses to review "in the morning". |
 | `hc_update(target, new_text, memory_id)` | **Update a fact that changed** (safe supersession; the old one stays as history). |
 | `hc_consolidate()` | Sleep phase: group episodes into semantic knowledge. |
 | `hc_forget(dry_run)` | Active forgetting. `dry_run=True` rehearses without deleting. |

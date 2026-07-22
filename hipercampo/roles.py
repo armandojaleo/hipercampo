@@ -79,6 +79,12 @@ def query_role(record: np.ndarray, role: str, item_memory: ItemMemory, top: int 
     return item_memory.cleanup(approx, top=top)
 
 
+# Umbrales de abstención de ask_role (evitar responder cuando no se sabe).
+ASK_MIN_MATCH = 0.56     # el hecho debe encajar de verdad con lo conocido
+ASK_MIN_ANSWER = 0.56    # el unbinding debe recuperar un valor con claridad
+ASK_MIN_MARGIN = 0.06    # y con margen sobre el segundo candidato
+
+
 class RoleMemory:
     """Memoria de HECHOS estructurados, persistente y aislada por namespace. Guarda
     hechos {rol: valor} como hipervectores role-filler y responde consultas por rol
@@ -110,19 +116,34 @@ class RoleMemory:
         return {"stored": True, "id": fid, "fields": clean}
 
     def ask_role(self, role: str, known: dict, top: int = 1) -> dict:
-        """Devuelve el valor del 'role' del hecho que mejor encaja con 'known'."""
+        """Devuelve el valor del 'role' del hecho que mejor encaja con 'known'. Se
+        ABSTIENE (answer=None, unknown=True) si no hay un hecho que encaje de verdad o
+        si el unbinding no recupera un valor con claridad y margen."""
         if role not in ROLES:
             return {"error": f"rol desconocido: {role}"}
         known = {r: str(v).strip() for r, v in known.items()
                  if r in ROLES and str(v).strip() and r != role}
         if not known or not self._hvs:
-            return {"error": "indica al menos un campo conocido y que haya hechos"}
-        # consulta parcial: los campos conocidos, ligados a sus roles
-        q = bundle([bind(ROLES[r], self.im.add(v)) for r, v in known.items()])
+            return {"answer": None, "unknown": True,
+                    "reason": "indica al menos un campo conocido y que haya hechos"}
+        # consulta parcial: campos conocidos ligados a su rol. Se codifican SIN añadir
+        # nada a la memoria de ítems (no contaminar el cleanup con términos ajenos).
+        q = bundle([bind(ROLES[r], encode_text(v)) for r, v in known.items()])
         sims = similarity_batch(q, stack_hvs([h.tobytes() for h in self._hvs]))
         j = int(np.argmax(sims))
-        record, fields = self._hvs[j], self._fields[j]
-        respuesta = query_role(record, role, self.im, top=top)
-        return {"role": role, "answer": respuesta[0][0] if respuesta else None,
-                "confidence": round(respuesta[0][1], 3) if respuesta else 0.0,
-                "matched_fact": fields, "match_score": round(float(sims[j]), 3)}
+        match = float(sims[j])
+        # abstención 1: ningún hecho encaja de verdad con lo conocido
+        if match < ASK_MIN_MATCH:
+            return {"role": role, "answer": None, "unknown": True,
+                    "reason": "ningún hecho encaja con lo indicado",
+                    "match_score": round(match, 3)}
+        cand = query_role(self._hvs[j], role, self.im, top=2)
+        conf = cand[0][1] if cand else 0.0
+        margen = (cand[0][1] - cand[1][1]) if len(cand) > 1 else conf
+        # abstención 2: el unbinding no recupera un valor claro y con margen
+        if conf < ASK_MIN_ANSWER or margen < ASK_MIN_MARGIN:
+            return {"role": role, "answer": None, "unknown": True,
+                    "reason": "el rol no se recupera con claridad",
+                    "match_score": round(match, 3), "confidence": round(conf, 3)}
+        return {"role": role, "answer": cand[0][0], "confidence": round(conf, 3),
+                "matched_fact": self._fields[j], "match_score": round(match, 3)}

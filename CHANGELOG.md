@@ -23,7 +23,7 @@ First public alpha. Local-first, single-user memory for Claude via MCP.
   optional secret **redaction** (`HIPERCAMPO_REDACT_SECRETS`) and per-context memory
   **cap** (`HIPERCAMPO_MAX_MEMORIES`).
 - **Optional semantic hook** (SimHash bridge over sentence-transformers).
-- Docs (EN/ES), SECURITY, ATTRIBUTION, ROADMAP; 14 test suites + CI (Python 3.11–3.13)
+- Docs (EN/ES), SECURITY, ATTRIBUTION, ROADMAP; 16 test suites + CI (Python 3.11–3.13)
   running tests, benchmarks and a baseline comparison (BM25 / embeddings).
 
 ### Added (post-tag, unreleased)
