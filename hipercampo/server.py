@@ -105,12 +105,26 @@ def hc_muse(query: str, k: int = 3) -> list:
 
 
 @mcp.tool()
-def hc_dream(max_bridges: int = 5) -> dict:
-    """Sueño CREATIVO: propone PUENTES entre recuerdos lejanos pero conectables
-    (hipótesis que quizá no sabías), tejiendo enlaces débiles para futuras
-    asociaciones. Como incubar de noche y despertar con ideas nuevas. Ejecútalo tras
-    consolidar/olvidar, o cuando busques conexiones inesperadas en tu memoria."""
-    return hc.dream(max_bridges)
+def hc_dream(max_bridges: int = 5, dry_run: bool = True) -> dict:
+    """Sueño CREATIVO: propone PUENTES entre recuerdos que comparten un asociado
+    común pero no están conectados (hipótesis que quizá no sabías). Por defecto SOLO
+    propone (dry_run=True): las hipótesis NO contaminan la memoria. Con dry_run=False
+    se registran como enlaces 'proposed' que aún no propagan; confírmalos con
+    hc_accept_bridge o descártalos con hc_reject_bridge."""
+    return hc.dream(max_bridges, dry_run)
+
+
+@mcp.tool()
+def hc_accept_bridge(a_id: int, b_id: int) -> dict:
+    """Confirma una hipótesis del sueño: ese puente pasa a ser una asociación real y
+    a partir de ahora propaga activación en recall/muse."""
+    return hc.accept_bridge(int(a_id), int(b_id))
+
+
+@mcp.tool()
+def hc_reject_bridge(a_id: int, b_id: int) -> dict:
+    """Descarta una hipótesis del sueño: no volverá a proponerse ni propagará."""
+    return hc.reject_bridge(int(a_id), int(b_id))
 
 
 @mcp.tool()

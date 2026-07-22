@@ -76,7 +76,7 @@ separar contextos *dentro de una misma máquina*:
 - ⚪ Linting + type-check (ruff/mypy) + cobertura en CI.
 - ⚪ Recuperación **explicable**: `score_components` (similitud directa, boost por
   asociación, factor de confianza, penalización por superado).
-- ⚪ Release **v0.1.0** (tag + changelog), publicación en **PyPI**.
+- 🟢 Release v0.1.0-alpha publicada en **PyPI** (trusted publishing + attestations).
 - ⚪ Observabilidad: logging estructurado, métricas.
 
 ---

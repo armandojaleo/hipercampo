@@ -30,18 +30,23 @@ que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 
 ## Instalación (guía completa: [INSTALL.md](INSTALL.md))
 
-**Vía rápida — Python local + Claude Code:**
+**Vía rápida — desde PyPI:**
+
+```bash
+pip install hipercampo                # o: pip install "hipercampo[semantic]"
+claude mcp add --scope user hipercampo -- python -m hipercampo.server
+```
+
+**Desde el código (colaboradores):**
 
 ```bash
 git clone https://github.com/armandojaleo/hipercampo.git
-cd hipercampo
-pip install -e .                                  # instala hipercampo + deps
-python scripts/demo.py                            # (opcional) ver el ciclo funcionando
-claude mcp add hipercampo -- python -m hipercampo.server   # conectar a Claude Code
+cd hipercampo && pip install -e .
+python scripts/demo.py                # ver el ciclo funcionando
 ```
 
-Reinicia Claude Code y tendrás 10 herramientas de memoria (`hc_remember`, `hc_recall`,
-`hc_muse`, `hc_dream`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
+Reinicia Claude Code y tendrás 12 herramientas de memoria (`hc_remember`, `hc_recall`,
+`hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_consolidate`, `hc_forget`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
 verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
 
@@ -74,7 +79,7 @@ python tests/test_properties.py   # invariantes con datos fabricados (8 rondas)
 python scripts/scenarios.py       # historia narrada: Claude recordando a un usuario
 ```
 
-16 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
+18 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
 comprobadas: *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera
 entre 25 distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *un
 contexto no ve ni puede modificar lo de otro*, *una transacción fallida no deja rastro*.
@@ -118,7 +123,8 @@ personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, n
 | `hc_remember(text, importance, confidence)` | Guarda algo (si es novedoso/sorprendente). `importance` = cuánto importa (≥0.8 protege del olvido); `confidence` = cuán fiable (pesa en el ranking). |
 | `hc_recall(query, k, include_history)` | Recupera por similitud + propagación. Puede **abstenerse** (devolver `[]`). |
 | `hc_muse(query, k)` | **Recuerdo inspirador**: trae conexiones *indirectas* y recuerdos **latentes** que pueden resurgir y atar ideas. Para intuición/brainstorming. |
-| `hc_dream(max_bridges)` | **Sueño creativo**: propone *puentes* entre recuerdos con un asociado común que no están enlazados — hipótesis para revisar "por la mañana". |
+| `hc_dream(max_bridges, dry_run)` | **Sueño creativo**: propone *puentes* entre recuerdos con un asociado común. Las hipótesis **no contaminan la memoria**: no propagan hasta confirmarse. |
+| `hc_accept_bridge / hc_reject_bridge` | Confirma una hipótesis del sueño (pasa a ser asociación real) o la descarta. |
 | `hc_update(target, new_text, memory_id)` | **Actualiza un hecho que cambió** (supersesión segura; el viejo queda como historia). |
 | `hc_consolidate()` | Fase de sueño: agrupa episodios en conocimiento semántico. |
 | `hc_forget(dry_run)` | Olvido activo. `dry_run=True` ensaya sin borrar. |

@@ -1,0 +1,48 @@
+name: "💡 Idea / Mejora"
+description: "Proponer una funcionalidad o un cambio · Propose a feature or change"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        En este proyecto **medimos antes de creer**. Si tu idea afirma que mejora algo,
+        piensa cómo se comprobaría.
+        *We measure before believing — think about how the claim could be tested.*
+
+  - type: textarea
+    id: problema
+    attributes:
+      label: "¿Qué problema resuelve? · What problem does it solve?"
+      description: "El caso de uso real, no la solución todavía."
+      placeholder: "Cuando tengo miles de recuerdos, el recall tarda demasiado porque…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: "Propuesta · Proposal"
+      description: "Cómo lo abordarías."
+    validations:
+      required: true
+
+  - type: textarea
+    id: medicion
+    attributes:
+      label: "¿Cómo se mediría? · How would we measure it?"
+      description: "Qué test o benchmark demostraría que funciona (o que no)."
+      placeholder: "Un caso en scripts/baselines.py que mida MRR antes/después…"
+
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: "Alternativas y pegas · Alternatives and downsides"
+      description: "Qué se pierde o se complica con este cambio."
+
+  - type: checkboxes
+    id: alcance
+    attributes:
+      label: "Encaje con el proyecto"
+      options:
+        - label: "Encaja con el alcance local-first (sin servidor central ni multiusuario)"
+        - label: "Si trae dependencias nuevas, irían en un extra opcional y acreditadas"

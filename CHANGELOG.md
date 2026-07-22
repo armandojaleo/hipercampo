@@ -3,6 +3,37 @@
 All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [0.1.0a3] — 2026-07-22
+
+### Added
+- **Typed, staged links**: associations now carry `type` (lexical | update |
+  consolidation | dream) and `status` (proposed | confirmed | rejected).
+- **`hc_dream` proposes, it doesn't assert**: `dry_run=True` by default; hypotheses
+  are stored as `proposed` and **never propagate** in recall/muse until confirmed with
+  `hc_accept_bridge` (or discarded with `hc_reject_bridge`). Imagination no longer
+  contaminates evidence.
+- **Creative-zone scoring**: bridges are ranked by `creative_fit` (peak at
+  `DREAM_IDEAL`, zero outside the band) × common-path strength × confidence — the most
+  dissimilar pair no longer wins by being absurd.
+- Structured facts now cast a **textual shadow** into the living memory (`fact_id`),
+  so they take part in recall/muse/forgetting; `ask_role` ignores forgotten facts.
+- Release pipeline **validates the artifact before publishing**: `twine check`,
+  tag/version match, clean-env wheel install, import, and MCP handshake.
+
+### Fixed
+- **Critical**: opening a database created by an older version crashed
+  (`no such column: namespace`) because indexes were created before the migration.
+  Now: tables → migration → indexes. Regression test included.
+- `__version__` now comes from installed metadata (no more drift with PyPI).
+- `MAX_MEMORIES` counts **physical** rows (dormant included) and prunes dormant
+  low-value first; `stats()` reports `total` (current) and `total_fisico` (on disk).
+
+## [0.1.0a2] — 2026-07-22
+First release published to PyPI (trusted publishing + attestations). Adds dormant
+memory (forgetting archives instead of deleting), `hc_muse` creative recall,
+`hc_dream`, compositional role tools (`hc_remember_fact` / `hc_ask_role`) and the
+baseline comparison against BM25 / embeddings.
+
 ## [0.1.0a1] — 2026-07-22
 
 First public alpha. Local-first, single-user memory for Claude via MCP.

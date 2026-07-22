@@ -16,15 +16,18 @@ cd hipercampo
 
 ---
 
-## Vía A · Python local (recomendada para empezar)
-
-### A.1 Instalar
+## Vía A · Instalar desde PyPI (recomendada)
 
 ```bash
-pip install -e .
+pip install hipercampo                 # o: pip install "hipercampo[semantic]"
 ```
 
-Esto instala `hipercampo` y su única dependencia real (numpy) + el SDK de MCP.
+### Desde el código fuente (colaboradores)
+
+```bash
+git clone https://github.com/armandojaleo/hipercampo.git
+cd hipercampo && pip install -e .
+```
 
 ### A.2 Comprobar que funciona (sin Claude todavía)
 
@@ -86,8 +89,9 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 }
 ```
 
-Reinicia Claude Code. Deberías ver 10 herramientas: `hc_remember`, `hc_recall`,
-`hc_update`, `hc_consolidate`, `hc_forget`, `hc_stats`.
+Reinicia Claude Code. Deberías ver 12 herramientas: `hc_remember`, `hc_recall`,
+`hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`,
+`hc_remember_fact`, `hc_ask_role`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
 ### Memoria compartida entre TODOS los proyectos (global)
 
@@ -208,7 +212,7 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-Debe listar las 10 herramientas `hc_*`.
+Debe listar las 12 herramientas `hc_*`.
 
 ---
 
@@ -231,7 +235,7 @@ devuelve el campo `db` con la ruta absoluta.
 
 ### Controlar su uso desde Claude
 
-Las 10 herramientas te dan control total, sin tocar código:
+Las 12 herramientas te dan control total, sin tocar código:
 
 | Quieres… | Pídele a Claude (usa la tool) |
 |----------|-------------------------------|

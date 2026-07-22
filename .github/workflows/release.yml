@@ -26,7 +26,37 @@ jobs:
           python-version: "3.13"
       - name: Build
         run: |
-          pip install build
+          pip install build twine
           python -m build
+
+      # Validar el ARTEFACTO antes de publicar: metadatos, que la version coincida
+      # con el tag, que el wheel instale en un entorno limpio, que importe, que el
+      # comando arranque y que el servidor MCP responda al handshake.
+      - name: twine check
+        run: twine check dist/*
+      - name: La versión debe coincidir con el tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(ls dist/*.whl | sed -E 's/.*hipercampo-([^-]+)-py3.*/\1/')
+          echo "tag=$TAG paquete=$PKG"
+          test "$TAG" = "$PKG"
+      - name: Instalar el wheel en entorno limpio y comprobarlo
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet dist/*.whl
+          /tmp/venv/bin/python -c "import hipercampo; print('version:', hipercampo.__version__)"
+          /tmp/venv/bin/python -c "
+          import subprocess, json
+          msgs = [
+            json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'ci','version':'0'}}}),
+            json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'}),
+            json.dumps({'jsonrpc':'2.0','id':2,'method':'tools/list'}),
+          ]
+          out = subprocess.run(['/tmp/venv/bin/python','-m','hipercampo.server'],
+                               input='\n'.join(msgs)+'\n', capture_output=True, text=True, timeout=90)
+          assert 'hc_remember' in out.stdout, out.stdout[:500]
+          print('handshake MCP OK')
+          "
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

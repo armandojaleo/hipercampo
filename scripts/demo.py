@@ -9,6 +9,12 @@ Muestra las dos cosas que hacen a hipercampo distinto de una base vectorial:
 import sys
 from pathlib import Path
 
+# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hipercampo.encoder import encode_text          # noqa: E402

@@ -30,18 +30,23 @@ modeled on the hippocampus, with four ideas integrated into a cycle:
 
 ## Install (full guide: [INSTALL.md](INSTALL.md))
 
-**Quick path — local Python + Claude Code:**
+**Quick path — from PyPI:**
+
+```bash
+pip install hipercampo                # or: pip install "hipercampo[semantic]"
+claude mcp add --scope user hipercampo -- python -m hipercampo.server
+```
+
+**From source (contributors):**
 
 ```bash
 git clone https://github.com/armandojaleo/hipercampo.git
-cd hipercampo
-pip install -e .                                  # installs hipercampo + deps
-python scripts/demo.py                            # (optional) watch the cycle run
-claude mcp add hipercampo -- python -m hipercampo.server   # connect to Claude Code
+cd hipercampo && pip install -e .
+python scripts/demo.py                # watch the cycle run
 ```
 
-Restart Claude Code and you'll have 10 memory tools (`hc_remember`, `hc_recall`,
-`hc_muse`, `hc_dream`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
+Restart Claude Code and you'll have 12 memory tools (`hc_remember`, `hc_recall`,
+`hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_consolidate`, `hc_forget`, `hc_stats`). For Docker, Claude Desktop,
 `.mcp.json`, verification and troubleshooting → **[INSTALL.md](INSTALL.md)**.
 
@@ -74,7 +79,7 @@ python tests/test_properties.py   # invariants over fabricated data (8 rounds)
 python scripts/scenarios.py       # narrated story: Claude remembering a user
 ```
 
-16 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
+18 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
 *a duplicate never creates a second memory*, *a needle is retrieved among 25
 distractors*, *forgetting never deletes something with importance ≥ 0.8*, *one
 context can neither see nor modify another's data*, *a failed transaction leaves no trace*.
@@ -118,7 +123,8 @@ thousands); at ~100k you'd want an index. A known limit, not hidden.
 | `hc_remember(text, importance, confidence)` | Store something (if novel/surprising). `importance` = how much it matters (≥0.8 protects from forgetting); `confidence` = how reliable (weights ranking). |
 | `hc_recall(query, k, include_history)` | Retrieve by similarity + spreading activation. Can **abstain** (return `[]`). |
 | `hc_muse(query, k)` | **Creative recall**: surfaces *indirect* connections and **dormant** memories that can resurface and tie ideas together. For insight/brainstorming. |
-| `hc_dream(max_bridges)` | **Creative sleep**: proposes *bridges* between memories that share a common associate but aren't linked — hypotheses to review "in the morning". |
+| `hc_dream(max_bridges, dry_run)` | **Creative sleep**: proposes *bridges* between memories sharing a common associate. Hypotheses **don't contaminate memory**: they never propagate until confirmed. |
+| `hc_accept_bridge / hc_reject_bridge` | Confirm a dream hypothesis (it becomes a real association) or discard it. |
 | `hc_update(target, new_text, memory_id)` | **Update a fact that changed** (safe supersession; the old one stays as history). |
 | `hc_consolidate()` | Sleep phase: group episodes into semantic knowledge. |
 | `hc_forget(dry_run)` | Active forgetting. `dry_run=True` rehearses without deleting. |

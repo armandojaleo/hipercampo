@@ -20,6 +20,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+
+# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.stress import CASOS, DISTRACTORES        # noqa: E402

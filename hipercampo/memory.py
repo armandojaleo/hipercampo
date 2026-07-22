@@ -64,6 +64,16 @@ def _clip01(x: float) -> float:
         return 0.5
 
 
+def creative_fit(similarity: float) -> float:
+    """Ajuste a la ZONA CREATIVA: máximo en DREAM_IDEAL y cero fuera de la banda.
+    Evita que gane el par más disímil (una conexión absurda) solo por ser lejano."""
+    if similarity < DREAM_LOW or similarity > DREAM_HIGH:
+        return 0.0
+    if similarity <= DREAM_IDEAL:
+        return (similarity - DREAM_LOW) / (DREAM_IDEAL - DREAM_LOW)
+    return (DREAM_HIGH - similarity) / (DREAM_HIGH - DREAM_IDEAL)
+
+
 def _validate_text(text: str) -> str:
     if not isinstance(text, str):
         raise ValueError("el texto debe ser una cadena")
@@ -174,7 +184,8 @@ class Hipercampo:
             mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
             for i, row in enumerate(actives):         # asociaciones (sims ya calculadas)
                 if row["id"] != evictado and sims_act[i] >= LINK_SIMILARITY:
-                    self.store.link(mem_id, row["id"], weight=float(sims_act[i]))
+                    self.store.link(mem_id, row["id"], weight=float(sims_act[i]),
+                                    type="lexical")
         self.surprise.learn(text)                     # aprender tras confirmar
 
         result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
@@ -233,10 +244,11 @@ class Hipercampo:
                 if r["id"] != new_id:
                     s = similarity(new_hv, self.store.hv_of(r))
                     if s >= LINK_SIMILARITY:
-                        self.store.link(new_id, r["id"], weight=s)
+                        self.store.link(new_id, r["id"], weight=s, type="lexical")
             if confiable:
                 self.store.mark_superseded([best["id"]])
-                self.store.link(new_id, best["id"], weight=1.0)   # cadena de historia
+                self.store.link(new_id, best["id"], weight=1.0,
+                                type="update")      # cadena de historia
         self.surprise.learn(new_text)                     # aprender tras confirmar
 
         if confiable:
@@ -390,7 +402,7 @@ class Hipercampo:
                 self.store.mark_consolidated([g["id"] for g in group])
                 for g in group:                  # heredar asociaciones
                     for dst, w in self.store.neighbors(g["id"]):
-                        self.store.link(sem_id, dst, w)
+                        self.store.link(sem_id, dst, w, type="consolidation")
                 made += 1
                 archived += len(group)
 
@@ -508,7 +520,7 @@ class Hipercampo:
                 "resurgido": bool(r["dormant"])})
         return salida
 
-    def dream(self, max_bridges: int = 5) -> dict:
+    def dream(self, max_bridges: int = 5, dry_run: bool = True) -> dict:
         """Sueño CREATIVO: mientras 'duerme', propone PUENTES entre recuerdos que
         comparten un ASOCIADO COMÚN pero NO están conectados entre sí (analogía: A y B
         evocan ambos a X, quizá A y B se relacionen). Incluye latentes. Teje un enlace
@@ -535,23 +547,49 @@ class Hipercampo:
         scored = []
         for pair, x in puentes.items():
             a, b = tuple(pair)
-            s_ab = similarity(by_id[a]["hv"] if False else self.store.hv_of(by_id[a]),
-                              self.store.hv_of(by_id[b]))
+            s_ab = similarity(self.store.hv_of(by_id[a]), self.store.hv_of(by_id[b]))
+            # ZONA CREATIVA (máximo en DREAM_IDEAL, cero fuera de la banda): ni
+            # redundante (demasiado parecido) ni absurdo (demasiado ajeno).
+            fit = creative_fit(s_ab)
+            if fit <= 0.0:
+                continue
+            # calidad = ajuste creativo × fuerza del camino común × fiabilidad × latencia
+            wax = dict(self.store.neighbors(x, include_proposed=False))
+            camino = min(wax.get(a, 0.5), wax.get(b, 0.5))
+            conf = (by_id[a]["confidence"] + by_id[b]["confidence"]) / 2.0
             latente = by_id[a]["dormant"] or by_id[b]["dormant"]
-            # salto creativo: cuanto MÁS distintos son a y b (menor s_ab), más novedoso
-            scored.append((1.0 - s_ab + (0.15 if latente else 0.0), a, b, x))
+            scored.append((fit * (0.5 + camino) * (0.5 + conf) * (1.15 if latente else 1.0),
+                           s_ab, a, b, x))
         scored.sort(key=lambda t: t[0], reverse=True)
 
         bridges = []
-        with self.store.transaction():
-            for _, a, b, x in scored[:max_bridges]:
-                self.store.link(a, b, weight=0.5)      # puente débil (asociación nueva)
-                bridges.append({
-                    "a": by_id[a]["text"], "b": by_id[b]["text"],
-                    "via": by_id[x]["text"],
-                    "hypothesis": f"«{by_id[a]['text'][:60]}» y «{by_id[b]['text'][:60]}» "
-                                  f"quizá se relacionan (ambos evocan «{by_id[x]['text'][:50]}»)"})
-        return {"bridges": bridges}
+        for _, s_ab, a, b, x in scored[:max_bridges]:
+            bridges.append({
+                "a": by_id[a]["text"], "b": by_id[b]["text"], "via": by_id[x]["text"],
+                "a_id": a, "b_id": b, "similarity": round(s_ab, 3),
+                "hypothesis": f"«{by_id[a]['text'][:60]}» y «{by_id[b]['text'][:60]}» "
+                              f"quizá se relacionan (ambos evocan «{by_id[x]['text'][:50]}»)"})
+
+        # Las hipótesis NO contaminan la memoria: por defecto solo se proponen. Si se
+        # persisten, quedan como enlaces 'proposed' (no propagan hasta confirmarse).
+        if not dry_run and bridges:
+            with self.store.transaction():
+                for br in bridges:
+                    self.store.link(br["a_id"], br["b_id"], weight=0.5,
+                                    type="dream", status="proposed")
+        return {"bridges": bridges, "dry_run": dry_run,
+                "nota": ("solo propuestas; usa dry_run=False para registrarlas como "
+                         "hipótesis y hc_accept_bridge para confirmarlas")}
+
+    def accept_bridge(self, a: int, b: int) -> dict:
+        """Confirma una hipótesis del sueño: pasa a ser asociación real y ya propaga."""
+        self.store.set_link_status(a, b, "confirmed")
+        return {"confirmed": [a, b]}
+
+    def reject_bridge(self, a: int, b: int) -> dict:
+        """Descarta una hipótesis del sueño (no volverá a proponerse ni propagará)."""
+        self.store.set_link_status(a, b, "rejected")
+        return {"rejected": [a, b]}
 
     # utilidades ----------------------------------------------------------
     def stats(self) -> dict:

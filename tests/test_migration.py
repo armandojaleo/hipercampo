@@ -58,6 +58,22 @@ def test_migra_y_conserva_los_datos_viejos():
     hc.store.close(); _clean()
 
 
+def test_migra_sin_perder_enlaces():
+    """Una BD anterior conserva sus asociaciones (y pasan a ser 'confirmed')."""
+    _crear_bd_v0()
+    db = sqlite3.connect(_DB)
+    now = time.time()
+    db.execute("INSERT INTO memories(text,hv,created,last_access) VALUES(?,?,?,?)",
+               ("otro recuerdo viejo enlazado", b"\x01" * 1250, now, now))
+    db.execute("INSERT INTO links(src,dst,weight) VALUES(1,2,0.9)")
+    db.commit(); db.close()
+
+    hc = Hipercampo(_DB, namespace="default")
+    vecinos = [d for d, _ in hc.store.neighbors(1)]
+    assert 2 in vecinos, "el enlace anterior debe sobrevivir a la migración"
+    hc.store.close(); _clean()
+
+
 def test_puede_escribir_tras_migrar():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")

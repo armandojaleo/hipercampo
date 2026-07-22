@@ -1,0 +1,63 @@
+name: "🐛 Bug / Fallo"
+description: "Algo no funciona como debería · Something isn't working"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportarlo. Cuanto más concreto, antes se arregla.
+        *Thanks for reporting — the more concrete, the faster the fix. Español o English, both fine.*
+
+  - type: textarea
+    id: que-pasa
+    attributes:
+      label: "¿Qué pasa? · What happens?"
+      description: "Qué esperabas y qué ocurrió en su lugar."
+      placeholder: "Esperaba que hc_recall devolviera X, pero devolvió Y…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducir
+    attributes:
+      label: "Cómo reproducirlo · How to reproduce"
+      description: "Pasos o un fragmento de código mínimo."
+      render: python
+      placeholder: |
+        from hipercampo.memory import Hipercampo
+        hc = Hipercampo("data/x.db")
+        hc.remember("...")
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Traza / logs"
+      description: "El error completo, si lo hay."
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: "Versión de hipercampo"
+      description: "python -c \"import hipercampo; print(hipercampo.__version__)\""
+      placeholder: "0.1.0a3"
+    validations:
+      required: true
+
+  - type: input
+    id: entorno
+    attributes:
+      label: "Entorno · Environment"
+      placeholder: "Windows 11 · Python 3.13 · Claude Code"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: comprobaciones
+    attributes:
+      label: "Comprobaciones"
+      options:
+        - label: "He mirado si ya existe una issue parecida"
+        - label: "No incluyo datos personales ni secretos en el reporte"

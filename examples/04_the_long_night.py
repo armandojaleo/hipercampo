@@ -12,6 +12,13 @@ import sys
 import time
 from pathlib import Path
 
+
+# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hipercampo.memory import Hipercampo             # noqa: E402
@@ -60,9 +67,14 @@ def main():
     print("  olvido:", hc.forget(dry_run=False))
     print("  estado:", {k: hc.stats()[k] for k in ("episodicos_activos", "latentes")})
 
-    titulo("DE MADRUGADA · Sueña: teje puentes entre ideas lejanas")
-    for b in hc.dream(max_bridges=3).get("bridges", []):
+    titulo("DE MADRUGADA · Sueña: PROPONE puentes entre ideas lejanas")
+    sueno = hc.dream(max_bridges=3, dry_run=False)   # registra como hipótesis
+    for b in sueno.get("bridges", []):
         print(f"  hipótesis: {b['hypothesis']}")
+    if not sueno.get("bridges"):
+        print("  (esta noche no surgieron puentes nuevos)")
+    print("\n  Nota: son HIPÓTESIS. No influyen en la memoria hasta confirmarlas")
+    print("  con hc_accept_bridge — lo especulativo no contamina lo observado.")
 
     titulo("A LA MAÑANA SIGUIENTE · Sigue atascada. Piensa en voz alta:")
     print("  «necesito que la red se ponga de acuerdo sola, sin nadie al mando»\n")

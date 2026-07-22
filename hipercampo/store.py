@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS links (
     dst       INTEGER NOT NULL,
     weight    REAL    NOT NULL DEFAULT 1.0,
     namespace TEXT    NOT NULL DEFAULT 'default',
+    type      TEXT    NOT NULL DEFAULT 'lexical',    -- lexical|update|consolidation|dream
+    status    TEXT    NOT NULL DEFAULT 'confirmed',  -- confirmed|proposed|rejected
+    created_at REAL,
     PRIMARY KEY (src, dst)
 );
 CREATE TABLE IF NOT EXISTS facts (
@@ -127,6 +130,14 @@ class Store:
         if lcols and "namespace" not in lcols:
             self.db.execute(
                 "ALTER TABLE links ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
+        if lcols and "type" not in lcols:
+            self.db.execute(
+                "ALTER TABLE links ADD COLUMN type TEXT NOT NULL DEFAULT 'lexical'")
+        if lcols and "status" not in lcols:
+            self.db.execute(
+                "ALTER TABLE links ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'")
+        if lcols and "created_at" not in lcols:
+            self.db.execute("ALTER TABLE links ADD COLUMN created_at REAL")
 
     # --- escritura -------------------------------------------------------
     def add(self, text, hv, novelty, importance, confidence=0.5, kind="episodic",
@@ -161,7 +172,11 @@ class Store:
             "SELECT * FROM facts WHERE namespace = ?", (self.namespace,)
         ).fetchall()
 
-    def link(self, src: int, dst: int, weight: float = 1.0):
+    def link(self, src: int, dst: int, weight: float = 1.0,
+             type: str = "lexical", status: str = "confirmed"):
+        """Crea/refuerza una asociación. `type` dice de dónde viene (observada,
+        actualización, consolidación o hipótesis de sueño) y `status` si es evidencia
+        CONFIRMADA o solo una propuesta. Solo lo confirmado propaga activación."""
         if src == dst:
             return
         # Peso acotado a [0,1]: al repetir, se satura hacia 1 (no crece sin límite,
@@ -169,11 +184,25 @@ class Store:
         # con el namespace: nunca se cruzan contextos.
         w = min(1.0, max(0.0, weight))
         self.db.execute(
-            "INSERT INTO links(src,dst,weight,namespace) VALUES(?,?,?,?) "
+            "INSERT INTO links(src,dst,weight,namespace,type,status,created_at) "
+            "VALUES(?,?,?,?,?,?,?) "
             "ON CONFLICT(src,dst) DO UPDATE SET weight = weight + 0.3 * (1.0 - weight)",
-            (src, dst, w, self.namespace),
+            (src, dst, w, self.namespace, type, status, time.time()),
         )
         self._commit()
+
+    def set_link_status(self, a: int, b: int, status: str):
+        """Confirma o rechaza una hipótesis (enlace propuesto)."""
+        self.db.execute(
+            "UPDATE links SET status=? WHERE namespace=? AND "
+            "((src=? AND dst=?) OR (src=? AND dst=?))",
+            (status, self.namespace, a, b, b, a))
+        self._commit()
+
+    def proposed_links(self) -> list[sqlite3.Row]:
+        return self.db.execute(
+            "SELECT * FROM links WHERE namespace=? AND status='proposed'",
+            (self.namespace,)).fetchall()
 
     def touch(self, ids: list[int], boost: float = 0.5):
         """Reforzar recuerdos usados: sube strength, access_count, last_access."""
@@ -259,11 +288,16 @@ class Store:
             (mem_id, self.namespace),
         ).fetchone()
 
-    def neighbors(self, mem_id: int) -> list[tuple[int, float]]:
+    def neighbors(self, mem_id: int, include_proposed: bool = False) -> list[tuple[int, float]]:
+        """Vecinos por asociaciones CONFIRMADAS. Las hipótesis (status='proposed')
+        NO propagan activación hasta que se aceptan: lo especulativo no contamina
+        la memoria observada."""
+        estados = ("confirmed", "proposed") if include_proposed else ("confirmed",)
+        marks = ",".join("?" * len(estados))
         rows = self.db.execute(
-            "SELECT dst, weight FROM links WHERE src=? AND namespace=? "
-            "UNION SELECT src, weight FROM links WHERE dst=? AND namespace=?",
-            (mem_id, self.namespace, mem_id, self.namespace),
+            f"SELECT dst, weight FROM links WHERE src=? AND namespace=? AND status IN ({marks}) "
+            f"UNION SELECT src, weight FROM links WHERE dst=? AND namespace=? AND status IN ({marks})",
+            (mem_id, self.namespace, *estados, mem_id, self.namespace, *estados),
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
