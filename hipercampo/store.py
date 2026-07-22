@@ -91,9 +91,14 @@ CREATE INDEX IF NOT EXISTS idx_facts_ns ON facts(namespace);
 
 
 class Store:
-    def __init__(self, path: str = "data/hipercampo.db", namespace: str = "default"):
+    def __init__(self, path: str = "data/hipercampo.db", namespace: str = "default",
+                 linked: tuple = ()):
         self.path = path
-        self.namespace = namespace
+        self.namespace = namespace          # dónde se ESCRIBE: siempre uno solo
+        # Contextos ENLAZADOS: se pueden LEER, nunca escribir. Así un proyecto puede
+        # inspirarse en lo aprendido en otro sin poder ensuciarlo ni ser ensuciado.
+        self.linked = tuple(dict.fromkeys(n for n in linked if n and n != namespace))
+        self._ns_lectura = (namespace, *self.linked)
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._txn_depth = 0
         self._connect()
@@ -558,9 +563,17 @@ class Store:
         self._commit()
 
     # --- lectura (siempre acotada al namespace del store) ----------------
-    def all(self, kind=None, only_active=True, include_dormant=False) -> list[sqlite3.Row]:
-        q = "SELECT * FROM memories WHERE namespace = ?"
-        args: list = [self.namespace]
+    def all(self, kind=None, only_active=True, include_dormant=False,
+            own_only=False) -> list[sqlite3.Row]:
+        # Lectura: el contexto propio MÁS los enlazados (inspiración entre proyectos).
+        # La escritura (add/touch/…) sigue acotada a self.namespace: leer no ensucia.
+        # own_only=True es para el MANTENIMIENTO (consolidar/olvidar/soñar): cuidar
+        # la memoria propia no debe ni leer la ajena — fundir episodios de otro
+        # proyecto en un semántico propio sería copiarse su texto.
+        ns = (self.namespace,) if own_only else self._ns_lectura
+        marks = ",".join("?" * len(ns))
+        q = f"SELECT * FROM memories WHERE namespace IN ({marks})"
+        args: list = [*ns]
         if kind:
             q += " AND kind = ?"
             args.append(kind)
@@ -571,10 +584,12 @@ class Store:
         return self.db.execute(q, args).fetchall()
 
     def get(self, mem_id: int):
-        # También acotado al namespace: un inquilino no puede leer id de otro.
+        # Acotado a lo LEGIBLE (propio + enlazados): un contexto no enlazado sigue
+        # siendo invisible, ni siquiera por id.
+        marks = ",".join("?" * len(self._ns_lectura))
         return self.db.execute(
-            "SELECT * FROM memories WHERE id=? AND namespace=?",
-            (mem_id, self.namespace),
+            f"SELECT * FROM memories WHERE id=? AND namespace IN ({marks})",
+            (mem_id, *self._ns_lectura),
         ).fetchone()
 
     def neighbors(self, mem_id: int, include_proposed: bool = False) -> list[tuple[int, float]]:
@@ -583,10 +598,13 @@ class Store:
         la memoria observada."""
         estados = ("confirmed", "proposed") if include_proposed else ("confirmed",)
         marks = ",".join("?" * len(estados))
+        ns_marks = ",".join("?" * len(self._ns_lectura))
         rows = self.db.execute(
-            f"SELECT dst, weight FROM links WHERE src=? AND namespace=? AND status IN ({marks}) "
-            f"UNION SELECT src, weight FROM links WHERE dst=? AND namespace=? AND status IN ({marks})",
-            (mem_id, self.namespace, *estados, mem_id, self.namespace, *estados),
+            f"SELECT dst, weight FROM links WHERE src=? AND namespace IN ({ns_marks}) "
+            f"  AND status IN ({marks}) "
+            f"UNION SELECT src, weight FROM links WHERE dst=? AND namespace IN ({ns_marks}) "
+            f"  AND status IN ({marks})",
+            (mem_id, *self._ns_lectura, *estados, mem_id, *self._ns_lectura, *estados),
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 

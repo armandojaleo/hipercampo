@@ -146,9 +146,22 @@ def _validate_text(text: str) -> str:
 
 
 class Hipercampo:
-    def __init__(self, path="data/hipercampo.db", namespace="default"):
+    def __init__(self, path="data/hipercampo.db", namespace="default", linked=None):
         namespace = (namespace or "default").strip()[:200] or "default"
-        self.store = Store(path, namespace=namespace)
+        # Contextos ENLAZADOS (solo lectura): recall/muse/dream también miran ahí,
+        # pero todo lo que se escribe cae en el namespace propio. Por defecto se
+        # toma de HIPERCAMPO_LINKED ("proy1,proy2" o "*" = todos los demás).
+        if linked is None:
+            linked = os.environ.get("HIPERCAMPO_LINKED", "")
+        if isinstance(linked, str):
+            linked = [n.strip() for n in linked.split(",") if n.strip()]
+        if "*" in linked:
+            with_all = Store(path, namespace=namespace)
+            linked = [r[0] for r in with_all.db.execute(
+                "SELECT DISTINCT namespace FROM memories WHERE namespace<>?",
+                (namespace,))]
+            with_all.close()
+        self.store = Store(path, namespace=namespace, linked=tuple(linked))
         audit.set_logfile(path)
         # Modelo de sorpresa: se "calienta" reproduciendo la memoria existente,
         # así lo ya guardado no vuelve a considerarse sorprendente tras un reinicio.
@@ -240,7 +253,8 @@ class Hipercampo:
         if MAX_MEMORIES:
             # cuenta FÍSICA (incluye latentes): si no, los dormidos no contarían y la
             # base podría crecer sin freno. Se poda primero lo latente de menor valor.
-            todos = self.store.all(only_active=False, include_dormant=True)
+            todos = self.store.all(only_active=False, include_dormant=True,
+                                   own_only=True)
             if len(todos) >= MAX_MEMORIES:
                 podables = [r for r in todos
                             if r["kind"] == "episodic" and r["importance"] < 0.8
@@ -305,10 +319,16 @@ class Hipercampo:
         best, best_sim = None, 0.0
         if memory_id is not None:
             best = self.store.get(memory_id)
+            if best is not None and best["namespace"] != self.store.namespace:
+                return {"error": f"el recuerdo {memory_id} es de un proyecto enlazado "
+                                 f"({best['namespace']}): se puede leer, no corregir "
+                                 "desde aquí. Actualízalo en su propio proyecto."}
             best_sim = 1.0 if best is not None else 0.0
         else:
             thv = encode_text(target or "")
-            for r in self.store.all(only_active=False):
+            # update REEMPLAZA: solo puede superar recuerdos PROPIOS. Lo de un
+            # proyecto enlazado se lee, no se corrige desde aquí.
+            for r in self.store.all(only_active=False, own_only=True):
                 if r["superseded"]:
                     continue
                 s = similarity(thv, self.store.hv_of(r))
@@ -447,6 +467,8 @@ class Hipercampo:
                     "strength": round(r["strength"], 2),
                     "confidence": round(r["confidence"], 2),
                     "utility": round(self.utility(r), 2)}
+            if r["namespace"] != self.store.namespace:
+                item["project"] = r["namespace"]      # viene de un proyecto enlazado
             # Salvaguarda: si el recuerdo parece contener instrucciones, se marca
             # como NO fiable para que se trate como dato, no como orden a ejecutar.
             if scan_injection(r["text"]):
@@ -468,7 +490,7 @@ class Hipercampo:
         resume (no reduce tokens por sí solo). Pasa `summarizer(list[str])->str`
         (p. ej. una llamada a un LLM) para condensar el texto de verdad.
         """
-        eps = [r for r in self.store.all(kind="episodic", only_active=True)]
+        eps = [r for r in self.store.all(kind="episodic", only_active=True, own_only=True)]
         used: set[int] = set()
         clusters: list[list] = []
 
@@ -534,7 +556,7 @@ class Hipercampo:
         half = DECAY_HALF_LIFE_DAYS * 86400
         to_prune: list[int] = []
 
-        for r in self.store.all(only_active=False):
+        for r in self.store.all(only_active=False, own_only=True):
             # El conocimiento semántico perdura MÁS (decae x5 más lento), pero no es
             # inmortal: una consolidación mala u obsoleta también puede podarse.
             vida = half * (5.0 if r["kind"] == "semantic" else 1.0)
@@ -630,6 +652,8 @@ class Hipercampo:
                 "id": mid, "text": r["text"], "kind": r["kind"],
                 "score": round(score, 3), "association_gain": round(gain, 3),
                 "via": via,
+                **({"project": r["namespace"]}
+                   if r["namespace"] != self.store.namespace else {}),
                 "conectado_por": puente,          # el recuerdo puente (el porqué)
                 "resurgido": bool(r["dormant"])})
         return salida

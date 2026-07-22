@@ -11,7 +11,36 @@ SaaS encima, sería otro proyecto; el núcleo se mantiene local y simple.
 
 Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
 
+## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
+
+Revisiones externas (jul 2026) proponen cinco saltos. No todos valen lo mismo:
+
+1. **Índice sublineal para >100k recuerdos** — SÍ, es el límite real medido
+   (escaneo lineal: ~164 ms con 10k). Pero la respuesta local-first no es HNSW
+   genérico: para Hamming binario basta un índice **multi-index hashing** (trocear
+   el hipervector en bandas y precribar por banda exacta), que es simple, exacto
+   en el re-rank y sin dependencias. ⚪ Fase 4.
+2. **Sinónimos nativos sin embeddings (random indexing léxico)** — SÍ, y es la
+   mejora más alineada con la filosofía del proyecto: co-ocurrencia acumulada en
+   los propios hipervectores, aprendida del corpus del usuario. ⚪ Explorar.
+3. **Aprender los pesos de retención (RL ligero)** — A MEDIAS. Aprender de la
+   utilidad real observada sí (ya se registra `access_count`); una red que decida
+   qué olvidar sin explicación, no: la retención transparente y auditable es una
+   característica, no una limitación. Se hará **ajuste medido**, no caja negra.
+4. **Vectores de tamaño dinámico** — NO por ahora: los 5 roles medidos bastan para
+   hechos atómicos, y la solución a "un contrato entero" no es un vector más
+   gordo, sino trocear en hechos (que ya existe). Coste alto, beneficio dudoso.
+5. **Multi-tenant cloud / cifrado homomórfico** — NO: fuera de alcance por diseño
+   (ver arriba). hipercampo compite en ser la mejor memoria LOCAL, no un SaaS.
+
+La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 abajo.
+
 ## Fase 1 — Cimientos de fiabilidad y aislamiento
+- 🟢 **Memoria entre proyectos (contextos enlazados, solo lectura)**: `linked=` /
+  `HIPERCAMPO_LINKED` ("proy1,proy2" o `*`). recall/muse/dream leen los proyectos
+  enlazados y etiquetan el origen (`project`); toda escritura, refuerzo, olvido y
+  consolidación queda en el propio. Lo no enlazado sigue invisible.
+  Tests en `tests/test_linked.py`.
 - 🟢 **Aislamiento por namespace/contexto**: cada contexto ve solo lo suyo, en TODAS
   las operaciones (lecturas y escrituras por id: delete/touch/mark_*), y los enlaces
   no cruzan contextos. Tests en `tests/test_namespaces.py`.
@@ -21,7 +50,8 @@ Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
   si algo falla a mitad, se revierte (`store.transaction()`).
 - 🟢 **Validación de entradas en el núcleo**: texto no vacío + longitud máxima,
   `importance`/`confidence` acotados, `k`/`hops` acotados, namespace saneado.
-- ⚪ Migraciones versionadas (tabla `schema_version`) en vez de `ALTER TABLE` ad-hoc.
+- 🟢 Migraciones versionadas (`PRAGMA user_version`, 6 pasos idempotentes,
+  copia previa, reanudables). Tests en `tests/test_migration.py`.
 - ⚪ `VACUUM` / borrado seguro para `hc_forget`.
 
 ## Fase 1b — Calibrar la sorpresa

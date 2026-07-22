@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Cross-project memory (linked contexts, read-only)**: `linked=` /
+  `HIPERCAMPO_LINKED` ("proj1,proj2" or `*`). recall/muse/dream also read the
+  linked projects and tag foreign results with `"project"`; every write, reinforce,
+  update, consolidation and forgetting stays in the own project, and a non-linked
+  project remains invisible. New suite `tests/test_linked.py` (8 tests) — 23 suites.
+
 ## [0.1.0a4] — 2026-07-22
 
 Hardening release. **No new cognitive features** — this one makes what exists

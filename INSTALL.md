@@ -289,6 +289,22 @@ esquema, lectura y permiso de escritura. Si la base de datos falla en medio de u
 operación, hipercampo **avisa en el registro, reconecta y reintenta una vez**; si aun
 así no puede, devuelve un error legible en vez de tirar el servidor MCP.
 
+### Memoria entre proyectos (contextos enlazados)
+
+Cada proyecto sigue teniendo su memoria aislada, pero puedes **enlazar** otros en
+solo lectura para que te den ideas:
+
+```jsonc
+// .mcp.json del proyecto
+"env": { "HIPERCAMPO_NAMESPACE": "mi-proyecto",
+         "HIPERCAMPO_LINKED": "otro-proyecto,tercero" }   // o "*" = todos
+```
+
+Las respuestas de `hc_recall`/`hc_muse` marcan lo ajeno con `"project": "..."`.
+La asimetría es la garantía: lo enlazado **se lee, nunca se toca** — escribir,
+reforzar, actualizar, consolidar y olvidar operan solo sobre el proyecto propio,
+y un proyecto no enlazado sigue siendo invisible.
+
 ### Sueño autónomo
 
 Cada **50 escrituras** (variable `HIPERCAMPO_AUTOSLEEP_EVERY`, `0` lo desactiva)
