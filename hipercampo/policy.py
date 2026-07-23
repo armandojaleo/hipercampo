@@ -45,10 +45,38 @@ VOLUNTEER_MIN_SCORE = 0.10
 # ventana del usuario.
 VOLUNTEER_MIN_SIM = 0.18
 
-_PREGUNTA = re.compile(
-    r"(?i)(^|\s)(qu[eé]|qui[eé]n|cu[aá]ndo|d[oó]nde|c[oó]mo|cu[aá]l|por qu[eé]|"
-    r"recuerdas|te acuerdas|sabes si|what|who|when|where|which|why|how|do you (recall|remember))\b")
+# Detectar una pregunta tiene DOS niveles de certeza, y la diferencia importa
+# porque la rama de "pregunta" inyecta contexto sin exigir relevancia alta.
+#
+# El regex anterior aceptaba los interrogativos SIN tilde, y en español eso es
+# catastrófico: «que» átono es de las palabras más frecuentes del idioma, así que
+# "espera que termine la sesión", "creo que esto está mal" o "haz lo que te digo"
+# se clasificaban como preguntas y disparaban una inyección de cientos de tokens.
+# Medido en una sesión real: 2 de 3 turnos inyectaron memoria de otro proyecto sin
+# que nadie hubiera preguntado nada.
+#
+#   CLARA  -> lleva tilde diacrítica o es inequívoca ("recuerdas", "do you remember").
+#             El usuario preguntó de verdad: se responde con el listón normal.
+#   DUDOSA -> la misma palabra sin tilde, que puede ser relativo átono. Puede que
+#             haya preguntado y puede que no, así que se le exige lo mismo que a
+#             hablar sin que nadie pregunte (VOLUNTEER_MIN_SIM): si acierta sigue
+#             respondiendo, y si era un «que» de paso, se calla.
+#
+# Los signos ¿ ? mandan por encima de todo: con ellos, siempre es CLARA.
+_PREGUNTA_CLARA = re.compile(
+    r"(?i)(^|\s)(qué|quién|cuándo|dónde|cómo|cuál|por qué|"
+    r"recuerdas|te acuerdas|sabes si|do you (recall|remember))\b")
+_PREGUNTA_DUDOSA = re.compile(
+    r"(?i)(^|\s)(que|quien|cuando|donde|como|cual|por que|"
+    r"what|who|when|where|which|why|how)\b")
 _INTERROGACION = re.compile(r"[?¿]")
+
+
+def _es_pregunta(msg: str) -> str | None:
+    """'clara' | 'dudosa' | None — cuánta confianza hay en que esto sea una pregunta."""
+    if _INTERROGACION.search(msg) or _PREGUNTA_CLARA.search(msg):
+        return "clara"
+    return "dudosa" if _PREGUNTA_DUDOSA.search(msg) else None
 
 _CREATIVO = re.compile(
     r"(?i)\b(se me ocurre|no s[eé] c[oó]mo|estoy atascad[oa]|alguna idea|ideas para|"
@@ -82,12 +110,20 @@ def _decide(hc, message: str, k: int = 3) -> dict:
         # sin nada creativo que ofrecer, se intenta un recuerdo normal
 
     # 2) ¿pregunta por algo? -> recordar
-    if _INTERROGACION.search(msg) or _PREGUNTA.search(msg):
+    certeza = _es_pregunta(msg)
+    if certeza:
         hits = hc.recall(msg, k=k)
+        if certeza == "dudosa":                   # puede que no sea una pregunta:
+            hits = [h for h in hits              # se le exige el listón de hablar
+                    if h.get("sim", 0.0) >= VOLUNTEER_MIN_SIM]   # sin que pregunten
         if hits:
-            return {"action": "recall", "why": "es una pregunta y hay memoria relevante",
+            return {"action": "recall",
+                    "why": ("es una pregunta y hay memoria relevante" if certeza == "clara"
+                            else "podría ser una pregunta y la memoria encaja claramente"),
                     "result": hits}
-        return {"action": "nothing", "why": "es una pregunta pero no sé nada relevante",
+        return {"action": "nothing",
+                "why": ("es una pregunta pero no sé nada relevante" if certeza == "clara"
+                        else "no está claro que sea una pregunta y nada encaja de sobra"),
                 "result": []}
 
     # 3) ¿afirma algo sobre el usuario o el proyecto? -> ¿guardar o actualizar?

@@ -910,6 +910,8 @@ class Hipercampo:
                 "total_fisico": len(dormidos),       # filas reales en disco
                 "db": os.path.abspath(self.store.path),
                 # La factura: cuánta ventana de contexto ha consumido esta memoria.
-                # Estimado por caracteres salvo que haya tiktoken instalado.
+                # Siempre aproximada: `metodo` dice con qué se ha contado y por qué
+                # ni siquiera con tiktoken es exacta (ver budget.es_estimacion).
                 "tokens": {**coste, "estimado": budget.es_estimacion(),
+                           "metodo": budget.metodo(),
                            "presupuesto_por_turno": budget.HOOK_BUDGET}}

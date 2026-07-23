@@ -42,9 +42,21 @@ def test_estimar_es_proporcional_al_texto():
 
 
 def test_se_admite_que_es_una_estimacion():
-    # Sin tokenizador real la cuenta es aproximada, y hipercampo debe DECIRLO
-    # en vez de fingir precisión. Con tiktoken instalado, deja de ser estimación.
-    assert isinstance(budget.es_estimacion(), bool)
+    """La cuenta es SIEMPRE aproximada, también con tiktoken instalado.
+
+    tiktoken/cl100k_base es el tokenizador de OpenAI y aquí se mide lo que cuesta
+    en Claude, cuyo tokenizador no es público: con él la estimación mejora, pero
+    no se vuelve exacta. Antes se declaraba exacta, que es justo lo que este
+    proyecto no hace."""
+    assert budget.es_estimacion() is True
+    assert budget.metodo(), "hay que poder DECIR con qué se ha contado"
+
+
+def test_se_dice_con_que_se_ha_contado():
+    m = budget.metodo()
+    assert ("tiktoken" in m) == (budget._real() is not None)
+    if budget._real() is not None:
+        assert "OpenAI" in m, "no puede callar de quién es el tokenizador"
 
 
 # --- recorte ----------------------------------------------------------------
@@ -73,8 +85,21 @@ def test_ajustar_respeta_el_presupuesto():
     lineas = ["[cabecera]"] + [f"- recuerdo largo numero {i} " + "relleno " * 60
                                for i in range(10)]
     salida, informe = budget.ajustar(lineas, 200)
-    assert informe["tokens"] <= 230, informe          # techo + línea de aviso
+    assert informe["tokens"] <= 200, informe          # el techo es el techo
     assert informe["original"] > 1000, "el caso de prueba no era grande"
+
+
+def test_el_aviso_de_omision_cabe_dentro_del_presupuesto():
+    """El aviso también cuesta tokens. Se añade al final, así que si no se reserva
+    antes el presupuesto se incumple justo al aplicarlo (medido: 40 -> 52, un 30%
+    de más). Un presupuesto que se pasa no es un presupuesto."""
+    for tope in (30, 40, 60, 120, 350):
+        lineas = ["[cabecera]"] + [f"- dato util numero {i} para el equipo"
+                                   for i in range(4)] + ["x " * 400]
+        salida, informe = budget.ajustar(lineas, tope)
+        real = sum(budget.estimate_tokens(x) for x in salida)
+        assert real <= tope, f"presupuesto {tope} superado: {real} · {informe}"
+        assert informe["tokens"] == real, "el informe no cuadra con la salida real"
 
 
 def test_la_cabecera_siempre_entra():
@@ -141,6 +166,63 @@ def test_la_similitud_directa_viaja_en_cada_resultado():
     assert all(0.0 <= h["sim"] <= 1.0 for h in hits)
 
 
+def test_un_que_atono_no_cuela_como_pregunta():
+    """El agujero por el que seguía entrando el ruido: el interrogativo SIN tilde.
+
+    «que» átono es de las palabras más frecuentes del español, así que "espera que
+    termine" o "creo que esto está mal" se clasificaban como preguntas y entraban
+    por la rama que inyecta memoria SIN exigir relevancia alta. Medido en una
+    sesión real: 2 de 3 turnos inyectaron memoria de otro proyecto sin que nadie
+    preguntase nada.
+
+    Ojo: el listón es de RELEVANCIA, no de gramática. Un mensaje con «que» átono
+    que además va del tema (ej. "haz lo que te digo con el servidor") sí responde,
+    y debe: ahí la memoria encaja de verdad. Lo que se cierra es inyectar cuando
+    ni preguntó ni viene a cuento."""
+    hc = _memoria()
+    for atono in ["espera que termine la sesion que estamos mejorando",
+                  "creo que esto esta mal",
+                  "haz lo que te digo y no preguntes",
+                  "lo que pasa es que no compila"]:
+        r = _decide(hc, atono, k=3)
+        assert r["action"] == "nothing", f"coló como pregunta: {atono} -> {r}"
+
+
+def test_una_pregunta_de_verdad_sigue_respondiendo():
+    """Cerrar el agujero no puede volver muda a la memoria: con tilde o con signos,
+    es una pregunta y hay que contestarla."""
+    hc = _memoria()
+    for clara in ["¿donde esta alojado el servidor de produccion?",
+                  "qué sabes del servidor de produccion",
+                  "recuerdas donde esta alojado el servidor de produccion"]:
+        r = _decide(hc, clara, k=3)
+        assert r["action"] == "recall" and r["result"], f"se calló ante: {clara}"
+
+
+def test_una_pregunta_dudosa_responde_si_encaja_de_sobra():
+    """Sin tilde no sabemos si preguntó, así que se le exige el listón de hablar
+    sin que nadie pregunte: si la memoria encaja claramente, contesta igual."""
+    hc = _memoria()
+    r = _decide(hc, "donde esta alojado el servidor de produccion", k=3)
+    if r["action"] == "recall":
+        assert all(h["sim"] >= VOLUNTEER_MIN_SIM for h in r["result"]), \
+            "una pregunta dudosa no puede inyectar por debajo del listón"
+
+
+def test_una_variable_de_entorno_ilegible_no_tumba_el_arranque():
+    """budget se importa desde el servidor MCP: un int() suelto al importar
+    convierte un typo en .mcp.json en 'no arranca', con stacktrace."""
+    env = dict(os.environ, HIPERCAMPO_HOOK_BUDGET="abc",
+               HIPERCAMPO_IDENTITY_BUDGET="-")
+    r = subprocess.run(
+        [sys.executable, "-c",
+         "import hipercampo.budget as b; print(b.HOOK_BUDGET, b.IDENTITY_BUDGET)"],
+        capture_output=True, text=True, encoding="utf-8", env=env)
+    assert r.returncode == 0, f"un valor ilegible tumbó el import: {r.stderr}"
+    assert r.stdout.split() == ["350", "500"], r.stdout
+    assert "no es un número" in r.stderr, "hay que AVISAR de que se ignoró el valor"
+
+
 def test_el_umbral_de_interrupcion_es_mas_exigente_que_el_de_respuesta():
     from hipercampo.policy import VOLUNTEER_MIN_SCORE
     assert VOLUNTEER_MIN_SIM > VOLUNTEER_MIN_SCORE, \
@@ -168,6 +250,30 @@ def test_el_hook_no_se_pasa_del_presupuesto():
     ctx = _hook("¿que sabes del despliegue del servidor?", env)
     assert ctx, "debería haber respondido a una pregunta con memoria relevante"
     assert budget.estimate_tokens(ctx) <= 160, budget.estimate_tokens(ctx)
+
+
+def test_si_no_cabe_ni_un_recuerdo_se_calla_en_vez_de_avisar_a_secas():
+    """Medido en la memoria real: 46 tokens de cabecera + "hay 1 que no cabe", sin
+    un solo dato. Se paga igual que un recuerdo útil, no aporta nada y el modelo ni
+    siquiera sabe qué pedir. Callarse es gratis."""
+    hc = Hipercampo(_DB, namespace="nocabe")
+    hc.remember("nota kilometrica sobre el despliegue: " + "detalle larguisimo " * 120, 0.9)
+    hc.close()
+    env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_NAMESPACE="nocabe",
+               HIPERCAMPO_HOOK_BUDGET="60", HIPERCAMPO_LOG="0")
+    env.pop("HIPERCAMPO_LINKED", None)
+    ctx = _hook("¿qué sabes del despliegue kilometrico?", env)
+    assert ctx == "", f"inyectó {budget.estimate_tokens(ctx)} tok sin un solo dato: {ctx!r}"
+
+
+def test_una_sugerencia_de_guardar_no_se_confunde_con_estar_vacio():
+    """El cuerpo útil no son solo recuerdos: si assist recomienda guardar algo, esa
+    sugerencia ES el contenido y tiene que llegar."""
+    env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_NAMESPACE="sugerencia",
+               HIPERCAMPO_LOG="0")
+    env.pop("HIPERCAMPO_LINKED", None)
+    ctx = _hook("me llamo Armando y prefiero las respuestas directas", env)
+    assert "sugerencia" in ctx, f"se comió la recomendación de guardar: {ctx!r}"
 
 
 def test_el_presupuesto_se_puede_desactivar():

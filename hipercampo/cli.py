@@ -141,6 +141,19 @@ def cmd_hook(_args) -> int:
     # consolidado puede ocupar media pantalla y entrar entero en cada turno. Se
     # recorta a lo relevante, y el recorte se DICE (nunca un silencio).
     lineas, gasto = budget.ajustar(lineas)
+
+    # Si NADA cabía, lo que queda es una cabecera y un aviso de que falta algo: 46
+    # tokens (medido) para no aportar un solo dato. Peor que callarse, porque se
+    # paga igual y encima el modelo no sabe qué pedir. Se calla, que es gratis.
+    # Ojo: "cuerpo" no es solo recuerdos —una sugerencia de guardar también lo es—,
+    # así que se descarta la cabecera y el aviso, y se mira si queda algo.
+    aviso = budget._aviso(gasto.get("omitidas", 0), gasto.get("presupuesto", 0))
+    if not [ln for ln in lineas[1:] if ln != aviso]:
+        audit.log("tokens", "0 tok: nada cabía en el presupuesto, me callo",
+                  presupuesto=gasto.get("presupuesto"), original=gasto.get("original"))
+        print("{}")
+        return 0
+
     audit.log("tokens", f"inyectados {gasto['tokens']} tok"
               + (f" (de {gasto['original']}, presupuesto {gasto['presupuesto']})"
                  if gasto.get("original") else ""))

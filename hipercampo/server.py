@@ -221,7 +221,11 @@ async def hc_tools(name: str = "", args: dict | None = None) -> dict:
                 "activas_ya": sorted(_ACTIVADAS)}
 
     if name not in _CATALOGO:
-        return {"error": f"no existe o ya está activa: {name}",
+        # Las ya activadas siguen en el catálogo, así que aquí solo se llega si el
+        # nombre no existe o es una del núcleo (que ya está anunciada y se llama
+        # directamente). Decirlo tal cual: "o ya está activa" despistaba.
+        ya = " (es del núcleo: llámala directamente)" if name in CORE else ""
+        return {"error": f"no existe ninguna herramienta llamada {name}{ya}",
                 "disponibles": sorted(_CATALOGO)}
 
     fn, _ = _CATALOGO[name]
@@ -247,17 +251,26 @@ async def hc_tools(name: str = "", args: dict | None = None) -> dict:
     return {"activada": name, "resultado": salida}
 
 
-async def _run_stdio_avisando():
-    """Igual que mcp.run(), pero declarando que la lista de herramientas PUEDE
-    cambiar. FastMCP lo anuncia como `listChanged: false` por defecto, y un cliente
-    que lee eso tiene todo el derecho a ignorar el aviso y quedarse con la lista
-    vieja: la activación en caliente no llegaría a verse nunca."""
+def _preparar_aviso_de_cambio():
+    """Prepara el arranque declarando que la lista de herramientas PUEDE cambiar.
+
+    FastMCP anuncia `listChanged: false` por defecto, y un cliente que lee eso tiene
+    todo el derecho a ignorar el aviso y quedarse con la lista vieja: la activación
+    en caliente no llegaría a verse nunca.
+
+    Esta función SOLO toca las tripas de la librería (los imports internos y las
+    opciones de inicialización). Es la parte frágil —lo que se rompería si la
+    librería cambia por dentro—, y va aparte precisamente para que el `try` de
+    `main` la cubra a ella sola. Devuelve (servidor, opciones)."""
     from mcp.server.lowlevel.server import NotificationOptions
-    from mcp.server.stdio import stdio_server
 
     srv = mcp._mcp_server
-    opciones = srv.create_initialization_options(
+    return srv, srv.create_initialization_options(
         NotificationOptions(tools_changed=True))
+
+
+async def _servir(srv, opciones):
+    from mcp.server.stdio import stdio_server
     async with stdio_server() as (lectura, escritura):
         await srv.run(lectura, escritura, opciones)
 
@@ -266,14 +279,24 @@ def main():
     # Con todas las herramientas anunciadas no hay nada que activar, así que se usa
     # el camino estándar. Y si la librería cambia por dentro, se cae con gracia al
     # comportamiento de siempre: perder el aviso es un incordio, no arrancar es un fallo.
+    #
+    # El `try` cubre SOLO la preparación, nunca el servidor ya en marcha: si lo
+    # envolviera entero, un fallo de E/S a mitad de sesión caería en el `except` y
+    # llamaría a mcp.run(), levantando un SEGUNDO servidor stdio sobre una entrada
+    # ya consumida. Un fallo sirviendo tiene que propagarse y matar el proceso, que
+    # es lo que el cliente MCP sabe manejar (relanzarlo limpio).
+    servir = None
     if not TODAS:
         try:
             import anyio
-            anyio.run(_run_stdio_avisando)
-            return
+            servir = (anyio, *_preparar_aviso_de_cambio())
         except Exception as e:
             print(f"hipercampo: sin capacidad tools/list_changed ({e}); "
                   "sigo en modo estándar", file=sys.stderr)
+    if servir is not None:
+        anyio, srv, opciones = servir
+        anyio.run(_servir, srv, opciones)
+        return
     mcp.run()
 
 

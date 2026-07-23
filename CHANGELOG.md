@@ -30,10 +30,48 @@ All notable changes to this project are documented here. Format loosely based on
     is dropped and the injection **says how many are missing and how to ask for
     them**. Total measured over a 30-turn session: **87k → 26k tokens**.
   - The bill is auditable: `hipercampo log --accion tokens` and a `tokens` field in
-    `hc_stats`. It is a character-based **estimate** (~3.7 chars/token) and says so;
-    with `tiktoken` installed it becomes exact.
+    `hc_stats`. It is always an **estimate** and says so — see the correction below.
 
 ### Fixed
+- **The noise was still getting in, through the door next to the one we closed.**
+  `VOLUNTEER_MIN_SIM` guarded the "nobody asked" branch, but the "this is a question"
+  branch injected with **no similarity bar at all** — and question detection accepted
+  the Spanish interrogatives *without their accent*. Unstressed «que» is among the
+  most frequent words in the language, so `"espera que termine la sesión"`, `"creo
+  que esto está mal"` and `"lo que pasa es que no compila"` all counted as questions.
+  Measured in a real session: **2 of 3 turns injected another project's memory with
+  nobody having asked anything**. Question detection now has two confidence levels —
+  accented or `¿?` is a real question and answers as before; unaccented gets the same
+  bar as volunteering, so it still answers when the memory clearly fits and stays
+  quiet when the «que» was just passing through. `"espera que termine…"`: 350 → 0 tok.
+- **The token budget did not hold.** The "N memories did not fit" notice is appended
+  *after* the budget is spent and was never charged against it: a budget of 40 came
+  out at 52 real tokens, **30% over**. A budget that overruns is not a budget. The
+  notice is now reserved up front, worst case first so the reservation can never fall
+  short. Verified across five ceilings: 40→39, 60→58, 120→64, never above.
+- **46 tokens to say nothing.** When no memory fit, the hook still injected a header
+  plus "1 more did not fit" — costing as much as a useful memory, carrying no data,
+  and leaving the model unable to tell what to ask for. It now stays quiet, which is
+  free. (A notice only earns its keep next to something.)
+- **An unreadable environment variable took the server down.** `int(os.environ…)` at
+  import time turned a typo in `.mcp.json` into a `ValueError` traceback and a server
+  that would not start — `budget` is imported by both the MCP server and the policy.
+  It now warns on stderr and falls back to the factory value.
+- **`main()` could start the server twice.** The `try` wrapped `anyio.run(...)`
+  entirely — the whole life of the server, not just building the options — so an I/O
+  failure mid-session landed in the `except` and called `mcp.run()`, raising a second
+  stdio server over already-consumed input. The `try` now covers only the fragile
+  preparation; a failure while serving propagates and kills the process, which is
+  what the MCP client knows how to handle.
+
+### Changed
+- **The token count is never exact, and now says so.** It was declared exact when
+  `tiktoken` was installed. It is not: `cl100k_base` is *OpenAI's* tokenizer and what
+  is being measured is what it costs **Claude**, whose tokenizer Anthropic does not
+  publish — only their API can be exact. With `tiktoken` the estimate improves; it
+  does not become exact. `es_estimacion()` now always returns `True`, and a new
+  `metodo()` states what the count was made with. Claiming a precision we do not have
+  is precisely what this project does not do.
 - **It interrupted when nobody had asked.** Measured: "arregla el bug del botón"
   injected 645 tokens of unrelated project context. Two candidate fixes were tested
   and **both failed**: raising the score threshold would have killed legitimate

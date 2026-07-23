@@ -23,15 +23,34 @@ import os
 # trabaja en un idioma donde la proporción es muy distinta.
 CHARS_PER_TOKEN = 3.7
 
+def _entero(variable: str, por_defecto: int) -> int:
+    """Lee un entero del entorno sin poder tumbar el arranque.
+
+    Esto se evalúa al IMPORTAR, y budget lo importan el servidor MCP y la política:
+    un `int("abc")` aquí no degrada nada, impide arrancar con un ValueError. Un
+    typo en .mcp.json no puede dejar sin memoria a nadie, así que un valor
+    ilegible se avisa por stderr y se sigue con el de fábrica."""
+    crudo = (os.environ.get(variable) or "").strip()
+    if not crudo:
+        return por_defecto
+    try:
+        return max(0, int(crudo))
+    except ValueError:
+        import sys
+        print(f"hipercampo: {variable}={crudo!r} no es un número; "
+              f"uso {por_defecto}", file=sys.stderr)
+        return por_defecto
+
+
 # Presupuesto por inyección del hook. 350 tokens es aproximadamente media pantalla
 # de texto: suficiente para 2-3 recuerdos útiles, poco para molestar. 0 = sin límite
 # (no recomendado: el coste crece con la memoria, sin techo).
-HOOK_BUDGET = int(os.environ.get("HIPERCAMPO_HOOK_BUDGET", "350") or 0)
+HOOK_BUDGET = _entero("HIPERCAMPO_HOOK_BUDGET", 350)
 
 # La identidad de trabajo se paga UNA vez al arrancar la sesión, no en cada turno:
 # puede permitirse ser más generosa. Aun así tiene techo, porque el número de
 # reglas aprendidas solo crece.
-IDENTITY_BUDGET = int(os.environ.get("HIPERCAMPO_IDENTITY_BUDGET", "500") or 0)
+IDENTITY_BUDGET = _entero("HIPERCAMPO_IDENTITY_BUDGET", 500)
 
 _tokenizador = None
 _intentado = False
@@ -65,8 +84,23 @@ def estimate_tokens(texto: str) -> int:
 
 
 def es_estimacion() -> bool:
-    """¿La cuenta es aproximada? Para poder DECIRLO en vez de fingir precisión."""
-    return _real() is None
+    """¿La cuenta es aproximada? SIEMPRE lo es, y por eso devuelve True siempre.
+
+    Antes devolvía False cuando había tokenizador, dando por exacta la cuenta. No
+    lo es: `tiktoken`/cl100k_base es el tokenizador de los modelos de OpenAI, y
+    hipercampo mide lo que le cuesta a CLAUDE. Anthropic no publica el suyo; lo
+    exacto solo lo da su API (endpoint de conteo, o el `usage` de la respuesta).
+    Con tiktoken la estimación es bastante mejor que contar caracteres, pero mejor
+    no es exacto, y decirlo exacto sería justo lo que este proyecto no hace.
+    """
+    return True
+
+
+def metodo() -> str:
+    """Con qué se ha contado, para poder declararlo sin exagerar."""
+    return ("aproximado con tiktoken/cl100k_base (tokenizador de OpenAI; "
+            "Claude no publica el suyo)" if _real() is not None
+            else f"estimado a {CHARS_PER_TOKEN} caracteres por token")
 
 
 def truncar(texto: str, max_tokens: int) -> str:
@@ -87,6 +121,13 @@ def truncar(texto: str, max_tokens: int) -> str:
     if espacio > limite * 0.6:                    # no dejar un muñón diminuto
         corte = corte[:espacio]
     return corte.rstrip(" .,;:—-") + " […]"
+
+
+def _aviso(omitidas: int, presupuesto: int) -> str:
+    """Lo que se dice cuando algo no cabe. Aparte, porque su coste hay que
+    RESERVARLO antes de repartir el presupuesto (ver `ajustar`)."""
+    return (f"({omitidas} recuerdo(s) más no caben en el presupuesto de "
+            f"{presupuesto} tokens; pídelos con hc_recall si hacen falta)")
 
 
 def ajustar(lineas: list[str], presupuesto: int = None) -> tuple[list[str], dict]:
@@ -116,14 +157,22 @@ def ajustar(lineas: list[str], presupuesto: int = None) -> tuple[list[str], dict
         return lineas, {"tokens": original, "presupuesto": presupuesto,
                         "omitidas": 0}
 
+    # El AVISO de omisión también cuesta tokens, y se añade al final: si no se
+    # reserva antes, el presupuesto se incumple justo cuando se está aplicando
+    # (medido: 40 de presupuesto -> 52 reales, un 30% de más). Se reserva el peor
+    # caso —todas las líneas omitidas, que da el número más largo— para que la
+    # reserva nunca se quede corta al final.
+    reserva = estimate_tokens(_aviso(max(1, len(lineas) - 1), presupuesto))
+    tope = max(0, presupuesto - reserva)
+
     salida, gastado, omitidas = [], 0, 0
     for i, linea in enumerate(lineas):
         coste = estimate_tokens(linea)
-        if i == 0:                                # la cabecera siempre
-            salida.append(linea)
-            gastado += coste
+        if i == 0:                                # la cabecera siempre: es barata,
+            salida.append(linea)                  # dice de qué va, y sin ella lo
+            gastado += coste                      # demás no se entiende
             continue
-        if gastado + coste <= presupuesto:
+        if gastado + coste <= tope:
             salida.append(linea)
             gastado += coste
         else:
@@ -132,8 +181,7 @@ def ajustar(lineas: list[str], presupuesto: int = None) -> tuple[list[str], dict
     if omitidas:                                  # la omisión se DICE, y se dice
         # cómo recuperar lo que falta: así el modelo puede decidir si lo necesita
         # en vez de creer que ya lo tiene todo.
-        salida.append(f"({omitidas} recuerdo(s) más no caben en el presupuesto de "
-                      f"{presupuesto} tokens; pídelos con hc_recall si hacen falta)")
+        salida.append(_aviso(omitidas, presupuesto))
     return salida, {"tokens": sum(estimate_tokens(x) for x in salida),
                     "presupuesto": presupuesto, "original": original,
                     "omitidas": omitidas}
