@@ -25,6 +25,26 @@ from . import audit
 # Soltar una asociación floja sin venir a cuento es ruido, no memoria.
 VOLUNTEER_MIN_SCORE = 0.10
 
+# ...pero ese umbral SOLO no basta, y está MEDIDO: "arregla el bug del botón"
+# puntuaba 0.167 —más que "¿qué es VSA?" (0.140), que sí es legítima—. Subir el
+# listón habría matado los recuerdos buenos antes que el ruido.
+#
+# Se probaron tres señales sobre los mismos casos, y dos fallaron:
+#   · score final:      no separa (el ruido puntúa por encima de aciertos reales)
+#   · contraste (z):    tampoco ("gracias, buen trabajo" sacaba z=2.46, el máximo)
+#   · activación DIRECTA: sí separa. Legítimas 0.198-0.252 · ruido 0.056-0.154
+# La razón es que el score final mezcla propagación, fuerza y fiabilidad —un
+# recuerdo muy reforzado puntúa alto aunque la consulta no vaya de él—, mientras
+# que la activación directa mide solo una cosa: cuánto se parece ESTO a la
+# pregunta. Para decidir si interrumpir, es la única que responde a lo que
+# realmente se está preguntando.
+#
+# El corte (0.18) va a media banda entre el mejor ruido y la peor legítima. Al
+# volunteering se le exige más que a una respuesta, y es deliberado: si nadie ha
+# preguntado, callarse es gratis y equivocarse cuesta cientos de tokens de la
+# ventana del usuario.
+VOLUNTEER_MIN_SIM = 0.18
+
 _PREGUNTA = re.compile(
     r"(?i)(^|\s)(qu[eé]|qui[eé]n|cu[aá]ndo|d[oó]nde|c[oó]mo|cu[aá]l|por qu[eé]|"
     r"recuerdas|te acuerdas|sabes si|what|who|when|where|which|why|how|do you (recall|remember))\b")
@@ -88,9 +108,12 @@ def _decide(hc, message: str, k: int = 3) -> dict:
         return {"action": "remember?", "why": "afirma algo nuevo y no tengo nada igual",
                 "sugerencia": "hc_remember(text=...)", "surprise": round(sorpresa, 3)}
 
-    # 4) por defecto (nadie ha preguntado): solo hablar si es CLARAMENTE relevante.
-    # Interrumpir con una asociación débil es peor que callarse.
-    hits = [h for h in hc.recall(msg, k=k) if h["score"] >= VOLUNTEER_MIN_SCORE]
+    # 4) por defecto (nadie ha preguntado): solo hablar si es CLARAMENTE relevante
+    # Y encima va del mismo tema. Interrumpir con una asociación fantasma no solo
+    # es ruido: son cientos de tokens de la ventana del usuario, gastados en nada.
+    hits = [h for h in hc.recall(msg, k=k)
+            if h["score"] >= VOLUNTEER_MIN_SCORE
+            and h.get("sim", 0.0) >= VOLUNTEER_MIN_SIM]
     if hits:
         return {"action": "recall", "why": "hay memoria claramente relevante",
                 "result": hits}

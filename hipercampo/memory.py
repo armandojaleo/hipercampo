@@ -24,7 +24,7 @@ import time
 
 import numpy as np
 
-from . import audit
+from . import audit, budget
 from .encoder import encode_text, semantic_active
 from .safety import redact_secrets, scan_injection, scan_secrets
 from .store import Store
@@ -479,6 +479,11 @@ class Hipercampo:
         # se encienden, suben la media y la memoria acaba abstiéndose justo cuando sí
         # sabía la respuesta.
         directa = np.sort(np.array(list(activation.values()), dtype=np.float64))[::-1]
+        # …y la misma foto indexada por id. La activación DIRECTA de cada recuerdo
+        # (sin propagación) es la única señal que distingue "esto va de lo mismo" de
+        # "esto se ha encendido de rebote", y hace falta fuera: quien decide
+        # interrumpir sin que nadie pregunte necesita el dato crudo, no el ranking.
+        directa_por_id = dict(activation)
 
         # propagación: la chispa salta a los vecinos, atenuada
         seeds = sorted(activation, key=activation.get, reverse=True)[:k]
@@ -561,6 +566,7 @@ class Hipercampo:
         for score, act, r in top:
             item = {"id": r["id"], "text": r["text"], "kind": r["kind"],
                     "score": round(score, 3), "activation": round(act, 3),
+                    "sim": round(directa_por_id.get(r["id"], 0.0), 3),
                     "strength": round(r["strength"], 2),
                     "confidence": round(r["confidence"], 2),
                     "utility": round(self.utility(r), 2)}
@@ -897,8 +903,13 @@ class Hipercampo:
         ep = [r for r in rows if r["kind"] == "episodic" and not r["consolidated"]]
         sem = [r for r in rows if r["kind"] == "semantic"]
         arch = [r for r in rows if r["consolidated"]]
+        coste = audit.coste_tokens()
         return {"episodicos_activos": len(ep), "semanticos": len(sem),
                 "archivados": len(arch), "latentes": len(dormidos) - len(rows),
                 "total": len(rows),                  # vigentes (sin latentes)
                 "total_fisico": len(dormidos),       # filas reales en disco
-                "db": os.path.abspath(self.store.path)}
+                "db": os.path.abspath(self.store.path),
+                # La factura: cuánta ventana de contexto ha consumido esta memoria.
+                # Estimado por caracteres salvo que haya tiktoken instalado.
+                "tokens": {**coste, "estimado": budget.es_estimacion(),
+                           "presupuesto_por_turno": budget.HOOK_BUDGET}}

@@ -144,7 +144,7 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 }
 ```
 
-Reinicia Claude Code. Deberías ver 15 herramientas: `hc_remember`, `hc_recall`,
+Reinicia Claude Code. Deberías ver 18 herramientas: `hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`,
 `hc_remember_fact`, `hc_ask_role`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
@@ -267,7 +267,7 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-Debe listar las 15 herramientas `hc_*`.
+Debe listar las 18 herramientas `hc_*`.
 
 ---
 
@@ -333,6 +333,50 @@ hipercampo doctor        # ruta de la BD, permisos, versión, dependencias
 
 Se desactiva con `HIPERCAMPO_LOG=0`.
 
+### Lo que cuesta en tokens (y cómo bajarlo)
+
+Una memoria que se come la ventana de contexto no ayuda: estorba. hipercampo
+gasta por dos sitios muy distintos, y conviene saber cuál es cuál:
+
+```bash
+python scripts/tokens.py       # la factura, medida en tu propia máquina
+```
+
+| Fuente | Coste | Cuándo se paga |
+|---|---:|---|
+| Herramientas anunciadas (7, por defecto) | ~810 tok | en **cada** petición |
+| …con `HIPERCAMPO_TOOLS=all` (las 18) | ~2.070 tok | en cada petición |
+| Identidad de trabajo (al arrancar) | ≤500 tok | 1 vez por sesión |
+| Inyección del hook | ≤350 tok | solo en los turnos que disparan |
+
+Lo caro **no** es la memoria: son las descripciones de las herramientas, que
+viajan en cada petición aunque nunca la uses. Por eso, de entrada solo se anuncian
+las seis de uso diario (`hc_remember`, `hc_recall`, `hc_update`, `hc_learn`,
+`hc_assist`, `hc_stats`) más `hc_tools`.
+
+**No se pierde nada.** Las otras doce están a una llamada:
+
+```
+hc_tools()                                     -> lista lo que hay, una línea cada una
+hc_tools(name="hc_dream", args={"max_bridges": 3})   -> la activa Y la ejecuta
+```
+
+Al activarse quedan registradas y el servidor avisa al cliente
+(`tools/list_changed`), así que a partir de ahí se llaman como cualquier otra. Se
+ejecutan además en la misma llamada a propósito: si un cliente ignora el aviso, la
+capacidad tiene que seguir estando disponible igual.
+
+¿Prefieres las 18 anunciadas desde el principio? `"HIPERCAMPO_TOOLS": "all"`.
+
+Los presupuestos de inyección se ajustan con `HIPERCAMPO_HOOK_BUDGET` (350 por
+defecto, `0` lo desactiva) y `HIPERCAMPO_IDENTITY_BUDGET` (500). Los recuerdos
+entran **enteros o no entran**: uno cortado por la mitad parece información y no lo
+es, así que el que no cabe se omite y **se dice cuántos faltan** y cómo pedirlos.
+
+Para ver la factura acumulada: `hipercampo log --accion tokens`, o el campo
+`tokens` de `hc_stats`. Aviso honesto: la cuenta es una **estimación** por
+caracteres (~3,7 por token); instala `tiktoken` si quieres exactitud.
+
 ### ¿Está sana la memoria?
 
 ```bash
@@ -386,7 +430,7 @@ devuelve el campo `db` con la ruta absoluta.
 
 ### Controlar su uso desde Claude
 
-Las 15 herramientas te dan control total, sin tocar código:
+Las 18 herramientas te dan control total, sin tocar código:
 
 | Quieres… | Pídele a Claude (usa la tool) |
 |----------|-------------------------------|

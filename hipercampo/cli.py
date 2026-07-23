@@ -28,6 +28,8 @@ import re
 import sys
 import time
 
+from . import audit, budget
+
 try:                                                  # salida UTF-8 en Windows
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -85,11 +87,18 @@ def cmd_hook(_args) -> int:
         if not r.get("n"):
             print("{}")
             return 0
+        # La identidad se paga UNA vez por sesión, así que su presupuesto es más
+        # generoso que el de cada turno; pero techo tiene, o crece sin freno según
+        # se van aprendiendo reglas.
+        cabecera = "[memoria · identidad de trabajo] aprendido en sesiones anteriores:"
+        lineas, gasto = budget.ajustar([cabecera] + r["texto"].splitlines(),
+                                       budget.IDENTITY_BUDGET)
+        audit.log("tokens", f"identidad {gasto['tokens']} tok"
+                  + (f" (de {gasto['original']})" if gasto.get("original") else ""))
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
-                "additionalContext": ("[memoria · identidad de trabajo] aprendido en "
-                                      f"sesiones anteriores:\n{r['texto']}")},
+                "additionalContext": "\n".join(lineas)},
             "suppressOutput": True}, ensure_ascii=False))
         return 0
 
@@ -127,6 +136,14 @@ def cmd_hook(_args) -> int:
         lineas.append(f"(sugerencia: {r['sugerencia']})")
         if r.get("candidato"):
             lineas.append(f"(candidato #{r['candidato']['id']}: {r['candidato']['text']})")
+
+    # PRESUPUESTO. Sin techo, el coste crece con la memoria: un recuerdo
+    # consolidado puede ocupar media pantalla y entrar entero en cada turno. Se
+    # recorta a lo relevante, y el recorte se DICE (nunca un silencio).
+    lineas, gasto = budget.ajustar(lineas)
+    audit.log("tokens", f"inyectados {gasto['tokens']} tok"
+              + (f" (de {gasto['original']}, presupuesto {gasto['presupuesto']})"
+                 if gasto.get("original") else ""))
     print(json.dumps({
         "hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                "additionalContext": "\n".join(lineas)},

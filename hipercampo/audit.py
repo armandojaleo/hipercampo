@@ -120,5 +120,33 @@ def acciones() -> list[str]:
     return sorted(vistas)
 
 
+def coste_tokens() -> dict:
+    """Cuántos tokens ha inyectado hipercampo, leídos del propio registro.
+
+    Si vamos a pedirle a alguien que le ceda parte de su ventana de contexto a una
+    memoria, lo mínimo es que pueda ver la factura. Se lee del log en vez de
+    llevar un contador en la BD a propósito: el registro ya existe, es auditable a
+    mano, y contar no debe provocar escrituras en cada turno.
+    """
+    import re
+    hoy = time.strftime("%Y-%m-%d")
+    total = de_hoy = turnos = ahorrado = 0
+    for ln in tail(0, accion="tokens"):
+        m = re.search(r"(\d+) tok", ln)
+        if not m:
+            continue
+        n = int(m.group(1))
+        total += n
+        turnos += 1
+        if ln.startswith(hoy):
+            de_hoy += n
+        original = re.search(r"\(de (\d+)", ln)      # lo que se recortó
+        if original:
+            ahorrado += max(0, int(original.group(1)) - n)
+    return {"total": total, "hoy": de_hoy, "inyecciones": turnos,
+            "ahorrado_por_presupuesto": ahorrado,
+            "media_por_inyeccion": round(total / turnos) if turnos else 0}
+
+
 def logfile() -> str | None:
     return str(_PATH) if _PATH else None

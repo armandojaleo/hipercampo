@@ -144,7 +144,7 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 }
 ```
 
-Restart Claude Code. You should see 15 tools: `hc_remember`, `hc_recall`,
+Restart Claude Code. You should see 18 tools: `hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`,
 `hc_remember_fact`, `hc_ask_role`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
@@ -270,7 +270,7 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-It must list the 15 `hc_*` tools.
+It must list the 18 `hc_*` tools.
 
 ---
 
@@ -337,6 +337,50 @@ hipercampo doctor        # DB path, permissions, version, dependencies
 
 Turn it off with `HIPERCAMPO_LOG=0`.
 
+### What it costs in tokens (and how to cut it)
+
+A memory that eats your context window is not helping: it is in the way.
+hipercampo spends in two very different places, and it pays to know which is which:
+
+```bash
+python scripts/tokens.py       # the bill, measured on your own machine
+```
+
+| Source | Cost | When you pay it |
+|---|---:|---|
+| Announced tools (7, by default) | ~810 tok | on **every** request |
+| …with `HIPERCAMPO_TOOLS=all` (all 18) | ~2,070 tok | on every request |
+| Working identity (at startup) | ≤500 tok | once per session |
+| Hook injection | ≤350 tok | only on turns that fire |
+
+The expensive part is **not** the memory: it is the tool descriptions, which
+travel in every request even if you never use it. So only the six daily ones are
+announced up front (`hc_remember`, `hc_recall`, `hc_update`, `hc_learn`,
+`hc_assist`, `hc_stats`), plus `hc_tools`.
+
+**Nothing is lost.** The other twelve are one call away:
+
+```
+hc_tools()                                     -> lists them, one line each
+hc_tools(name="hc_dream", args={"max_bridges": 3})   -> activates AND runs it
+```
+
+Once activated they are registered for real and the server notifies the client
+(`tools/list_changed`), so from then on they are called like any other tool. They
+also run in that same call on purpose: if a client ignores the notification, the
+capability must stay reachable anyway.
+
+Prefer all 18 announced from the start? `"HIPERCAMPO_TOOLS": "all"`.
+
+Injection budgets are tuned with `HIPERCAMPO_HOOK_BUDGET` (350 by default, `0`
+disables it) and `HIPERCAMPO_IDENTITY_BUDGET` (500). Memories go in **whole or not
+at all**: one cut in half looks like information and isn't, so whatever does not
+fit is omitted and hipercampo **says how many are missing** and how to ask for them.
+
+For the running total: `hipercampo log --accion tokens`, or the `tokens` field of
+`hc_stats`. Honest caveat: the count is a character-based **estimate** (~3.7 per
+token); install `tiktoken` if you want exactness.
+
 ### Is the memory healthy?
 
 ```bash
@@ -390,7 +434,7 @@ returns a `db` field with the absolute path.
 
 ### Controlling its use from Claude
 
-The 15 tools give you full control, without touching code:
+The 18 tools give you full control, without touching code:
 
 | You want to… | Ask Claude (uses the tool) |
 |----------|-------------------------------|

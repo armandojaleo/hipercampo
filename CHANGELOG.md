@@ -5,6 +5,47 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Added
+- **Token budget: hipercampo now knows what it costs you.** Nobody had ever measured
+  it. The bill turned out to be the opposite of what was assumed: the hook was the
+  cheap part (~244 tok/turn) while the **tool definitions travel in every single
+  request** (~2,658 tok) and quietly occupy the context window even when the memory
+  is never used. New `scripts/tokens.py` measures both, so the claim is checkable
+  rather than asserted.
+  - Tool descriptions rewritten short, and **only the six daily tools are announced
+    by default**: **2,658 → 807 tok** per request (−70%). The other twelve are not
+    gone — new **`hc_tools`** lists them one line each and activates any of them
+    **hot**: it registers the tool for real, notifies the client
+    (`tools/list_changed`, now correctly declared as a server capability) and runs
+    the requested one *in the same call*, so the capability holds even if the client
+    ignores the notification. `HIPERCAMPO_TOOLS=all` restores the full announced
+    surface. The Python API is unchanged: all 18 functions keep their signatures,
+    `hc_tools` is purely additive.
+  - New `hipercampo/budget.py`: per-injection budget (`HIPERCAMPO_HOOK_BUDGET`, 350;
+    `HIPERCAMPO_IDENTITY_BUDGET`, 500). Memories go in **whole or not at all** —
+    the first attempt truncated them, and the very first real injection proved why
+    that was wrong: *"Compartir listas: URL …/share?l=<ids> […]"* cut away exactly
+    the part that explained why. A halved memory reads as complete and gets answered
+    with confidence; an omitted one is visible and recoverable, so what does not fit
+    is dropped and the injection **says how many are missing and how to ask for
+    them**. Total measured over a 30-turn session: **87k → 26k tokens**.
+  - The bill is auditable: `hipercampo log --accion tokens` and a `tokens` field in
+    `hc_stats`. It is a character-based **estimate** (~3.7 chars/token) and says so;
+    with `tiktoken` installed it becomes exact.
+
+### Fixed
+- **It interrupted when nobody had asked.** Measured: "arregla el bug del botón"
+  injected 645 tokens of unrelated project context. Two candidate fixes were tested
+  and **both failed**: raising the score threshold would have killed legitimate
+  recalls first (the noise scored 0.167, above a real question's 0.140), and
+  z-contrast was worse still ("gracias, buen trabajo" scored the highest z of all).
+  What separates cleanly is the **direct activation** — similarity alone, before
+  propagation, strength and confidence are mixed in. `recall` now returns it as
+  `sim` on every hit, and volunteering requires clearing a stricter bar than
+  answering does: if nobody asked, staying quiet is free and being wrong costs the
+  user hundreds of tokens. Waste in the measured session: 1/6 turns → 0/6, average
+  244 → 89 tok/turn, with retrieval quality unchanged (MRR 0.807).
+
 ### Fixed
 - **Accents arrived broken through the hook.** `json.load(sys.stdin)` decodes with
   the locale encoding — cp1252 on Windows — while Claude Code always sends UTF-8,

@@ -45,7 +45,7 @@ cd hipercampo && pip install -e .
 python scripts/demo.py                # watch the cycle run
 ```
 
-Restart Claude Code and you'll have 15 memory tools (`hc_remember`, `hc_recall`,
+Restart Claude Code and you'll have 18 memory tools (`hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_assist`, `hc_sleep`, `hc_consolidate`, `hc_forget`, `hc_health`, `hc_stats`). For Docker, Claude Desktop,
 `.mcp.json`, verification and troubleshooting → **[INSTALL.md](INSTALL.md)**.
@@ -135,6 +135,31 @@ thousands); at ~100k you'd want an index. A known limit, not hidden.
 Guardrails (env): `HIPERCAMPO_MAX_MEMORIES` caps memories per context (evicts the
 lowest-retention, never the protected); `HIPERCAMPO_REDACT_SECRETS=1` masks detected
 secrets before storing instead of only warning.
+
+## What it costs you (measured)
+
+A memory that eats your context window is in the way, so the bill is measurable:
+`python scripts/tokens.py`.
+
+| Source | Cost | When |
+|---|---:|---|
+| Announced tools (7, default) | ~810 tok | **every** request |
+| …with `HIPERCAMPO_TOOLS=all` (18) | ~2,070 tok | every request |
+| Hook injection | ≤350 tok | only on turns that fire |
+
+The expensive part is not the memory — it's the tool descriptions, which travel in
+every request even if you never call them. So only the six daily tools are
+announced; the other twelve are activated **hot** by `hc_tools`, which registers
+them, notifies the client (`tools/list_changed`) and runs the requested one in the
+same call — so the capability holds even if the client ignores the notification.
+
+Memories are injected **whole or not at all**: one cut in half looks like
+information and isn't, so what doesn't fit is omitted and *said*, with a pointer to
+`hc_recall`. And when nobody asked a question, hipercampo only interrupts if the
+memory's *direct* activation clears a stricter bar — measured, because both the
+final score and z-contrast failed to separate signal from noise. Measured end to
+end: **87k → 26k tokens** over a 30-turn session. Counts are character-based
+estimates; install `tiktoken` for exactness.
 
 ## The four axes of a memory (novelty ≠ importance ≠ reliability ≠ utility)
 

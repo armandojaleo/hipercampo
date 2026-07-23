@@ -40,6 +40,10 @@ HERRAMIENTAS = {
     "hc_unlearn":       {"memory_id": False},
     "hc_health":        {"full": True},
     "hc_stats":         {},
+    # Añadida, no sustituye a nada: la puerta a las herramientas que ya no se
+    # anuncian de entrada para no gastar tokens en cada petición. Las 18 de arriba
+    # siguen existiendo con la misma firma; lo que cambia es CUÁNDO se anuncian.
+    "hc_tools":         {"name": True, "args": True},
 }
 
 

@@ -45,7 +45,7 @@ cd hipercampo && pip install -e .
 python scripts/demo.py                # ver el ciclo funcionando
 ```
 
-Reinicia Claude Code y tendrás 15 herramientas de memoria (`hc_remember`, `hc_recall`,
+Reinicia Claude Code y tendrás 18 herramientas de memoria (`hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_assist`, `hc_sleep`, `hc_consolidate`, `hc_forget`, `hc_health`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
 verificación y problemas frecuentes → **[INSTALL.es.md](INSTALL.es.md)**.
@@ -135,6 +135,31 @@ personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, n
 Guardrails (entorno): `HIPERCAMPO_MAX_MEMORIES` acota los recuerdos por contexto
 (poda el de menor retención, nunca lo protegido); `HIPERCAMPO_REDACT_SECRETS=1`
 enmascara los secretos detectados antes de guardarlos en vez de solo avisar.
+
+## Lo que te cuesta (medido)
+
+Una memoria que se come tu ventana de contexto estorba, así que la factura se
+mide: `python scripts/tokens.py`.
+
+| Fuente | Coste | Cuándo |
+|---|---:|---|
+| Herramientas anunciadas (7, por defecto) | ~810 tok | en **cada** petición |
+| …con `HIPERCAMPO_TOOLS=all` (las 18) | ~2.070 tok | en cada petición |
+| Inyección del hook | ≤350 tok | solo en los turnos que disparan |
+
+Lo caro no es la memoria: son las descripciones de las herramientas, que viajan en
+cada petición aunque nunca las llames. Por eso solo se anuncian las seis de uso
+diario; las otras doce se activan **en caliente** con `hc_tools`, que las registra,
+avisa al cliente (`tools/list_changed`) y ejecuta la pedida en la misma llamada —
+así la capacidad se mantiene aunque el cliente ignore el aviso.
+
+Los recuerdos se inyectan **enteros o nada**: uno cortado por la mitad parece
+información y no lo es, así que lo que no cabe se omite y *se dice*, indicando
+`hc_recall` para pedirlo. Y cuando nadie ha preguntado, hipercampo solo interrumpe
+si la activación *directa* del recuerdo supera un listón más exigente — medido,
+porque ni el score final ni el contraste (z) separaban la señal del ruido. Medido
+de punta a punta: **87k → 26k tokens** en una sesión de 30 turnos. Las cuentas son
+estimaciones por caracteres; instala `tiktoken` si quieres exactitud.
 
 ## Los cuatro ejes de un recuerdo (novedad ≠ importancia ≠ fiabilidad ≠ utilidad)
 
