@@ -94,6 +94,41 @@ def test_el_hook_nunca_revienta_con_entrada_basura():
     _limpiar_db()
 
 
+def test_el_hook_de_arranque_inyecta_la_identidad():
+    """SessionStart: al empezar no hay pregunta, lo que toca es recordar quién eres."""
+    _limpiar_db()
+    os.environ["HIPERCAMPO_DB"] = _DB
+    from hipercampo.memory import Hipercampo
+    hc = Hipercampo(_DB, namespace="default")
+    hc.learn("medir antes de creer y decir la verdad de los limites", "regla")
+    hc.close()
+
+    original = sys.stdin
+    sys.stdin = io.StringIO(json.dumps({"hook_event_name": "SessionStart",
+                                        "source": "startup"}))
+    try:
+        _, salida = _correr("hook")
+    finally:
+        sys.stdin = original
+    r = json.loads(salida)
+    ctx = r.get("hookSpecificOutput", {})
+    assert ctx.get("hookEventName") == "SessionStart", r
+    assert "medir antes de creer" in ctx.get("additionalContext", ""), r
+    _limpiar_db()
+
+
+def test_el_arranque_sin_identidad_se_calla():
+    _limpiar_db()
+    original = sys.stdin
+    sys.stdin = io.StringIO(json.dumps({"hook_event_name": "SessionStart"}))
+    try:
+        _, salida = _correr("hook")
+    finally:
+        sys.stdin = original
+    assert json.loads(salida) == {}, salida
+    _limpiar_db()
+
+
 # --- comandos ---------------------------------------------------------------
 
 def test_remember_y_recall_por_terminal():

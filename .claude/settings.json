@@ -3,6 +3,18 @@
     "HIPERCAMPO_LINKED": "*"
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hipercampo.cli hook",
+            "timeout": 15,
+            "statusMessage": "recordando quién soy trabajando..."
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

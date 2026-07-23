@@ -5,6 +5,26 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Added — working identity (the agent's own memory)
+- **`hc_learn` / `hc_identity` / `hc_unlearn`.** Until now hipercampo stored memory
+  *of the world* — facts, projects, gotchas. It did not store what psychology calls
+  procedural and self memory: **what was learned about how to work**. Rules the user
+  confirmed, lessons from mistakes, decisions already made and why, preferences.
+  All of that died when the session closed, so the next one started from zero and
+  tripped over the same stone.
+- Lives in a reserved context (`__self__`) that is readable from **every** project
+  (identity belongs to the agent, not to a project), is only written on purpose,
+  and is **protected from active forgetting** — a lesson learned does not expire
+  through disuse. Repeating a rule reinforces it instead of duplicating it: a rule
+  repeated is a rule confirmed.
+- **`SessionStart` hook**: at the start of a session there is no question to answer,
+  so what it injects is *who you are when you work*. Also `hipercampo identity`.
+- New suite `tests/test_identity.py` (9) — **29 suites**.
+
+### Fixed
+- `Hipercampo.close()` now closes the identity store too. Without it every hook
+  invocation leaked a file handle (and on Windows locked the file).
+
 ### Fixed
 - **`restore()` could destroy your live memory silently.** It overwrote the
   database with no copy of what it replaced, and without checking the source was

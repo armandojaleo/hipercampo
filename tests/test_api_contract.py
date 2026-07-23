@@ -35,6 +35,9 @@ HERRAMIENTAS = {
     "hc_sleep":         {},
     "hc_consolidate":   {},
     "hc_forget":        {"dry_run": True},
+    "hc_learn":         {"text": False, "tipo": True},
+    "hc_identity":      {"k": True},
+    "hc_unlearn":       {"memory_id": False},
     "hc_health":        {"full": True},
     "hc_stats":         {},
 }
@@ -45,7 +48,7 @@ def _tools():
     return {n: f for n, f in vars(server).items() if n.startswith("hc_")}
 
 
-def test_estan_las_15_y_ninguna_de_mas():
+def test_estan_todas_y_ninguna_de_mas():
     vivas = set(_tools())
     assert vivas == set(HERRAMIENTAS), (
         f"faltan: {set(HERRAMIENTAS) - vivas} · sobran: {vivas - set(HERRAMIENTAS)}")

@@ -180,6 +180,77 @@ class Hipercampo:
         return self.roles.ask_role(role, known, at=at)
 
     @resiliente
+    # --- identidad de trabajo (la memoria del agente) --------------------
+    def _self_store(self):
+        """Almacén del contexto reservado `__self__`, abierto bajo demanda."""
+        from .identity import SELF_NAMESPACE
+        if getattr(self, "_ss", None) is None:
+            self._ss = Store(self.store.path, namespace=SELF_NAMESPACE)
+        return self._ss
+
+    @resiliente
+    def learn(self, text: str, tipo: str = "leccion") -> dict:
+        """APRENDER algo sobre CÓMO TRABAJAR — no sobre el mundo.
+
+        Reglas, lecciones de un error, decisiones ya tomadas y preferencias del
+        usuario. Es lo que hoy se pierde al cerrar la sesión y hace que la
+        siguiente tropiece en la misma piedra."""
+        from .identity import IMPORTANCIA_IDENTIDAD, TIPOS
+        text = _validate_text(text)
+        if tipo not in TIPOS:
+            return {"error": f"tipo no válido: {tipo}",
+                    "validos": {t: d for t, d in TIPOS.items()}}
+        ss = self._self_store()
+        etiquetado = f"{tipo}: {text}"
+        hv = encode_text(etiquetado)
+        # Sin veto por sorpresa: una regla que se repite es una regla que se
+        # confirma, y perderla por "redundante" sería justo el error a evitar.
+        for r in ss.all(only_active=False, include_dormant=True):
+            if similarity(hv, ss.hv_of(r)) >= 0.90:
+                ss.touch([r["id"]])
+                audit.log("learn", f"ya lo sabía (reforzado #{r['id']})", tipo=tipo)
+                return {"learned": False, "reinforced": r["id"], "text": r["text"],
+                        "nota": "ya formaba parte de la identidad de trabajo"}
+        mem_id = ss.add(etiquetado, hv, 1.0, IMPORTANCIA_IDENTIDAD, 0.9)
+        audit.log("learn", f"aprendido id={mem_id}", tipo=tipo)
+        return {"learned": True, "id": mem_id, "tipo": tipo, "text": etiquetado}
+
+    @resiliente
+    def identity(self, k: int = 40) -> dict:
+        """QUIÉN SOY TRABAJANDO: lo aprendido en sesiones anteriores.
+
+        Se lee al principio de una sesión para no empezar de cero."""
+        from .identity import formatear
+        ss = self._self_store()
+        filas = sorted(ss.all(only_active=False, include_dormant=True),
+                       key=lambda r: r["created"])[-max(1, int(k)):]
+        return {"n": len(filas), "texto": formatear(filas),
+                "items": [{"id": r["id"], "text": r["text"]} for r in filas]}
+
+    @resiliente
+    def unlearn(self, memory_id: int) -> dict:
+        """Desaprender: una regla puede dejar de valer. Se borra de verdad —lo que
+        guía cómo se trabaja no debe quedar medio vivo confundiendo."""
+        ss = self._self_store()
+        fila = ss.get(memory_id)
+        if fila is None:
+            return {"error": f"no hay nada aprendido con id {memory_id}"}
+        ss.delete([memory_id])
+        audit.log("unlearn", f"olvidado a propósito id={memory_id}")
+        return {"unlearned": memory_id, "text": fila["text"]}
+
+    def close(self) -> None:
+        """Cierra TODO lo abierto: la memoria del proyecto y la de identidad.
+        Olvidar la segunda deja un descriptor vivo por cada uso (en Windows, además,
+        bloquea el fichero)."""
+        for almacen in (getattr(self, "_ss", None), self.store):
+            if almacen is not None:
+                try:
+                    almacen.close()
+                except Exception:
+                    pass
+        self._ss = None
+
     def assist(self, message: str, k: int = 3) -> dict:
         """¿Qué toca hacer en ESTE momento de la conversación? Decide la operación
         de memoria adecuada, ejecuta las lecturas y recomienda las escrituras."""

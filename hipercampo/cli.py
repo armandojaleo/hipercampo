@@ -12,6 +12,7 @@ CLI de hipercampo — para usarlo desde el terminal y, sobre todo, desde HOOKS
     hipercampo backup [destino]      # copia de seguridad consistente
     hipercampo servers               # qué servidores MCP hay vivos y desde cuándo
     hipercampo restart               # reiniciarlos tras actualizar (el cliente los relanza)
+    hipercampo identity              # qué se ha aprendido trabajando
     hipercampo doctor                # diagnóstico: ruta, permisos, versión, deps
     hipercampo version
 
@@ -59,6 +60,29 @@ def cmd_hook(_args) -> int:
         payload = json.load(sys.stdin)
     except Exception:
         payload = {}
+    # Al ARRANCAR una sesión no hay pregunta que responder: lo que toca es
+    # recordar quién se es trabajando, para no empezar de cero.
+    if payload.get("hook_event_name") == "SessionStart":
+        try:
+            hc = _hc()
+            try:
+                r = hc.identity()
+            finally:
+                hc.close()
+        except Exception:
+            print("{}")
+            return 0
+        if not r.get("n"):
+            print("{}")
+            return 0
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "SessionStart",
+                "additionalContext": ("[memoria · identidad de trabajo] aprendido en "
+                                      f"sesiones anteriores:\n{r['texto']}")},
+            "suppressOutput": True}, ensure_ascii=False))
+        return 0
+
     prompt = ""
     for clave in ("prompt", "user_prompt", "userPrompt", "message", "input"):
         v = payload.get(clave)
@@ -76,7 +100,7 @@ def cmd_hook(_args) -> int:
         try:
             r = hc.assist(prompt)
         finally:
-            hc.store.close()
+            hc.close()
     except Exception as e:
         print(json.dumps({"systemMessage": f"hipercampo no pudo responder: {e}"}))
         return 0
@@ -161,6 +185,22 @@ def cmd_restart(args) -> int:
     return 0
 
 
+def cmd_identity(_args) -> int:
+    """Qué se ha aprendido trabajando (lo que sobrevive a cerrar la sesión)."""
+    hc = _hc()
+    try:
+        r = hc.identity()
+        if not r.get("n"):
+            print("Todavía no hay identidad de trabajo aprendida.")
+            print("Se construye con `hc_learn` cuando algo enseña cómo trabajar mejor.")
+            return 0
+        print(f"# identidad de trabajo · {r['n']} cosa(s) aprendidas\n")
+        print(r["texto"])
+        return 0
+    finally:
+        hc.close()
+
+
 def cmd_doctor(_args) -> int:
     """Diagnóstico rápido: ¿está todo en su sitio para funcionar?"""
     from . import __version__
@@ -189,7 +229,7 @@ def cmd_doctor(_args) -> int:
               f"{salud['comprobacion']}={salud['integridad']} · "
               f"escribible={salud['escribible']}")
         print("memoria    ", json.dumps(hc.stats(), ensure_ascii=False, default=str))
-        hc.store.close()
+        hc.close()
         return 0
     except Exception as e:
         print(f"ERROR abriendo la memoria: {e}")
@@ -205,7 +245,8 @@ def main(argv=None) -> int:
     dr = sub.add_parser("doctor", help="diagnóstico del entorno")
     dr.add_argument("--full", action="store_true",
                     help="integrity_check completo (más lento) en vez de quick_check")
-    sub.add_parser("hook", help="modo sináptico: para el hook UserPromptSubmit")
+    sub.add_parser("hook", help="modo sináptico: para los hooks de Claude Code")
+    sub.add_parser("identity", help="qué se ha aprendido trabajando")
     sub.add_parser("servers", help="qué servidores MCP hay en marcha y desde cuándo")
     rs = sub.add_parser("restart", help="reiniciar los servidores tras actualizar")
     rs.add_argument("--dry-run", action="store_true",
@@ -239,6 +280,8 @@ def main(argv=None) -> int:
         return cmd_doctor(args)
     if args.cmd == "hook":
         return cmd_hook(args)
+    if args.cmd == "identity":
+        return cmd_identity(args)
     if args.cmd == "servers":
         return cmd_servers(args)
     if args.cmd == "restart":
@@ -275,7 +318,7 @@ def main(argv=None) -> int:
                 _print(hc.remember(texto, args.importance, args.confidence))
         return 0
     finally:
-        hc.store.close()
+        hc.close()
 
 
 if __name__ == "__main__":

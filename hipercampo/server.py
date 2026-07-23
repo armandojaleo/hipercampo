@@ -166,6 +166,34 @@ def hc_forget(dry_run: bool = True) -> dict:
 
 
 @mcp.tool()
+def hc_learn(text: str, tipo: str = "leccion") -> dict:
+    """APRENDER algo sobre CÓMO TRABAJAR (no sobre el mundo). Esto es lo que hoy se
+    pierde al cerrar la sesión y hace que la siguiente tropiece igual. tipo:
+    'regla' (cómo hay que trabajar), 'leccion' (qué salió mal y qué se aprendió),
+    'decision' (qué se decidió y POR QUÉ, para no volver a discutirlo) o
+    'preferencia' (cómo le gusta al usuario que se le responda). Úsalo cuando el
+    usuario corrija tu forma de trabajar, cuando un error enseñe algo, o cuando se
+    cierre una decisión. No caduca por desuso."""
+    return hc.learn(text, tipo)
+
+
+@mcp.tool()
+def hc_identity(k: int = 40) -> dict:
+    """QUIÉN SOY TRABAJANDO: las reglas, lecciones, decisiones y preferencias
+    aprendidas en sesiones ANTERIORES. Léelo al empezar para no partir de cero ni
+    repetir errores ya cometidos. Es la memoria del agente, no la del usuario:
+    se comparte entre todos los proyectos."""
+    return hc.identity(k)
+
+
+@mcp.tool()
+def hc_unlearn(memory_id: int) -> dict:
+    """Desaprender algo de la identidad de trabajo: una regla puede dejar de valer.
+    Se borra de verdad (lo que guía cómo trabajas no debe quedar medio vivo)."""
+    return hc.unlearn(int(memory_id))
+
+
+@mcp.tool()
 def hc_health(full: bool = False) -> dict:
     """¿Está sana la memoria? Comprueba integridad del fichero, esquema, lectura y
     escritura REAL (una escritura de prueba que se deshace, no solo permisos).
