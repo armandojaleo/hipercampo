@@ -241,8 +241,25 @@ def _hook(prompt: str, env: dict) -> str:
 
 def test_el_hook_no_se_pasa_del_presupuesto():
     hc = _memoria()
-    for i in range(6):                                # recuerdos largos de verdad
-        hc.remember(f"nota {i} sobre el despliegue: " + "detalle importante " * 40, 0.9)
+    # Seis recuerdos LARGOS y DISTINTOS ENTRE SÍ. Antes eran seis variantes de la misma
+    # frase (solo cambiaba el índice) y `remember` descartaba cinco por redundantes: el
+    # test creía llenar la memoria con seis y medía el presupuesto sobre UNO.
+    detalles = [
+        "el despliegue arranca con la copia de seguridad de la base y sigue con la "
+        "migración del esquema, que puede tardar varios minutos si hay muchas filas",
+        "el despliegue exige avisar al equipo de soporte con antelación porque durante "
+        "la ventana el panel de administración queda en modo lectura para los clientes",
+        "el despliegue se detiene solo si las pruebas de humo fallan dos veces seguidas "
+        "y entonces revierte al paquete anterior sin intervención de nadie",
+        "el despliegue publica primero en el entorno de preproducción y espera la "
+        "aprobación manual de un responsable antes de tocar las máquinas de producción",
+        "el despliegue deja un registro con la versión, la hora y quién lo lanzó, y ese "
+        "registro se conserva un año entero para poder auditar cualquier incidencia",
+        "el despliegue rota las credenciales del servicio de correo al terminar, de modo "
+        "que las claves antiguas dejan de servir en cuanto la nueva versión está viva",
+    ]
+    guardados = sum(1 for d in detalles if hc.remember(d, 0.9).get("stored"))
+    assert guardados == 6, f"el test necesita 6 recuerdos, se guardaron {guardados}"
     hc.close()
     env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_NAMESPACE="presupuesto",
                HIPERCAMPO_HOOK_BUDGET="120", HIPERCAMPO_LOG="0")

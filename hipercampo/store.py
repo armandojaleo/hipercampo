@@ -554,13 +554,38 @@ class Store:
         )
         self._commit()
 
-    def delete(self, ids: list[int]):
-        self.db.executemany("DELETE FROM memories WHERE id = ? AND namespace = ?",
-                            [(i, self.namespace) for i in ids])
-        self.db.executemany(
-            "DELETE FROM links WHERE (src=? OR dst=?) AND namespace = ?",
-            [(i, i, self.namespace) for i in ids])
-        self._commit()
+    def delete(self, ids: list[int], secure: bool = False):
+        """Borra filas (y sus enlaces) del namespace. Con `secure=True` activa
+        `PRAGMA secure_delete`, que hace que SQLite SOBRESCRIBA con ceros el contenido
+        liberado en vez de dejarlo legible en páginas libres del fichero: es lo que
+        convierte un borrado en un borrado de verdad para un secreto. Recuperar el
+        espacio a disco es aparte (VACUUM); esto asegura que el texto ya no está ahí."""
+        if secure:
+            # Por conexión y transitorio: se restaura después para no pagar el
+            # sobrecoste de sobrescritura en las escrituras normales.
+            self.db.execute("PRAGMA secure_delete = ON")
+        try:
+            self.db.executemany("DELETE FROM memories WHERE id = ? AND namespace = ?",
+                                [(i, self.namespace) for i in ids])
+            self.db.executemany(
+                "DELETE FROM links WHERE (src=? OR dst=?) AND namespace = ?",
+                [(i, i, self.namespace) for i in ids])
+            self._commit()
+        finally:
+            if secure:
+                self.db.execute("PRAGMA secure_delete = OFF")
+
+    def vacuum(self) -> None:
+        """Reescribe el fichero compactándolo: recupera el espacio de lo borrado y,
+        de paso, retira de las páginas libres cualquier resto que un DELETE normal
+        hubiera dejado. NO puede correr dentro de una transacción, así que primero se
+        confirma lo pendiente. Es una operación GLOBAL (todo el fichero, todos los
+        namespaces): reescribe la base entera, puede tardar en bases grandes."""
+        if self._txn_depth:
+            raise RuntimeError("VACUUM no puede ejecutarse dentro de una transacción")
+        self.db.commit()                       # no puede haber nada abierto
+        self.db.execute("VACUUM")
+        self.db.commit()
 
     def mark_dormant(self, ids: list[int]):
         """Adormece recuerdos: olvidados-pero-NO-borrados. Salen de la recuperación

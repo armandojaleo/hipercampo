@@ -55,7 +55,6 @@ licencia, en [ATTRIBUTION.md](ATTRIBUTION.md). Aquí no es negociable.
 Lo pendiente está en [ROADMAP.md](ROADMAP.md). Algunos autocontenidos:
 
 - Persistir los contadores del modelo de sorpresa entre reinicios.
-- Política de purga física / `VACUUM` para lo latente muy antiguo.
 - Un índice LSH para que la recuperación siga siendo sublineal pasados ~100k recuerdos.
 - Ablaciones (sin sorpresa / propagación / consolidación) en `scripts/baselines.py`.
 - Evaluar con un dataset externo (LongMemEval, MemoryAgentBench).

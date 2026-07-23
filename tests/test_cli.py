@@ -135,8 +135,25 @@ def test_remember_y_recall_por_terminal():
     _limpiar_db()
     codigo, salida = _correr("remember", "las ballenas azules son los mayores animales")
     assert codigo == 0 and '"stored": true' in salida.lower(), salida
-    codigo, salida = _correr("recall", "cual es el animal mas grande", "--plain")
+    # Consulta con vocabulario COMPARTIDO. Antes se preguntaba "cual es el animal mas
+    # grande", que es un sinónimo puro: con el suelo de abstención ya calibrado
+    # (ANSWER_MIN_SCORE, medido en scripts/calibrate.py) la memoria se calla ahí, y hace
+    # bien — en modo léxico el parafraseo sin palabras comunes es justo lo que no cubre.
+    # Este test comprueba la FONTANERÍA del terminal, no la calidad semántica.
+    codigo, salida = _correr("recall", "cuales son los mayores animales", "--plain")
     assert codigo == 0 and "ballenas" in salida, salida
+    _limpiar_db()
+
+
+def test_recall_se_calla_ante_un_sinonimo_puro_en_modo_lexico():
+    """El reverso honesto del test de arriba: sin palabras en común, el modo léxico
+    NO responde, y eso es la abstención funcionando, no un fallo. Queda escrito para
+    que si algún día responde sea una decisión medida y no una regresión silenciosa."""
+    _limpiar_db()
+    _correr("remember", "las ballenas azules son los mayores animales")
+    codigo, salida = _correr("recall", "cual es el animal mas grande", "--plain")
+    assert codigo == 0, salida
+    assert "ballenas" not in salida, salida
     _limpiar_db()
 
 

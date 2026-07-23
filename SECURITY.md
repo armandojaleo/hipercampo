@@ -38,8 +38,22 @@ local-first, un proceso por contexto—. Para separar:
 - **Cifrado** del contenido en reposo.
 - **Autenticación / control de acceso** por herramienta.
 - **Verificación de veracidad**: guarda lo que le dices; no juzga si es cierto.
-- **Borrado seguro**: `hc_forget` elimina filas, pero pueden quedar restos en el
-  fichero SQLite hasta un `VACUUM`.
+- **Cifrado** del contenido en reposo (ver arriba): mientras no lo haya, para borrar
+  un secreto de verdad usa la purga física, no el olvido.
+
+## Borrar de verdad: olvido vs. purga
+
+Conviene no confundir dos cosas que sí garantiza:
+
+- `hc_forget` (y el sueño) **no borran**: adormecen. El recuerdo sale de la
+  recuperación normal pero sigue en el fichero y puede resurgir (`hc_muse`). Es
+  memoria, no supresión.
+- Para un secreto que nunca debió guardarse, un derecho de supresión, o lo latente
+  muy antiguo, está la **purga física**: `hipercampo purge --ids …` o
+  `--older-than DÍAS`. Hace un **borrado seguro** (SQLite sobrescribe el contenido
+  liberado, no lo deja legible en páginas libres) y un `VACUUM` que devuelve el
+  espacio al disco. Es irreversible y pide confirmación. `hc_unlearn` también borra
+  de forma segura la identidad de trabajo.
 
 ## Salvaguardas integradas (defensa en profundidad)
 

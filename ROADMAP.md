@@ -54,7 +54,11 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
   `importance`/`confidence` acotados, `k`/`hops` acotados, namespace saneado.
 - 🟢 Migraciones versionadas (`PRAGMA user_version`, 6 pasos idempotentes,
   copia previa, reanudables). Tests en `tests/test_migration.py`.
-- ⚪ `VACUUM` / borrado seguro para `hc_forget`.
+- 🟢 **Purga física / borrado seguro** (no confundir con el olvido, que solo adormece):
+  `hipercampo purge --ids …` / `--older-than DÍAS` para secretos, derecho de supresión
+  o latentes muy antiguos. Borrado seguro (SQLite sobrescribe, no deja el texto en
+  páginas libres) + `VACUUM`, con confirmación. `hc_unlearn` también borra seguro.
+  Tests en `tests/test_purge.py` (verifica que el texto ya no está en los bytes del `.db`).
 
 ## Fase 1b — Calibrar la sorpresa
 - 🟢 **Umbral adaptativo**: "predecible" = cuantil inferior de la sorpresa reciente
@@ -64,14 +68,21 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
   y reforzar solo si es redundante (no por un match débil al vetar por predecible).
 - ⚪ **Persistencia real** de los contadores unigrama/bigrama por namespace (hoy se
   reconstruye solo desde lo guardado; lo visto-y-rechazado no persiste al reiniciar).
-- ⚪ Calibrar `MIN_RECALL_SCORE` midiendo la **tasa de falsas recuperaciones** al crecer
-  N (no solo Recall@k).
+- 🟢 Calibrada la **abstención** midiendo la tasa de falsas recuperaciones al crecer N
+  (`scripts/calibrate.py`). Hallazgo: `MIN_RECALL_SCORE` era **inerte** (moverlo no cambia
+  ni MRR ni falsaRec); la palanca real, `ANSWER_MIN_SCORE`, estaba **por debajo** del
+  percentil 5 de las consultas ajenas, así que no filtraba nada. Recalibrado **0.08→0.19**
+  (léxico) y **0.05→0.17** (semántico): falsaRec **1.00→0.17** (léxico, estable en
+  N=20/100/500) y **~0.10** (semántico), manteniendo vivo el sinónimo. `RECALL_Z` resultó
+  inerte a escala. Se intentó normalizar por longitud y se **descartó tras medirlo** (a
+  falsaRec igualada perdía en los dos bancos; queda documentado como límite → trocear).
 
 ## Fase 2 — Credibilidad: demostrar la calidad
 - 🟢 **Baselines** (`scripts/baselines.py`): BM25 y embeddings+coseno vs hipercampo.
   Resultado medido: hipercampo+semántico gana en MRR global (0.95 vs 0.87 de
-  embeddings); en léxico ya supera a BM25 (erratas 0.95 vs 0.77). Pierde en
-  abstención (falsaRec 1.00 vs 0.20) -> calibrar `MIN_RECALL_SCORE`.
+  embeddings); en léxico ya supera a BM25 (erratas 0.95 vs 0.77). La abstención
+  (falsaRec) estaba en 1.00 por un umbral mal puesto; **calibrada a 0.17-0.20**, a la
+  par de embeddings (ver Fase 1b y `scripts/calibrate.py`).
 - 🟡 **Ablación**: sin propagación (medida: no cambia en este corpus). Faltan
   sin-sorpresa / sin-consolidación / sin-confianza aisladas.
 - ⚪ Sobre datasets **estándar** (LongMemEval, MemoryAgentBench), no solo el propio.

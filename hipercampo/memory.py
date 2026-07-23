@@ -36,18 +36,66 @@ NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
 SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
 SUPERSEDE_HINT_SIMILARITY = 0.72 # por encima -> avisamos de posible actualización
 SUPERSEDED_RECALL_PENALTY = 0.2  # cuánto se demueve un recuerdo superado al recuperar
+# CALIBRADOS con scripts/calibrate.py sobre N=500 (30 consultas positivas, 30 ajenas).
+# MIN_RECALL_SCORE resultó INERTE: moverlo de 0.03 a 0.08 cambia el MRR global ≤0.002
+# y la tasa de falsas recuperaciones NADA. Se deja donde estaba porque no es la palanca
+# (el ROADMAP pedía calibrar este; la medición dice que el que manda es el de abajo).
 MIN_RECALL_SCORE = 0.03          # suelo por ITEM: por debajo no se incluye en la respuesta
-ANSWER_MIN_SCORE = 0.08          # suelo para RESPONDER: si ni el mejor llega, abstención
+# La palanca real. Estaba en 0.08, POR DEBAJO del percentil 5 de las consultas ajenas
+# (0.100): no era una puerta, dejaba pasar la distribución negativa entera, y de ahí el
+# falsaRec 1.00. Las clases sí se separan en la mediana (positivas 0.327 vs ajenas 0.160).
+# Hay un ACANTILADO en 0.195 y el valor se eligió al lado que degrada suave:
+#   suelo   synonym  global  falsaRec
+#   0.190     0.201   0.625      0.17   <- aquí
+#   0.240     0.050   0.533      0.07   (el sinónimo ya casi no sobrevive)
+#   0.280     0.000   0.500      0.00   (falsaRec 0, pero ya no recupera por parafraseo)
+# Con 0.19 la tasa de falsos se mantiene en 0.17 a las tres escalas medidas (N real
+# 20/44/216) con MRR global 0.742/0.736/0.625, y el sinónimo sigue vivo, que es lo que
+# distingue a hipercampo de BM25. Subir a 0.28 daría el 0.00 vistoso a cambio de dejar
+# de recuperar por parafraseo: no compensa.
+# Es un COMPROMISO elegido y medido, no un óptimo: ninguna fila gana en las dos columnas.
+ANSWER_MIN_SCORE = 0.19          # suelo para RESPONDER: si ni el mejor llega, abstención
+# INERTE a escala: medido a N=500, z=2.0 y z=3.0 dan filas idénticas en todo el barrido
+# (el mejor ancla supera siempre mu+3sd con una cola de cientos). Solo muerde con memorias
+# pequeñas, que es donde se puso y donde sigue haciendo falta. No se toca sin medirlo AHÍ.
 RECALL_Z = 2.0                   # cuántas desviaciones sobre el ruido para NO abstenerse
-# El gancho semántico COMPRIME las activaciones (mezcla un vector denso donde casi
-# todo se parece un poco a casi todo): medido sobre el mismo corpus, los aciertos
-# bajan de 0.12-0.30 a 0.09-0.21 y se pegan al ruido, dejando un margen de 0.017 con
-# los umbrales léxicos. Con la escala aplastada el suelo absoluto discrimina peor y
-# el contraste relativo discrimina MEJOR, así que en este régimen se baja el suelo y
-# se exige más z. Cada par está medido en su propio régimen; no son intercambiables.
-ANSWER_MIN_SCORE_SEM = 0.05
-RECALL_Z_SEM = 2.5
+# CORRECCIÓN medida (scripts/calibrate.py --semantic, N=500). Aquí decía que el gancho
+# semántico COMPRIME las activaciones contra el ruido, y que por eso había que BAJAR el
+# suelo (a 0.05) y exigir más z. Sobre este corpus es al revés: el semántico separa
+# MEJOR que el léxico, porque hunde las ajenas, no porque suba los aciertos.
+#            positivas p5/med/p95        ajenas p5/med/p95
+#   léxico     0.112/0.327/0.518          0.099/0.160/0.239
+#   semántico  0.164/0.298/0.462          0.078/0.124/0.180   <- ajenas más abajo
+# Con 0.05 el suelo quedaba por debajo de TODAS las ajenas: falsaRec 0.93. Calibrado a
+# 0.17 rinde mejor que el léxico en las DOS columnas a la vez (N real 20/44/219):
+#   falsaRec 0.07 / 0.07 / 0.10   ·   MRR global 0.833 / 0.814 / 0.751
+# Cada par se mide en su propio régimen; no son intercambiables.
+ANSWER_MIN_SCORE_SEM = 0.17
+RECALL_Z_SEM = 2.5               # inerte a N=500 igual que RECALL_Z; se mantiene por N pequeño
 NOISE_MIN_N = 5                  # nº mínimo de recuerdos DE LA COLA para aplicar el z-score
+# LÍMITE MEDIDO Y DECLARADO: la DILUCIÓN por longitud. En un bundle VSA la señal de
+# cada componente se reparte entre todo lo superpuesto, así que la activación cae como
+# 1/√T con el nº de palabras del recuerdo (medido: activación×√T se mantiene en ~0.95-1.21
+# mientras la longitud varía 54x). Consecuencia real: un hecho ahogado en 60 palabras de
+# relleno es IRRECUPERABLE (0 de 10 en scripts/calibrate.py).
+#
+# Se intentó corregir multiplicando por (T/12)^exp y se DESCARTÓ tras medirlo. Parecía
+# arreglarlo (0/10 -> 10/10), pero era un espejismo: el suelo se dejaba sin recalibrar,
+# de modo que el sistema simplemente respondía mucho más a menudo (falsaRec 0.17 -> 0.73).
+# Igualando la tasa de falsos, la corrección PIERDE en los dos bancos a la vez:
+#   exp   suelo*  falsaRec   MRR cortos   MRR largos(rel=20)
+#   0.00    0.19      0.17        0.625                0.800   <- sin corregir
+#   0.25    0.39      0.17        0.188                0.000
+#   0.50    0.39      0.17        0.175                0.300
+# El motivo: reforzar por longitud sube también a los distractores largos y le quita la
+# ventaja al hecho corto y preciso. La respuesta correcta a un texto largo no es un factor
+# de escala, sino TROCEARLO en hechos atómicos (ver ROADMAP). No se reintenta sin un banco
+# que tenga objetivos largos Y cortos y sin igualar falsaRec antes de comparar.
+# Interruptor SOLO para calibrar (scripts/calibrate.py): con la puerta abierta se
+# puede observar el ranking que HABRÍA salido y barrer umbrales sobre las mismas
+# señales, en vez de reejecutar la memoria una vez por umbral. En producción no se
+# toca: apagarlo elimina la abstención.
+GATE_ENABLED = True
 REINFORCE_MIN_SCORE = 0.10       # solo se refuerza lo claramente relevante (no roce)
 UPDATE_MIN_SIMILARITY = 0.60     # hc_update no reemplaza si no hay match así de bueno
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
@@ -87,6 +135,43 @@ def creative_fit(similarity: float) -> float:
     if similarity <= DREAM_IDEAL:
         return (similarity - DREAM_LOW) / (DREAM_IDEAL - DREAM_LOW)
     return (DREAM_HIGH - similarity) / (DREAM_HIGH - DREAM_IDEAL)
+
+
+def abstention_gate(directa, n_top: int, semantic: bool = False,
+                    suelo: float | None = None, zmin: float | None = None) -> tuple[bool, dict]:
+    """
+    ¿Hay material suficiente para RESPONDER, o toca callarse?
+
+    `directa` son las activaciones DIRECTAS (sin propagación) ordenadas de mayor a
+    menor; `n_top` cuántas van a devolverse. Devuelve (responder, diagnóstico), y el
+    diagnóstico lleva las señales crudas (mejor, mu, sd, n_cola) para que se pueda
+    barrer umbrales sin volver a ejecutar la memoria — ver `scripts/calibrate.py`.
+
+    Función PURA a propósito: la decisión de abstenerse es el parámetro más delicado
+    del sistema y tiene que poder medirse aparte, no solo observarse desde fuera.
+    """
+    if suelo is None or zmin is None:
+        _suelo, _z = ((ANSWER_MIN_SCORE_SEM, RECALL_Z_SEM) if semantic
+                      else (ANSWER_MIN_SCORE, RECALL_Z))
+        suelo = _suelo if suelo is None else suelo
+        zmin = _z if zmin is None else zmin
+
+    mejor = float(directa[0]) if len(directa) else 0.0
+    n_excl = min(max(n_top, 1), max(1, len(directa) - NOISE_MIN_N))
+    cola = directa[n_excl:]
+    diag = {"mejor": mejor, "suelo": suelo, "zmin": zmin, "n_cola": len(cola),
+            "mu": None, "sd": None, "umbral_z": None, "motivo": None}
+
+    if mejor < suelo:                                 # nada relevante en absoluto
+        diag["motivo"] = "nada relevante"
+        return False, diag
+    if len(cola) >= NOISE_MIN_N:
+        mu, sd = float(cola.mean()), float(cola.std())
+        diag.update(mu=mu, sd=sd, umbral_z=mu + zmin * sd)
+        if mejor < mu + zmin * sd:                    # el mejor no sobresale del ruido
+            diag["motivo"] = "nada destaca del ruido"
+            return False, diag
+    return True, diag
 
 
 # Solo se reintenta lo TRANSITORIO. Repetir una escritura que quizá sí se confirmó
@@ -175,6 +260,9 @@ class Hipercampo:
             self.surprise.learn(row["text"])
         from .roles import RoleMemory
         self.roles = RoleMemory(self.store)   # memoria composicional de hechos
+        # Señales crudas de la última decisión de abstención (diagnóstico, no estado):
+        # lo consume scripts/calibrate.py para barrer umbrales sin reejecutar la memoria.
+        self.ultima_decision: dict = {}
 
     def remember_fact(self, fields: dict, importance: float = 0.6,
                       confidence: float = 0.6, source: str | None = None) -> dict:
@@ -240,7 +328,7 @@ class Hipercampo:
         fila = ss.get(memory_id)
         if fila is None:
             return {"error": f"no hay nada aprendido con id {memory_id}"}
-        ss.delete([memory_id])
+        ss.delete([memory_id], secure=True)   # una regla retirada no queda medio legible
         audit.log("unlearn", f"olvidado a propósito id={memory_id}")
         return {"unlearned": memory_id, "text": fila["text"]}
 
@@ -529,25 +617,20 @@ class Hipercampo:
         # ir por debajo de ANSWER_MIN_SCORE: solo el MEJOR tiene que justificar respuesta.
         top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
         if top:
-            mejor = float(directa[0])                 # el mejor ANCLA directo
-            suelo, zmin = ((ANSWER_MIN_SCORE_SEM, RECALL_Z_SEM) if semantic_active()
-                           else (ANSWER_MIN_SCORE, RECALL_Z))
-            n_excl = min(len(top), max(1, len(directa) - NOISE_MIN_N))
-            cola = directa[n_excl:]
-            if mejor < suelo:                         # nada relevante en absoluto
-                audit.log("recall", "abstención: nada relevante",
-                          consulta=query[:60], mirados=len(rows),
-                          mejor=round(mejor, 3), suelo=suelo)
-                top = []
-            elif len(cola) >= NOISE_MIN_N:
-                mu, sd = float(cola.mean()), float(cola.std())
-                if mejor < mu + zmin * sd:            # el mejor no sobresale del ruido
+            responder, diag = abstention_gate(directa, len(top), semantic_active())
+            self.ultima_decision = dict(diag, consulta=query[:60], n=len(scored))
+            if not responder and GATE_ENABLED:
+                if diag["motivo"] == "nada relevante":
+                    audit.log("recall", "abstención: nada relevante",
+                              consulta=query[:60], mirados=len(rows),
+                              mejor=round(diag["mejor"], 3), suelo=diag["suelo"])
+                else:
                     audit.log("recall", "abstención: nada destaca del ruido",
                               consulta=query[:60], n=len(scored),
-                              mejor=round(mejor, 3),
-                              umbral=round(mu + zmin * sd, 3),
-                              ruido=f"{mu:.3f}±{sd:.3f}")
-                    top = []                          # abstención
+                              mejor=round(diag["mejor"], 3),
+                              umbral=round(diag["umbral_z"], 3),
+                              ruido=f"{diag['mu']:.3f}±{diag['sd']:.3f}")
+                top = []                              # abstención
         # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
         # para no darle utilidad a falsos positivos que luego se auto-protegerían.
         try:
@@ -679,6 +762,55 @@ class Hipercampo:
         audit.log("forget", f"{len(to_prune)} adormecido(s)", ensayo=dry_run or None)
         return {"olvidados": len(to_prune), "ids": to_prune, "dry_run": dry_run,
                 "nota": "latentes, no borrados; pueden resurgir con muse"}
+
+    # 4b · PURGA FÍSICA (el reverso consciente del olvido) ----------------
+    @resiliente
+    def purge(self, older_than_days: float | None = None, ids: list[int] | None = None,
+              dry_run: bool = False, vacuum: bool = True) -> dict:
+        """Borrado FÍSICO y seguro, la contraparte deliberada de `forget()`.
+
+        `forget()` adormece y es reversible a propósito: un recuerdo puede resurgir.
+        Pero hay dos casos en los que eso no basta y hay que borrar DE VERDAD:
+          - un secreto que nunca debió guardarse (o un derecho de supresión ejercido),
+          - lo latente MUY antiguo, que ya no va a resurgir y solo ocupa.
+        Por eso esta operación es explícita, humana y separada del ciclo automático:
+        olvidar es del sueño; purgar es una decisión que se toma a conciencia.
+
+        Se elige el objetivo con UNO de dos criterios (nunca ambo a la vez):
+          - `ids`: exactamente esos recuerdos (p. ej. el secreto localizado con recall).
+          - `older_than_days`: los LATENTES cuyo último acceso es más viejo que eso.
+        El borrado es SEGURO (sobrescribe, no deja el texto en páginas libres) y, salvo
+        que se pida lo contrario, hace `VACUUM` para devolver el espacio al disco.
+        `dry_run=True` dice qué se borraría sin tocar nada.
+        """
+        if (ids is None) == (older_than_days is None):
+            return {"error": "usa exactamente uno: ids=[...] o older_than_days=N"}
+
+        if ids is not None:
+            objetivo = [r for r in self.store.all(only_active=False, include_dormant=True,
+                                                  own_only=True) if r["id"] in set(ids)]
+        else:
+            umbral = time.time() - older_than_days * 86400
+            objetivo = [r for r in self.store.all(only_active=False, include_dormant=True,
+                                                  own_only=True)
+                        if r["dormant"] and r["last_access"] < umbral]
+
+        elegidos = [r["id"] for r in objetivo]
+        if dry_run or not elegidos:
+            audit.log("purge", f"{len(elegidos)} a purgar (ensayo)" if dry_run
+                      else "nada que purgar", ids=",".join(map(str, elegidos)) or None)
+            return {"purgados": 0 if dry_run else len(elegidos), "ids": elegidos,
+                    "dry_run": dry_run,
+                    "nota": "borrado FÍSICO e irreversible; esto es un ensayo"
+                            if dry_run else "nada coincidía con el criterio"}
+
+        self.store.delete(elegidos, secure=True)      # sobrescribe, no solo desenlaza
+        if vacuum:
+            self.store.vacuum()                       # y recupera el espacio del disco
+        audit.log("purge", f"{len(elegidos)} purgado(s) FÍSICAMENTE",
+                  vacuum=vacuum or None, ids=",".join(map(str, elegidos)))
+        return {"purgados": len(elegidos), "ids": elegidos, "vacuum": vacuum,
+                "nota": "borrado físico e irreversible; ya no está en el fichero"}
 
     # 5 · RECUERDO INSPIRADOR --------------------------------------------
     @resiliente

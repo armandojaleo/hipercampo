@@ -241,6 +241,41 @@ def cmd_identity(_args) -> int:
         hc.close()
 
 
+def cmd_purge(args) -> int:
+    """Borrado FÍSICO y seguro. Irreversible: se enseña primero qué se va a borrar
+    (ensayo) y se pide confirmación, salvo --yes. Es lo contrario del olvido normal,
+    que solo adormece; esto quita el texto del fichero y recupera el espacio."""
+    if (args.ids is None) == (args.older_than is None):   # 0 días es válido, no "falta"
+        print("Elige UNO: --ids 3,7,9  o  --older-than DÍAS.", file=sys.stderr)
+        return 2
+    ids = [int(x) for x in args.ids.split(",")] if args.ids else None
+    hc = _hc()
+    try:
+        ensayo = hc.purge(older_than_days=args.older_than, ids=ids, dry_run=True)
+        if "error" in ensayo:
+            print(ensayo["error"], file=sys.stderr); return 2
+        objetivo = ensayo["ids"]
+        if not objetivo:
+            print("Nada coincide con ese criterio: no hay nada que purgar.")
+            return 0
+        print(f"Se BORRARÁN FÍSICAMENTE {len(objetivo)} recuerdo(s): "
+              f"{', '.join(map(str, objetivo))}")
+        print("Esto es irreversible (no es el olvido, que solo adormece).")
+        if not args.yes:
+            try:
+                if input("¿Seguro? escribe 'si' para continuar: ").strip().lower() not in (
+                        "si", "sí", "s", "yes", "y"):
+                    print("Cancelado."); return 0
+            except EOFError:
+                print("\nSin confirmación (usa --yes para no interactivo). Cancelado.")
+                return 1
+        r = hc.purge(older_than_days=args.older_than, ids=ids, vacuum=not args.no_vacuum)
+        _print(r)
+        return 0
+    finally:
+        hc.close()
+
+
 def cmd_log(args) -> int:
     """Qué ha decidido hipercampo: el registro, con filtros y en vivo."""
     import time as _t
@@ -354,6 +389,13 @@ def main(argv=None) -> int:
             sp.add_argument("--confidence", type=float, default=0.5)
     bk = sub.add_parser("backup", help="copia de seguridad consistente")
     bk.add_argument("dest", nargs="?")
+    pg = sub.add_parser("purge", help="borrado FÍSICO y seguro (secretos, RGPD, espacio)")
+    pg.add_argument("--ids", help="ids concretos a borrar, separados por comas")
+    pg.add_argument("--older-than", type=float, metavar="DÍAS",
+                    help="purga los LATENTES sin acceso desde hace más de N días")
+    pg.add_argument("--no-vacuum", action="store_true",
+                    help="no recuperar espacio (más rápido; el texto igual se sobrescribe)")
+    pg.add_argument("--yes", action="store_true", help="no pedir confirmación")
     lg = sub.add_parser("log", help="qué ha decidido hipercampo últimamente")
     lg.add_argument("-n", type=int, default=20, help="cuántas líneas (0 = todas)")
     lg.add_argument("-f", "--follow", action="store_true",
@@ -389,6 +431,8 @@ def main(argv=None) -> int:
     if args.cmd == "backup":
         from .backup import backup
         print("Copia creada en:", backup(args.dest)); return 0
+    if args.cmd == "purge":
+        return cmd_purge(args)
     if args.cmd == "log":
         return cmd_log(args)
 

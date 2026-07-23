@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+## [0.1.0b1] — 2026-07-23
+
+Primera **beta**: la superficie de la API queda congelada (contrato en
+`tests/test_api_contract.py`). Respecto a la última alpha: coste de tokens auditado y
+recortado (87k → 26k por sesión), abstención **medida y calibrada** en vez de asumida,
+purga física segura, cobertura 69% → 81% con suelo en CI, y CI en los tres sistemas.
+
 ### Added
 - **Token budget: hipercampo now knows what it costs you.** Nobody had ever measured
   it. The bill turned out to be the opposite of what was assumed: the hook was the
@@ -65,6 +72,26 @@ All notable changes to this project are documented here. Format loosely based on
   what the MCP client knows how to handle.
 
 ### Changed
+- **The abstention threshold was measured, and it had never been a gate.** The
+  ROADMAP asked to calibrate `MIN_RECALL_SCORE`; measuring it (new `scripts/calibrate.py`,
+  a sweep of 30 in-domain queries + 30 unrelated ones at N=20/100/500) showed that knob
+  is **inert** — moving it 0.03→0.08 changes neither MRR (≤0.002) nor false-recall (none).
+  The real lever, `ANSWER_MIN_SCORE`, sat at **0.08 — below the 5th percentile of the
+  *unrelated* queries (0.100)**: it let the whole negative distribution through, which is
+  where false-recall 1.00 came from. The classes do separate at the median (positives
+  0.327 vs strangers 0.160), so it is a placement problem, not an impossible one.
+  Re-calibrated to **0.19** (lexical) and **0.17** (semantic): false-recall **1.00 → 0.17**
+  (lexical, stable across N) and **~0.10** (semantic), while keeping synonym recall alive —
+  the thing that separates hipercampo from BM25. This does cost some paraphrase recall
+  (the measured price of the compromise, MRR 0.807 → 0.71 lexical); 0.28 would reach
+  false-recall 0.00 but kills synonym entirely, so it was not taken. `RECALL_Z` turned out
+  inert at scale (identical rows for z=2.0 and z=3.0 at N=500); it still bites on tiny
+  memories, where it was put. A length-normalisation of the activation was built and
+  **discarded after measuring it**: it seemed to rescue long memories (a fact buried in 60
+  filler words is otherwise unrecoverable, 0/10) but, with false-recall held equal, it lost
+  on *both* benchmarks at once — the apparent win was just answering more often. The honest
+  fix for a long text is to split it into atomic facts, not to rescale; the finding is left
+  documented in the code as a measured limit.
 - **The token count is never exact, and now says so.** It was declared exact when
   `tiktoken` was installed. It is not: `cl100k_base` is *OpenAI's* tokenizer and what
   is being measured is what it costs **Claude**, whose tokenizer Anthropic does not
@@ -91,6 +118,18 @@ All notable changes to this project are documented here. Format loosely based on
   now reads bytes and decodes UTF-8 explicitly.
 
 ### Added
+- **Physical purge: the deliberate counterpart to forgetting.** `hc_forget` and sleep
+  only *dormant* a memory — reversible on purpose, it can resurface. That is memory, not
+  erasure, and for a secret that should never have been stored (or a right-to-erasure
+  request, or very old dormant clutter) it is not enough. New `hipercampo purge --ids …`
+  / `--older-than DAYS` deletes for real: a **secure delete** (SQLite overwrites the freed
+  content instead of leaving the text legible in free pages) followed by `VACUUM` to
+  return the space to disk. It is irreversible and asks for confirmation first. `hc_unlearn`
+  now also secure-deletes the working-identity it removes. `tests/test_purge.py` proves the
+  hard part: after a purge the secret's bytes are **gone from the `.db` file**, not just
+  unlinked from the table. SECURITY.md corrected — it previously claimed `hc_forget`
+  deletes rows; it does not, and conflating the two is exactly the kind of false assurance
+  this project avoids.
 - **A much more detailed decision log.** `recall` now records how many memories were
   scanned, the best score, which ids won, which linked projects were consulted and
   the elapsed ms; an abstention records the threshold and the noise it was measured

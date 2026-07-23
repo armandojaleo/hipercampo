@@ -93,17 +93,21 @@ categoría + tasa de **falsa recuperación** (consultas ajenas que devuelven alg
 | método | keyword | typo | synonym | global | falsaRec |
 |--------|:---:|:---:|:---:|:---:|:---:|
 | BM25 (léxico exacto) | 1.00 | 0.77 | 0.33 | 0.70 | 1.00 |
-| embeddings + coseno | 0.95 | 0.88 | 0.79 | 0.87 | **0.20** |
-| hipercampo (léxico) | 1.00 | 0.95 | 0.37 | 0.77 | 1.00 |
-| **hipercampo + semántico** | 1.00 | 0.95 | **0.90** | **0.95** | 1.00 |
+| embeddings + coseno | 0.95 | 0.88 | 0.77 | 0.87 | 0.20 |
+| hipercampo (léxico) | 1.00 | 0.85 | 0.29 | 0.71 | **0.00** |
+| **hipercampo + semántico** | 1.00 | 0.95 | **0.75** | **0.90** | **0.00** |
 
 Lectura honesta:
-- **En ranking (MRR), hipercampo+semántico gana** (0.95): junta precisión léxica
-  (keyword/typo) con alcance semántico (sinónimos). En léxico puro ya supera a BM25,
-  sobre todo en **erratas** (0.95 vs 0.77) gracias a los trigramas de carácter.
-- **En abstención, pierde**: embeddings rechaza negativas con su umbral de coseno
-  (falsaRec 0.20); hipercampo aún no (1.00). Hay que calibrar `MIN_RECALL_SCORE`.
-- Corpus **pequeño y sintético**: es una señal, no una prueba a escala. Ver [ROADMAP.md](ROADMAP.md).
+- **En ranking (MRR), hipercampo+semántico gana** (0.90 vs 0.87 de embeddings): junta
+  precisión léxica (keyword/typo) con alcance semántico (sinónimos). En léxico puro ya
+  supera a BM25, sobre todo en **erratas** gracias a los trigramas de carácter.
+- **En abstención ya no pierde**: tras calibrar el umbral (`ANSWER_MIN_SCORE`, ver
+  abajo) rechaza las consultas ajenas mejor que embeddings en este corpus (falsaRec
+  0.00 vs 0.20). El umbral estaba mal puesto, por debajo del ruido; medirlo lo arregló.
+- **Honestidad sobre la escala**: 0.00 es a N=20. En el barrido a N=500
+  (`scripts/calibrate.py`) la tasa se estabiliza en **0.17** (léxico) / **~0.10**
+  (semántico) — sigue a la par de embeddings, pero no es cero. Corpus pequeño y
+  sintético: una señal, no una prueba a escala. Ver [ROADMAP.md](ROADMAP.md).
 
 ## Escala y latencia (medido)
 

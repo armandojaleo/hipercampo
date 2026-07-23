@@ -93,17 +93,20 @@ methods on the same corpus (10 facts + 10 confusable distractors). MRR per categ
 | method | keyword | typo | synonym | global | falseRec |
 |--------|:---:|:---:|:---:|:---:|:---:|
 | BM25 (exact lexical) | 1.00 | 0.77 | 0.33 | 0.70 | 1.00 |
-| embeddings + cosine | 0.95 | 0.88 | 0.79 | 0.87 | 0.20 |
-| hipercampo (lexical) | 1.00 | 0.91 | 0.51 | 0.81 | **0.20** |
-| **hipercampo + semantic** | 1.00 | 0.95 | **0.90** | **0.95** | ~0.20 |
+| embeddings + cosine | 0.95 | 0.88 | 0.77 | 0.87 | 0.20 |
+| hipercampo (lexical) | 1.00 | 0.85 | 0.29 | 0.71 | **0.00** |
+| **hipercampo + semantic** | 1.00 | 0.95 | **0.75** | **0.90** | **0.00** |
 
 Honest reading:
-- **On ranking (MRR), hipercampo+semantic wins** (0.95): it fuses lexical precision
-  (keyword/typo) with semantic reach (synonyms). In pure-lexical mode it already
-  beats BM25, especially on **typos** thanks to character trigrams.
-- **Abstention now works**: a noise-relative (z-score) threshold brings false-recall
-  down to **0.20**, on par with embeddings' cosine cutoff (was 1.00).
-- The corpus is **small and synthetic**: a signal, not proof at scale. See [ROADMAP.md](ROADMAP.md).
+- **On ranking (MRR), hipercampo+semantic wins** (0.90 vs 0.87 for embeddings): it
+  fuses lexical precision (keyword/typo) with semantic reach (synonyms). In
+  pure-lexical mode it already beats BM25, especially on **typos** (character trigrams).
+- **Abstention now works**: the threshold (`ANSWER_MIN_SCORE`) was mis-set *below* the
+  noise floor and never filtered. Measuring and re-calibrating it (see `scripts/calibrate.py`)
+  brings false-recall to **0.00** here — better than embeddings' cosine cutoff (0.20).
+- **Honest about scale**: 0.00 is at N=20. On the N=500 sweep the rate settles at
+  **0.17** (lexical) / **~0.10** (semantic) — still on par with embeddings, but not zero.
+  Small, synthetic corpus: a signal, not proof at scale. See [ROADMAP.md](ROADMAP.md).
 
 ## Scale & latency (measured)
 
