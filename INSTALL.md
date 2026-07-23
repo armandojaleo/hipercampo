@@ -1,13 +1,68 @@
-# Guía de instalación de hipercampo
+# hipercampo · Installation guide
 
-De cero a "Claude tiene memoria" en unos minutos. Elige **una** de las dos vías
-(A: Python local — la más simple para empezar; B: Docker — más portable).
+🌍 **Español: [INSTALL.es.md](INSTALL.es.md)** · You are reading the English version.
 
-Requisitos: **Python 3.11+** (vía A) o **Docker** (vía B). Windows, macOS o Linux.
+From zero to "Claude has memory" in a few minutes. Pick **one** of the two paths
+(A: local Python — the simplest way to start; B: Docker — more portable).
+
+Requirements: **Python 3.11+** (path A) or **Docker** (path B). Windows, macOS or Linux.
 
 ---
 
-## Paso 0 · Conseguir el código
+## The map: how memory is organised
+
+Before configuring anything, the mental model. All memory lives in **a single
+SQLite file**. Inside it, *namespaces* are separate drawers. Here is an example
+with two imaginary projects, `webshop` and `blog`:
+
+```
+                 A SINGLE FILE:  ~/.hipercampo/hipercampo.db
+                 ────────────────────────────────────────────
+                   (namespaces are drawers inside it)
+
+   ┌─ __self__ ─────────────┐        ┌─ personal ─────────────┐
+   │ the agent's working    │        │ who you are:           │
+   │ identity: rules,       │        │ role, preferences,     │
+   │ decisions, lessons     │        │ how you like to work   │
+   └────────────────────────┘        └────────────────────────┘
+     read at every session             "personal" server, global
+
+   ┌─ proj-webshop ─────────┐        ┌─ proj-blog ────────────┐
+   │ the shop's technical   │        │ the blog's technical   │
+   │ side: stack, deploys,  │        │ side: stack, deploys,  │
+   │ gotchas, decisions     │        │ gotchas, decisions     │
+   └────────────────────────┘        └────────────────────────┘
+        ▲                                 ▲
+        │ "project" server                │ "project" server
+        │ (the shop's .mcp.json)          │ (the blog's .mcp.json)
+     ~/code/webshop                    ~/code/blog
+
+
+   WHO SEES WHOM   (with HIPERCAMPO_LINKED="*")
+   ───────────────────────────────────────────
+    working on webshop:   ══> WRITES to  proj-webshop  ← and only there
+                          ──> reads      personal, __self__, proj-blog
+
+    working on blog:      ══> WRITES to  proj-blog
+                          ──> reads      personal, __self__, proj-webshop
+
+   ══> WRITE arrow: only one, into your own drawer
+   ──> READ arrow: towards linked drawers, and it never comes back
+```
+
+**The asymmetry is the guarantee**: what is linked is **read, never touched**.
+Storing, reinforcing, updating, consolidating and forgetting operate on your own
+project alone. A project that is not linked is simply invisible.
+
+> ⚠️ **The `default` drawer.** If you store memories before setting
+> `HIPERCAMPO_NAMESPACE`, they land in a drawer called `default`. It is not an
+> error — it works — but it is a drawer with no owner: every project reads it and
+> none feels it is theirs. If that happened to you, split its contents into the
+> drawers they belong to (see *Moving memories between drawers*, below).
+
+---
+
+## Step 0 · Get the code
 
 ```bash
 git clone https://github.com/armandojaleo/hipercampo.git
@@ -16,66 +71,66 @@ cd hipercampo
 
 ---
 
-## Vía A · Instalar desde PyPI (recomendada)
+## Path A · Install from PyPI (recommended)
 
 ```bash
-pip install hipercampo                 # o: pip install "hipercampo[semantic]"
+pip install hipercampo                 # or: pip install "hipercampo[semantic]"
 ```
 
-### Desde el código fuente (colaboradores)
+### From source (contributors)
 
 ```bash
 git clone https://github.com/armandojaleo/hipercampo.git
 cd hipercampo && pip install -e .
 ```
 
-### A.2 Comprobar que funciona (sin Claude todavía)
+### A.2 Check that it works (without Claude yet)
 
 ```bash
-python scripts/demo.py        # ves el ciclo completo: sorpresa, recuerdo, sueño, olvido
-python -m pytest -q           # o: python tests/test_memory.py
+python scripts/demo.py        # see the whole cycle: surprise, recall, dream, forgetting
+python -m pytest -q           # or: python tests/test_memory.py
 ```
 
-### A.3 Arrancar el servidor MCP a mano (opcional, para verlo vivo)
+### A.3 Start the MCP server by hand (optional, to see it alive)
 
 ```bash
 python -m hipercampo.server
 ```
 
-Se queda esperando por stdio (es lo normal en MCP). Córtalo con Ctrl+C. No hace
-falta lanzarlo tú: lo lanzará Claude automáticamente al conectarlo (paso siguiente).
+It sits waiting on stdio (that is normal for MCP). Stop it with Ctrl+C. You do not
+need to launch it yourself: Claude starts it automatically once connected (next step).
 
 ---
 
-## Vía B · Docker
+## Path B · Docker
 
 ```bash
 docker compose build
 ```
 
-La memoria se guarda en el volumen `hipercampo_data`. Para una prueba manual:
+Memory is stored in the `hipercampo_data` volume. For a manual test:
 
 ```bash
-docker compose run --rm hipercampo   # arranca el server (stdio); Ctrl+C para salir
+docker compose run --rm hipercampo   # starts the server (stdio); Ctrl+C to exit
 ```
 
 ---
 
-## Paso final · Conectar con Claude
+## Final step · Connect to Claude
 
-### Claude Code (CLI / extensión de VSCode)
+### Claude Code (CLI / VSCode extension)
 
-**Opción 1 — con el comando** (desde la carpeta del proyecto):
+**Option 1 — with the command** (from the project folder):
 
 ```bash
-# Vía A (Python):
+# Path A (Python):
 claude mcp add hipercampo -- python -m hipercampo.server
 
-# Vía B (Docker):
+# Path B (Docker):
 claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hipercampo:latest
 ```
 
-**Opción 2 — a mano**: crea un archivo `.mcp.json` en la raíz del proyecto:
+**Option 2 — by hand**: create an `.mcp.json` file at the project root:
 
 ```json
 {
@@ -89,89 +144,92 @@ claude mcp add hipercampo -- docker run --rm -i -v hipercampo_data:/data hiperca
 }
 ```
 
-Reinicia Claude Code. Deberías ver 15 herramientas: `hc_remember`, `hc_recall`,
+Restart Claude Code. You should see 15 tools: `hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`,
 `hc_remember_fact`, `hc_ask_role`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
-### Memoria compartida entre TODOS los proyectos (global)
+### Memory shared across ALL projects (global)
 
-El `.mcp.json` del paso anterior activa hipercampo **solo en ese proyecto**. Como la
-base de datos ya vive en una ruta global (`~/.hipercampo/hipercampo.db`), los datos
-se comparten igual; lo único "por proyecto" es el registro del servidor.
+The `.mcp.json` above enables hipercampo **in that project only**. Since the
+database already lives at a global path (`~/.hipercampo/hipercampo.db`), the data
+is shared anyway; the only "per project" part is the server registration.
 
-Para que Claude tenga las herramientas en **cualquier** proyecto, registra el
-servidor a nivel **usuario**:
+To have the tools available in **any** project, register the server at **user**
+scope:
 
 ```bash
 claude mcp add --scope user hipercampo -- python -m hipercampo.server
 ```
 
-O a mano, añade un bloque `mcpServers` de nivel raíz en `~/.claude.json` (Claude
-Code) — misma forma que el `.mcp.json`, pero en el archivo global del usuario. Usa
-rutas absolutas del ejecutable de Python y de `HIPERCAMPO_DB`. Reinicia Claude Code.
+Or by hand, add a root-level `mcpServers` block to `~/.claude.json` (Claude Code)
+— same shape as `.mcp.json`, but in the user's global file. Use absolute paths for
+the Python executable and for `HIPERCAMPO_DB`. Restart Claude Code.
 
-> Puedes tener ambos (global + `.mcp.json` del repo): si apuntan a la misma BD y
-> comando, es inofensivo. El `.mcp.json` del repo es útil para quien clone el proyecto.
+> You can have both (global + the repo's `.mcp.json`): if they point to the same
+> DB and command, it is harmless. The repo's `.mcp.json` is useful for whoever
+> clones the project.
 
-### Aislar contextos: namespaces (recomendado) o ficheros distintos
+### Isolating contexts: namespaces (recommended) or separate files
 
-Dos formas de que lo de un proyecto no se mezcle con otro (local-first, ambas válidas):
+Two ways to keep one project's memory out of another's (local-first, both valid):
 
-**Opción A — namespaces (una sola BD).** Añade `HIPERCAMPO_NAMESPACE` al `env` de
-cada servidor. Cada recuerdo lleva su contexto y **nada cruza** (lecturas, escrituras
-por id y enlaces, todo acotado):
+**Option A — namespaces (a single DB).** Add `HIPERCAMPO_NAMESPACE` to each
+server's `env`. Every memory carries its context and **nothing crosses over**
+(reads, writes by id and links — all scoped):
 
 ```json
 "env": {
-  "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/hipercampo.db",
-  "HIPERCAMPO_NAMESPACE": "mplayer"
+  "HIPERCAMPO_DB": "C:/Users/you/.hipercampo/hipercampo.db",
+  "HIPERCAMPO_NAMESPACE": "proj-webshop"
 }
 ```
 
-**Opción B — ficheros distintos.** Un `HIPERCAMPO_DB` por proyecto (abajo). Es
-aislamiento **local entre contextos**, no una frontera de seguridad multiusuario
-(ver [SECURITY.md](SECURITY.md)).
+**Option B — separate files.** One `HIPERCAMPO_DB` per project (below). This is
+**local isolation between contexts**, not a multi-user security boundary (see
+[SECURITY.md](SECURITY.md)).
 
-### Híbrida: memoria personal + memoria por proyecto
+### Hybrid: personal memory + per-project memory
 
-Dos servidores con **BD distinta** (o mismo fichero y distinto namespace), para que
-lo técnico de un proyecto no se mezcle con otro pero Claude te siga conociendo:
+Two servers with a **different DB** (or the same file and a different namespace),
+so one project's technical detail does not mix with another's while Claude still
+knows you:
 
-**1) Personal (global, `~/.claude.json`)** — un servidor `memoria` con su propia BD:
+**1) Personal (global, `~/.claude.json`)** — a `personal` server with its own DB:
 
 ```json
 "mcpServers": {
-  "memoria": {
+  "personal": {
     "command": "C:/Python313/python.exe",
     "args": ["-m", "hipercampo.server"],
-    "env": { "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/personal.db" }
+    "env": { "HIPERCAMPO_DB": "C:/Users/you/.hipercampo/personal.db" }
   }
 }
 ```
 
-**2) Por proyecto (`.mcp.json` en la raíz de cada proyecto)** — un servidor
-`proyecto` con una BD propia por proyecto:
+**2) Per project (`.mcp.json` at each project's root)** — a `project` server with
+its own DB per project:
 
 ```json
 {
   "mcpServers": {
-    "proyecto": {
+    "project": {
       "command": "C:/Python313/python.exe",
       "args": ["-m", "hipercampo.server"],
-      "env": { "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/proj-NOMBRE.db" }
+      "env": { "HIPERCAMPO_DB": "C:/Users/you/.hipercampo/proj-NAME.db" }
     }
   }
 }
 ```
 
-Cambia `proj-NOMBRE.db` por proyecto (`proj-mplayer.db`, `proj-web.db`...). Claude
-verá dos juegos de herramientas (`memoria` y `proyecto`) y elegirá dónde guardar
-cada cosa. Para copiar tu memoria actual a la personal: `python -m hipercampo.backup
-C:/Users/tu/.hipercampo/personal.db` (con `HIPERCAMPO_DB` apuntando a la vieja).
+Change `proj-NAME.db` per project (`proj-webshop.db`, `proj-blog.db`...). Claude
+will see two sets of tools (`personal` and `project`) and will pick where to store
+each thing. To copy your current memory into the personal one: `python -m
+hipercampo.backup C:/Users/you/.hipercampo/personal.db` (with `HIPERCAMPO_DB`
+pointing at the old one).
 
 ### Claude Desktop
 
-Edita el archivo de configuración:
+Edit the configuration file:
 
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -189,21 +247,21 @@ Edita el archivo de configuración:
 }
 ```
 
-(O con Python: `"command": "python"`, `"args": ["-m", "hipercampo.server"]`, y
-`"env": {"HIPERCAMPO_DB": "C:/ruta/a/hipercampo.db"}`.)
+(Or with Python: `"command": "python"`, `"args": ["-m", "hipercampo.server"]`, and
+`"env": {"HIPERCAMPO_DB": "C:/path/to/hipercampo.db"}`.)
 
-Reinicia Claude Desktop.
+Restart Claude Desktop.
 
 ---
 
-## Comprobar que Claude ya tiene memoria
+## Check that Claude really has memory
 
-En una conversación con Claude, pídele:
+In a conversation with Claude, ask it:
 
-> «Guarda en tu memoria que prefiero respuestas directas» → usará `hc_remember`.
-> Más tarde: «¿qué recuerdas sobre cómo prefiero que me hables?» → usará `hc_recall`.
+> «Store in your memory that I prefer direct answers» → it will use `hc_remember`.
+> Later: «what do you remember about how I like to be spoken to?» → `hc_recall`.
 
-También puedes verificar el servidor sin Claude, con un handshake MCP crudo:
+You can also verify the server without Claude, with a raw MCP handshake:
 
 ```bash
 printf '%s\n' \
@@ -212,20 +270,20 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-Debe listar las 15 herramientas `hc_*`.
+It must list the 15 `hc_*` tools.
 
 ---
 
-## Modo SINÁPTICO (que la memoria dispare sola en cada turno)
+## SYNAPTIC mode (memory firing on its own, every turn)
 
-Por defecto, la memoria es *pull*: Claude decide cuándo llamarla. Con un **hook** de
-Claude Code puede dispararse **en cada mensaje tuyo**, como una sinapsis.
+By default memory is *pull*: Claude decides when to call it. With a Claude Code
+**hook** it can fire **on every message you send**, like a synapse.
 
-hipercampo decide solo qué toca (`hipercampo assist`): recordar si preguntas,
-inspirar si estás atascado, sugerir guardar/actualizar si afirmas algo nuevo, o
-**callarse** si no hay nada relevante. Nunca escribe por su cuenta.
+hipercampo decides for itself what is called for (`hipercampo assist`): recall if
+you ask, inspire if you are stuck, suggest storing/updating if you state something
+new, or **stay quiet** if nothing is relevant. It never writes on its own.
 
-En `~/.claude/settings.json` (global) o `.claude/settings.json` (del proyecto):
+In `~/.claude/settings.json` (global) or `.claude/settings.json` (per project):
 
 ```json
 {
@@ -237,7 +295,7 @@ En `~/.claude/settings.json` (global) o `.claude/settings.json` (del proyecto):
             "type": "command",
             "command": "hipercampo hook",
             "timeout": 15,
-            "statusMessage": "consultando la memoria..."
+            "statusMessage": "consulting memory..."
           }
         ]
       }
@@ -246,154 +304,189 @@ En `~/.claude/settings.json` (global) o `.claude/settings.json` (del proyecto):
 }
 ```
 
-`hipercampo hook` lee el JSON del hook por **stdin**, decide qué toca y devuelve el
-contexto a inyectar (`hookSpecificOutput.additionalContext`). Si no hay nada
-relevante devuelve `{}`: **no molesta**. Pruébalo a mano antes:
+`hipercampo hook` reads the hook's JSON from **stdin**, decides what is called for
+and returns the context to inject (`hookSpecificOutput.additionalContext`). If
+nothing is relevant it returns `{}`: **it does not get in the way**. Try it by hand
+first:
 
 ```bash
-echo '{"prompt":"¿dónde está alojado el servidor?"}' | hipercampo hook
-echo '{"prompt":"mañana compraré pan"}' | hipercampo hook     # -> {} : se calla
+echo '{"prompt":"where is the server hosted?"}' | hipercampo hook
+echo '{"prompt":"tomorrow I will buy bread"}' | hipercampo hook   # -> {} : stays quiet
 ```
 
-Tras editarlo, abre `/hooks` una vez (recarga la configuración) o reinicia Claude
-Code. Si prefieres no usar hooks, la herramienta **`hc_assist`** hace lo mismo
-cuando Claude la llama al principio del turno.
+After editing it, open `/hooks` once (this reloads the configuration) or restart
+Claude Code. If you would rather not use hooks, the **`hc_assist`** tool does the
+same thing when Claude calls it at the start of a turn.
 
-### Ver qué está haciendo (transparencia)
+### Seeing what it is doing (transparency)
 
-Cada decisión se registra —a stderr (visible en los logs del servidor MCP) y a un
-fichero junto a la base de datos:
+Every decision is logged — to stderr (visible in the MCP server logs) and to a
+file next to the database:
 
 ```bash
-hipercampo log -n 20     # qué ha decidido últimamente y por qué
-hipercampo doctor        # ruta de la BD, permisos, versión, dependencias
+hipercampo log -n 20     # what it decided lately, and why
+hipercampo doctor        # DB path, permissions, version, dependencies
 ```
 
 ```
-20:47:05 remember  guardado id=1 · novedad=1.0 · sorpresa=1.0
-20:47:06 remember  saltado: redundante · novedad=0.0 · sorpresa=0.57
-20:47:07 recall    abstención: nada destaca del ruido · n=14
-20:47:07 assist    nothing: nada relevante que aportar en este turno
+20:47:05 remember  stored id=1 · novelty=1.0 · surprise=1.0
+20:47:06 remember  skipped: redundant · novelty=0.0 · surprise=0.57
+20:47:07 recall    abstained: nothing stands out from the noise · n=14
+20:47:07 assist    nothing: nothing relevant to add this turn
 ```
 
-Se desactiva con `HIPERCAMPO_LOG=0`.
+Turn it off with `HIPERCAMPO_LOG=0`.
 
-### ¿Está sana la memoria?
+### Is the memory healthy?
 
 ```bash
-hipercampo doctor          # entorno: ruta, permisos, dependencias, estado
+hipercampo doctor          # environment: path, permissions, dependencies, state
 ```
 
-o la herramienta **`hc_health`** desde el chat: comprueba integridad del fichero,
-esquema, lectura y permiso de escritura. Si la base de datos falla en medio de una
-operación, hipercampo **avisa en el registro, reconecta y reintenta una vez**; si aun
-así no puede, devuelve un error legible en vez de tirar el servidor MCP.
+or the **`hc_health`** tool from the chat: it checks file integrity, schema, reads
+and write permission. If the database fails mid-operation, hipercampo **warns in
+the log, reconnects and retries once**; if it still cannot, it returns a readable
+error instead of taking the MCP server down.
 
-### Memoria entre proyectos (contextos enlazados)
+### Memory across projects (linked contexts)
 
-Cada proyecto sigue teniendo su memoria aislada, pero puedes **enlazar** otros en
-solo lectura para que te den ideas:
+Each project keeps its own isolated memory, but you can **link** others read-only
+so they can feed you ideas:
 
 ```jsonc
-// .mcp.json del proyecto
-"env": { "HIPERCAMPO_NAMESPACE": "mi-proyecto",
-         "HIPERCAMPO_LINKED": "otro-proyecto,tercero" }   // o "*" = todos
+// the project's .mcp.json
+"env": { "HIPERCAMPO_NAMESPACE": "proj-webshop",
+         "HIPERCAMPO_LINKED": "proj-blog,proj-docs" }   // or "*" = all of them
 ```
 
-Las respuestas de `hc_recall`/`hc_muse` marcan lo ajeno con `"project": "..."`.
-La asimetría es la garantía: lo enlazado **se lee, nunca se toca** — escribir,
-reforzar, actualizar, consolidar y olvidar operan solo sobre el proyecto propio,
-y un proyecto no enlazado sigue siendo invisible.
+`hc_recall`/`hc_muse` responses mark anything foreign with `"project": "..."`.
+The asymmetry is the guarantee: what is linked is **read, never touched** —
+storing, reinforcing, updating, consolidating and forgetting operate on your own
+project alone, and a project that is not linked stays invisible.
 
-### Sueño autónomo
+### Autonomous sleep
 
-Cada **50 escrituras** (variable `HIPERCAMPO_AUTOSLEEP_EVERY`, `0` lo desactiva)
-hipercampo **se mantiene sola**: consolida, adormece lo que ya no vale y propone
-puentes. Como un cerebro que duerme sin que se lo manden. También puedes pedírselo:
-`hipercampo sleep` o la herramienta `hc_sleep`.
+Every **50 writes** (`HIPERCAMPO_AUTOSLEEP_EVERY`, `0` disables it) hipercampo
+**maintains itself**: it consolidates, lets what no longer matters go dormant, and
+proposes bridges. Like a brain that sleeps without being told. You can also ask
+for it: `hipercampo sleep` or the `hc_sleep` tool.
 
-## Controlar y respaldar la memoria
+## Controlling and backing up the memory
 
-Toda la memoria de hipercampo es **un único fichero SQLite**. Fácil de ver, mover,
-copiar o borrar.
+All of hipercampo's memory is **a single SQLite file**. Easy to inspect, move,
+copy or delete.
 
-### ¿Dónde está?
+### Where is it?
 
-Por defecto:
+By default:
 
-- **Local (Windows)**: `C:\Users\<tú>\.hipercampo\hipercampo.db`
+- **Local (Windows)**: `C:\Users\<you>\.hipercampo\hipercampo.db`
 - **Local (macOS/Linux)**: `~/.hipercampo/hipercampo.db`
-- **Docker**: dentro del volumen `hipercampo_data` (`/data/hipercampo.db`)
+- **Docker**: inside the `hipercampo_data` volume (`/data/hipercampo.db`)
 
-Puedes cambiarla con la variable **`HIPERCAMPO_DB`** (en el `env` de la config MCP,
-o al lanzar el server). Y puedes preguntárselo a Claude: la herramienta `hc_stats`
-devuelve el campo `db` con la ruta absoluta.
+You can change it with the **`HIPERCAMPO_DB`** variable (in your MCP config's
+`env`, or when launching the server). And you can ask Claude: the `hc_stats` tool
+returns a `db` field with the absolute path.
 
-### Controlar su uso desde Claude
+### Controlling its use from Claude
 
-Las 15 herramientas te dan control total, sin tocar código:
+The 15 tools give you full control, without touching code:
 
-| Quieres… | Pídele a Claude (usa la tool) |
+| You want to… | Ask Claude (uses the tool) |
 |----------|-------------------------------|
-| Ver cuánto recuerda y dónde | `hc_stats` |
-| Que guarde algo concreto | `hc_remember` (con `importance` alta para que no se olvide) |
-| Que recuerde algo | `hc_recall` |
-| Actualizar un hecho que cambió | `hc_update` |
-| Condensar (fase de sueño) | `hc_consolidate` |
-| Podar lo viejo/trivial | `hc_forget` (usa `dry_run=true` para ver antes qué se iría) |
-| Empezar de cero | cierra el server y borra el fichero `.db` |
+| See how much it remembers and where | `hc_stats` |
+| Store something specific | `hc_remember` (with high `importance` so it is not forgotten) |
+| Recall something | `hc_recall` |
+| Update a fact that changed | `hc_update` |
+| Condense (sleep phase) | `hc_consolidate` |
+| Prune the old/trivial | `hc_forget` (use `dry_run=true` to preview what would go) |
+| Start from scratch | stop the server and delete the `.db` file |
 
-Los umbrales (cuándo algo es "novedoso", "predecible", cuándo se olvida) están al
-inicio de [`hipercampo/memory.py`](hipercampo/memory.py) — comentados y ajustables.
+The thresholds (when something counts as "novel", "predictable", when it is
+forgotten) are at the top of [`hipercampo/memory.py`](hipercampo/memory.py) —
+commented and adjustable.
 
-### Backup y restauración
+### Moving memories between drawers
+
+If you started without namespaces and everything landed in `default`, or you want
+a project's technical memory to live in its own drawer, you split it with SQL.
+**Back up first** — this touches live memory:
 
 ```bash
-# Copia de seguridad (consistente, aunque el server esté activo):
-python -m hipercampo.backup                       # -> <db>.YYYYMMDD-HHMMSS.bak
-python -m hipercampo.backup C:\copias\hc.db        # -> a la ruta que elijas
-
-# Restaurar desde una copia:
-python -m hipercampo.backup --restore C:\copias\hc.db
+python -m hipercampo.backup            # back up, always the first move
 ```
 
-O simplemente **copia el fichero `.db`** con el server parado; es igual de válido.
-En Docker: `docker run --rm -v hipercampo_data:/data -v "%cd%":/backup alpine \
+```sql
+-- See what you have and where:
+SELECT namespace, count(*) FROM memories GROUP BY 1;
+SELECT id, namespace, substr(text,1,80) FROM memories WHERE namespace='default';
+
+-- Move specific memories into their project (ids 3, 13, 14 as an example):
+UPDATE memories SET namespace='proj-webshop' WHERE id IN (3,13,14);
+UPDATE links    SET namespace='proj-webshop' WHERE src IN (3,13,14) AND dst IN (3,13,14);
+
+-- Links left straddling two drawers are noise: delete them.
+DELETE FROM links
+ WHERE (src IN (3,13,14)) != (dst IN (3,13,14));
+```
+
+Two warnings learned the hard way: **move the links along with the memories** (or
+the graph is left limping), and **compare the full text before deleting a
+duplicate**, not just its beginning. When you are done, check no orphans are left:
+
+```sql
+SELECT src, dst FROM links
+ WHERE src NOT IN (SELECT id FROM memories) OR dst NOT IN (SELECT id FROM memories);
+```
+
+### Backup and restore
+
+```bash
+# Backup (consistent, even with the server running):
+python -m hipercampo.backup                       # -> <db>.YYYYMMDD-HHMMSS.bak
+python -m hipercampo.backup C:\copies\hc.db        # -> to the path you choose
+
+# Restore from a copy:
+python -m hipercampo.backup --restore C:\copies\hc.db
+```
+
+Or simply **copy the `.db` file** with the server stopped; that is just as valid.
+On Docker: `docker run --rm -v hipercampo_data:/data -v "%cd%":/backup alpine \
 cp /data/hipercampo.db /backup/`.
 
 ---
 
-## Semántica opcional (para sinónimos)
+## Optional semantics (for synonyms)
 
-Por defecto hipercampo es léxico (CPU, sin GPU). Si quieres que capte sinónimos:
+By default hipercampo is lexical (CPU, no GPU). If you want it to catch synonyms:
 
 ```bash
-pip install -e ".[semantic]"     # trae sentence-transformers (Apache-2.0)
+pip install -e ".[semantic]"     # brings sentence-transformers (Apache-2.0)
 ```
 
-Y actívala en el servidor con una variable de entorno (en el `env` de tu config MCP):
+And enable it on the server with an environment variable (in your MCP config's `env`):
 
 ```json
 "env": {
-  "HIPERCAMPO_DB": "C:/Users/tu/.hipercampo/hipercampo.db",
+  "HIPERCAMPO_DB": "C:/Users/you/.hipercampo/hipercampo.db",
   "HIPERCAMPO_SEMANTIC": "1"
 }
 ```
 
-(O en código: `from hipercampo import encoder; encoder.enable_semantic()`.)
+(Or in code: `from hipercampo import encoder; encoder.enable_semantic()`.)
 
-Sube el MRR global de recuperación de **0.77 a 0.95** en el banco de estrés
-(`python scripts/stress.py --semantic`). La 1ª vez descarga el modelo. Ver
-[ATTRIBUTION.md](ATTRIBUTION.md) para licencias del modelo.
+It raises global retrieval MRR from **0.77 to 0.95** on the stress bench
+(`python scripts/stress.py --semantic`). The first run downloads the model. See
+[ATTRIBUTION.md](ATTRIBUTION.md) for the model's licences.
 
 ---
 
-## Problemas frecuentes
+## Common problems
 
-| Síntoma | Causa / solución |
+| Symptom | Cause / fix |
 |---|---|
-| `No module named hipercampo` | No hiciste `pip install -e .` en la carpeta del proyecto. |
-| Claude no ve las herramientas | Reinicia el cliente tras editar la config; revisa que la ruta/comando sea correcta. |
-| El comando `hipercampo` no existe | Usa `python -m hipercampo.server` (el script de consola puede no estar en el PATH). |
-| Docker: "cannot access stdin" | Falta `-i` en `docker run` (MCP habla por stdin). |
-| La memoria "se pierde" | En Docker, comprueba que montas el volumen `-v hipercampo_data:/data`. |
+| `No module named hipercampo` | You did not run `pip install -e .` in the project folder. |
+| Claude does not see the tools | Restart the client after editing the config; check the path/command is right. |
+| The `hipercampo` command does not exist | Use `python -m hipercampo.server` (the console script may not be on your PATH). |
+| Docker: "cannot access stdin" | `-i` is missing from `docker run` (MCP speaks over stdin). |
+| Memory "gets lost" | On Docker, check you are mounting the `hipercampo_data` volume. |

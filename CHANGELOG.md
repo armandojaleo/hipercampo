@@ -5,6 +5,24 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Fixed
+- **Accents arrived broken through the hook.** `json.load(sys.stdin)` decodes with
+  the locale encoding — cp1252 on Windows — while Claude Code always sends UTF-8,
+  so «¿añadelo?» became «Â¿aÃ±adelo?» *and was stored and logged that way*. The hook
+  now reads bytes and decodes UTF-8 explicitly.
+
+### Added
+- **A much more detailed decision log.** `recall` now records how many memories were
+  scanned, the best score, which ids won, which linked projects were consulted and
+  the elapsed ms; an abstention records the threshold and the noise it was measured
+  against (`mejor=0.061 · umbral=0.118 · ruido=0.043±0.037`); `remember` records what
+  it resembled, with what similarity, and how many associations it created.
+  A log that says "abstained" without saying *against what* explains nothing.
+- **`hipercampo log` grew up**: `-f/--follow` (live), `-g/--grep` (accent- and
+  case-insensitive — searching `abstencion` finds `abstención`), `-a/--accion`,
+  `--hoy`, `--errores`, `--ruta`, and `-n 0` for everything. With no matches it
+  lists which actions exist in the log.
+
 ### Added — working identity (the agent's own memory)
 - **`hc_learn` / `hc_identity` / `hc_unlearn`.** Until now hipercampo stored memory
   *of the world* — facts, projects, gotchas. It did not store what psychology calls

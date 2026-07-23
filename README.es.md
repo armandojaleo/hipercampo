@@ -28,7 +28,7 @@ que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 
 ---
 
-## Instalación (guía completa: [INSTALL.md](INSTALL.md))
+## Instalación (guía completa: [INSTALL.es.md](INSTALL.es.md))
 
 **Vía rápida — desde PyPI:**
 
@@ -48,7 +48,7 @@ python scripts/demo.py                # ver el ciclo funcionando
 Reinicia Claude Code y tendrás 15 herramientas de memoria (`hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_assist`, `hc_sleep`, `hc_consolidate`, `hc_forget`, `hc_health`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
-verificación y problemas frecuentes → **[INSTALL.md](INSTALL.md)**.
+verificación y problemas frecuentes → **[INSTALL.es.md](INSTALL.es.md)**.
 
 ---
 
@@ -172,9 +172,26 @@ y capacidad hasta 5 roles. Integrarlo en el ciclo MCP vivo es el siguiente paso
 
 ## Contextos, Docker, seguridad
 
-- **Contextos**: namespaces (`HIPERCAMPO_NAMESPACE`) para aislar proyectos/perfiles
-  en una misma BD, o ficheros distintos (`HIPERCAMPO_DB`). Aislamiento **local**, no
-  seguridad multiusuario — hipercampo es local-first. Ver [SECURITY.md](SECURITY.md).
+**Contextos**: toda la memoria es **un solo fichero**; los namespaces
+(`HIPERCAMPO_NAMESPACE`) son cajones dentro de él. Escribes en el tuyo y lees de
+los que enlaces:
+
+```
+   ~/.hipercampo/hipercampo.db
+   ├── __self__        identidad de trabajo del agente
+   ├── personal        quién eres tú
+   ├── proj-webshop  ══> escribes aquí cuando trabajas en la tienda
+   └── proj-blog     ──> lo lees, pero nunca lo tocas
+```
+
+Lo enlazado **se lee, nunca se toca**: guardar, reforzar, olvidar y consolidar
+operan solo sobre tu propio cajón, y un proyecto no enlazado es invisible. El mapa
+completo, con las flechas de lectura y escritura, en
+**[INSTALL.es.md](INSTALL.es.md)**.
+
+- También puedes aislar por **ficheros distintos** (`HIPERCAMPO_DB`) en vez de
+  namespaces. Aislamiento **local**, no seguridad multiusuario — hipercampo es
+  local-first. Ver [SECURITY.md](SECURITY.md).
 - **Docker**: `docker compose build && docker compose run --rm hipercampo`.
 - **Seguridad**: el texto recuperado es **dato, no instrucciones**. Salvaguardas
   integradas (`hipercampo/safety.py`): `hc_remember` avisa de posibles **secretos**

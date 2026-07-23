@@ -12,6 +12,7 @@ CLI de hipercampo — para usarlo desde el terminal y, sobre todo, desde HOOKS
     hipercampo backup [destino]      # copia de seguridad consistente
     hipercampo servers               # qué servidores MCP hay vivos y desde cuándo
     hipercampo restart               # reiniciarlos tras actualizar (el cliente los relanza)
+    hipercampo log [-f] [-g texto]   # qué ha decidido y por qué (en vivo con -f)
     hipercampo identity              # qué se ha aprendido trabajando
     hipercampo doctor                # diagnóstico: ruta, permisos, versión, deps
     hipercampo version
@@ -56,8 +57,17 @@ def cmd_hook(_args) -> int:
 
     Lee el JSON del hook por stdin, decide qué toca (assist) y devuelve el contexto
     a inyectar en el turno. Si no hay nada relevante, no inyecta nada (se calla)."""
+    # El JSON del hook SIEMPRE viene en UTF-8. Leer `sys.stdin` como texto usa la
+    # codificación local (en Windows, cp1252) y convierte «¿añadelo?» en «Â¿aÃ±adelo?»:
+    # la memoria acababa guardando y registrando el texto ya roto. Se leen bytes.
     try:
-        payload = json.load(sys.stdin)
+        crudo = sys.stdin.buffer.read()
+    except (AttributeError, ValueError):          # stdin sustituido (tests)
+        crudo = sys.stdin.read()
+    if isinstance(crudo, bytes):
+        crudo = crudo.decode("utf-8", "replace")
+    try:
+        payload = json.loads(crudo)
     except Exception:
         payload = {}
     # Al ARRANCAR una sesión no hay pregunta que responder: lo que toca es
@@ -201,6 +211,57 @@ def cmd_identity(_args) -> int:
         hc.close()
 
 
+def cmd_log(args) -> int:
+    """Qué ha decidido hipercampo: el registro, con filtros y en vivo."""
+    import time as _t
+
+    from . import audit
+    from .config import db_path
+    audit.set_logfile(db_path())
+    ruta = audit.logfile()
+    if getattr(args, "ruta", False):
+        print(ruta or "(registro desactivado: HIPERCAMPO_LOG=0)")
+        return 0
+    if not ruta:
+        print("El registro está desactivado (HIPERCAMPO_LOG=0).")
+        return 1
+
+    accion = "ERROR" if args.errores else args.accion
+    filtros = " · ".join(f for f in (
+        f"acción={accion}" if accion else "",
+        f"contiene «{args.grep}»" if args.grep else "",
+        "solo hoy" if args.hoy else "") if f)
+    print(f"# {ruta}{' · ' + filtros if filtros else ''}")
+
+    def leer(n):
+        return audit.tail(n, contiene=args.grep, solo_hoy=args.hoy, accion=accion)
+
+    lineas = leer(args.n)
+    if not lineas:
+        print("(nada coincide con el filtro)" if filtros else "(sin actividad todavía)")
+        if not args.follow:
+            print("\nAcciones vistas en el registro: "
+                  + (", ".join(audit.acciones()) or "ninguna"))
+            return 0
+    else:
+        print("\n".join(lineas))
+
+    if not args.follow:
+        return 0
+    print("\n-- en vivo (Ctrl+C para salir) --", flush=True)
+    vistas = set(lineas)
+    try:
+        while True:
+            _t.sleep(1.0)
+            for ln in leer(200):
+                if ln not in vistas:
+                    print(ln, flush=True)
+                    vistas.add(ln)
+    except KeyboardInterrupt:
+        print("\n-- fin --")
+    return 0
+
+
 def cmd_doctor(_args) -> int:
     """Diagnóstico rápido: ¿está todo en su sitio para funcionar?"""
     from . import __version__
@@ -264,7 +325,16 @@ def main(argv=None) -> int:
     bk = sub.add_parser("backup", help="copia de seguridad consistente")
     bk.add_argument("dest", nargs="?")
     lg = sub.add_parser("log", help="qué ha decidido hipercampo últimamente")
-    lg.add_argument("-n", type=int, default=20, help="cuántas líneas")
+    lg.add_argument("-n", type=int, default=20, help="cuántas líneas (0 = todas)")
+    lg.add_argument("-f", "--follow", action="store_true",
+                    help="quedarse mirando en vivo (Ctrl+C para salir)")
+    lg.add_argument("-g", "--grep", metavar="TEXTO",
+                    help="solo las líneas que contengan esto (ignora acentos)")
+    lg.add_argument("-a", "--accion", metavar="ACCION",
+                    help="solo esa acción: recall, remember, sleep, dream, ERROR…")
+    lg.add_argument("--hoy", action="store_true", help="solo lo de hoy")
+    lg.add_argument("--errores", action="store_true", help="atajo para --accion ERROR")
+    lg.add_argument("--ruta", action="store_true", help="solo decir dónde está el fichero")
     args = p.parse_args(argv)
 
     if args.cmd in (None, "version"):
@@ -290,13 +360,7 @@ def main(argv=None) -> int:
         from .backup import backup
         print("Copia creada en:", backup(args.dest)); return 0
     if args.cmd == "log":
-        from . import audit
-        from .config import db_path
-        audit.set_logfile(db_path())
-        lineas = audit.tail(args.n)
-        print(f"# {audit.logfile() or '(registro desactivado)'}")
-        print("\n".join(lineas) if lineas else "(sin actividad registrada todavía)")
-        return 0
+        return cmd_log(args)
 
     hc = _hc()
     try:

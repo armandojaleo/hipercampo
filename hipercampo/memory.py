@@ -281,6 +281,7 @@ class Hipercampo:
                  confidence: float = 0.5) -> dict:
         """Graba un episodio salvo doble veto: NO lo guarda si es redundante (ya hay
         algo casi igual) NI si es predecible (el modelo de sorpresa ya lo esperaba)."""
+        t0 = time.time()
         text = _validate_text(text)
         importance, confidence = _clip01(importance), _clip01(confidence)
         secretos = scan_secrets(text)                 # aviso: la BD es texto plano
@@ -346,13 +347,18 @@ class Hipercampo:
             if evictado is not None:
                 self.store.delete([evictado])
             mem_id = self.store.add(text, hv, max(novelty, surprise), importance, confidence)
+            n_enlaces = 0
             for i, row in enumerate(actives):         # asociaciones (sims ya calculadas)
                 if row["id"] != evictado and sims_act[i] >= LINK_SIMILARITY:
                     self.store.link(mem_id, row["id"], weight=float(sims_act[i]),
                                     type="lexical")
+                    n_enlaces += 1
         self.surprise.learn(text)                     # aprender tras confirmar
-        audit.log("remember", f"guardado id={mem_id}", novedad=round(novelty, 2),
-                  sorpresa=round(surprise, 2), evictado=evictado)
+        audit.log("remember", f"guardado id={mem_id}", texto=text[:60],
+                  novedad=round(novelty, 2), sorpresa=round(surprise, 2),
+                  parecido_a=best_id, similitud=round(best_sim, 2) if best_id else None,
+                  enlaces=n_enlaces or None, evictado=evictado,
+                  ms=round((time.time() - t0) * 1000))
         mantenimiento = self._autosleep()             # ¿le toca dormir sola?
 
         result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
@@ -446,6 +452,7 @@ class Hipercampo:
         Por defecto NO devuelve historia (episodios ya consolidados ni superados);
         pon include_history=True para verla. Solo refuerza lo realmente devuelto.
         """
+        t0 = time.time()
         k = max(1, min(int(k), 100))
         hops = max(0, min(int(hops), 5))
         if not isinstance(query, str) or not query.strip():
@@ -523,13 +530,18 @@ class Hipercampo:
             n_excl = min(len(top), max(1, len(directa) - NOISE_MIN_N))
             cola = directa[n_excl:]
             if mejor < suelo:                         # nada relevante en absoluto
-                audit.log("recall", "abstención: nada relevante", mejor=round(mejor, 3))
+                audit.log("recall", "abstención: nada relevante",
+                          consulta=query[:60], mirados=len(rows),
+                          mejor=round(mejor, 3), suelo=suelo)
                 top = []
             elif len(cola) >= NOISE_MIN_N:
                 mu, sd = float(cola.mean()), float(cola.std())
                 if mejor < mu + zmin * sd:            # el mejor no sobresale del ruido
                     audit.log("recall", "abstención: nada destaca del ruido",
-                              n=len(scored))
+                              consulta=query[:60], n=len(scored),
+                              mejor=round(mejor, 3),
+                              umbral=round(mu + zmin * sd, 3),
+                              ruido=f"{mu:.3f}±{sd:.3f}")
                     top = []                          # abstención
         # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
         # para no darle utilidad a falsos positivos que luego se auto-protegerían.
@@ -540,7 +552,11 @@ class Hipercampo:
             # (o llena) LEER debe seguir funcionando aunque no se pueda reforzar.
             audit.log("recall", f"sin refuerzo ({e}); sigo en solo lectura")
 
-        audit.log("recall", f"{len(top)} resultado(s)", consulta=query[:40])
+        audit.log("recall", f"{len(top)} resultado(s)", consulta=query[:60],
+                  mirados=len(rows), mejor=round(top[0][0], 3) if top else None,
+                  ids=",".join(str(r["id"]) for _, _, r in top[:5]) or None,
+                  enlazados=",".join(self.store.linked) or None,
+                  ms=round((time.time() - t0) * 1000))
         salida = []
         for score, act, r in top:
             item = {"id": r["id"], "text": r["text"], "kind": r["kind"],

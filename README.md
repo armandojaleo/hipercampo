@@ -172,9 +172,26 @@ capacity up to 5 roles. Wiring these role-records into the live MCP cycle is nex
 
 ## Contexts, Docker, security
 
-- **Contexts**: namespaces (`HIPERCAMPO_NAMESPACE`) to isolate projects/profiles in
-  one DB, or separate files (`HIPERCAMPO_DB`). **Local** isolation, not multi-user
-  security — hipercampo is local-first. See [SECURITY.md](SECURITY.md).
+**Contexts**: all memory lives in **a single file**; namespaces
+(`HIPERCAMPO_NAMESPACE`) are drawers inside it. You write to your own and read from
+the ones you link:
+
+```
+   ~/.hipercampo/hipercampo.db
+   ├── __self__        the agent's working identity
+   ├── personal        who you are
+   ├── proj-webshop  ══> you write here while working on the shop
+   └── proj-blog     ──> you read it, but never touch it
+```
+
+What is linked is **read, never touched**: storing, reinforcing, forgetting and
+consolidating operate on your own drawer alone, and a project that is not linked is
+invisible. The full map, with read and write arrows, is in
+**[INSTALL.md](INSTALL.md)**.
+
+- You can also isolate by **separate files** (`HIPERCAMPO_DB`) instead of
+  namespaces. **Local** isolation, not multi-user security — hipercampo is
+  local-first. See [SECURITY.md](SECURITY.md).
 - **Docker**: `docker compose build && docker compose run --rm hipercampo`.
 - **Security**: retrieved text is **data, not instructions**. Built-in safeguards
   (`hipercampo/safety.py`): `hc_remember` warns on likely **secrets** (plaintext DB),

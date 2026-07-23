@@ -80,14 +80,44 @@ def log(accion: str, detalle: str = "", **campos) -> None:
         pass
 
 
-def tail(n: int = 20) -> list[str]:
-    """Últimas n líneas del registro (para `hipercampo log`)."""
+def tail(n: int = 20, contiene: str | None = None, solo_hoy: bool = False,
+         accion: str | None = None) -> list[str]:
+    """Últimas n líneas del registro, con filtros (para `hipercampo log`).
+
+    `contiene`: subcadena a buscar (sin distinguir mayúsculas ni acentos).
+    `solo_hoy`: solo lo de hoy. `accion`: solo esa acción (recall, remember…)."""
     if _PATH is None or not _PATH.exists():
         return []
     try:
-        return _PATH.read_text(encoding="utf-8").splitlines()[-n:]
+        lineas = _PATH.read_text(encoding="utf-8", errors="replace").splitlines()
     except Exception:
         return []
+    if solo_hoy:
+        hoy = time.strftime("%Y-%m-%d")
+        lineas = [ln for ln in lineas if ln.startswith(hoy)]
+    if accion:
+        # la acción es la 3ª columna: "2026-07-23 09:00:37 recall    ..."
+        lineas = [ln for ln in lineas if ln[20:].split(" ", 1)[0] == accion]
+    if contiene:
+        aguja = _plano(contiene)
+        lineas = [ln for ln in lineas if aguja in _plano(ln)]
+    return lineas[-n:] if n > 0 else lineas
+
+
+def _plano(t: str) -> str:
+    """Minúsculas y sin acentos: buscar 'sueno' debe encontrar 'sueño'."""
+    sin = unicodedata.normalize("NFKD", t.lower())
+    return "".join(c for c in sin if not unicodedata.combining(c)).replace("ñ", "n")
+
+
+def acciones() -> list[str]:
+    """Qué acciones aparecen en el registro (para la ayuda del comando)."""
+    vistas = []
+    for ln in tail(0):
+        a = ln[20:].split(" ", 1)[0]
+        if a and a not in vistas:
+            vistas.append(a)
+    return sorted(vistas)
 
 
 def logfile() -> str | None:

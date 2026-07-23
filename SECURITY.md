@@ -29,7 +29,7 @@ contextos. Es aislamiento **local entre contextos** (proyectos, perfiles, agente
 local-first, un proceso por contexto—. Para separar:
 
 - Un `HIPERCAMPO_NAMESPACE` distinto por contexto (mismo `.db`), o un
-  `HIPERCAMPO_DB` distinto por proyecto. Ambos valen (ver INSTALL.md).
+  `HIPERCAMPO_DB` distinto por proyecto. Ambos valen (ver INSTALL.es.md).
 - No hay autenticación: quien pueda hablar con el proceso puede elegir su namespace.
   El aislamiento protege de mezclas accidentales, no de un actor malicioso local.
 

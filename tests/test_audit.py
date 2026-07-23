@@ -26,12 +26,16 @@ def _audit_activo(tmp: str):
     from hipercampo import audit
     importlib.reload(audit)
     Path(tmp).parent.mkdir(parents=True, exist_ok=True)
+    Path(_LOG).unlink(missing_ok=True)          # cada test parte de un registro limpio
     audit.set_logfile(tmp)
     return audit
 
 
-_DB = "data/_t_audit.db"
-_LOG = "data/hipercampo.log"
+# Carpeta propia: el registro vive junto a la BD, así que compartir carpeta con
+# otras suites mezclaría sus líneas con las nuestras y los asertos medirían ruido.
+_DIR = Path("data/_t_audit")
+_DB = str(_DIR / "audit.db")
+_LOG = str(_DIR / "hipercampo.log")
 
 
 def test_registra_la_decision_con_sus_numeros():
@@ -133,6 +137,46 @@ def test_el_ciclo_real_deja_rastro_legible():
 
     texto = "\n".join(audit.tail(50))
     assert "remember" in texto and "recall" in texto, texto
+    for suf in ("", "-wal", "-shm"):
+        Path(_DB + suf).unlink(missing_ok=True)
+    Path(_LOG).unlink(missing_ok=True)
+
+
+def test_los_filtros_del_registro():
+    audit = _audit_activo(_DB)
+    Path(_LOG).unlink(missing_ok=True)
+    audit.log("recall", "abstención: nada destaca del ruido", n=18)
+    audit.log("remember", "guardado id=1", texto="el diseño de Peñíscola")
+    audit.log("ERROR", "recall: base de datos bloqueada")
+
+    assert len(audit.tail(0, accion="recall")) == 1, "filtro por acción"
+    assert len(audit.tail(0, accion="ERROR")) == 1, "los errores se filtran igual"
+    # buscar sin acentos debe encontrar CON acentos: nadie escribe 'diseño' al buscar
+    assert len(audit.tail(0, contiene="diseno")) == 1, "búsqueda insensible a acentos"
+    assert len(audit.tail(0, contiene="ABSTENCION")) == 1, "insensible a mayúsculas"
+    assert audit.tail(0, contiene="no aparece jamas") == []
+    assert len(audit.tail(0, solo_hoy=True)) == 3, "todo esto es de hoy"
+    assert set(audit.acciones()) == {"recall", "remember", "ERROR"}, audit.acciones()
+    Path(_LOG).unlink(missing_ok=True)
+
+
+def test_el_registro_dice_por_que_y_no_solo_que():
+    """Un registro que dice 'abstención' sin decir contra qué no explica nada."""
+    _audit_activo(_DB)
+    Path(_LOG).unlink(missing_ok=True)
+    from hipercampo import audit
+    from hipercampo.memory import Hipercampo
+    for suf in ("", "-wal", "-shm"):
+        Path(_DB + suf).unlink(missing_ok=True)
+
+    hc = Hipercampo(_DB, namespace="test")
+    hc.remember("el amoniaco hierve a menos treinta y tres grados", 0.7)
+    hc.recall("a que temperatura hierve el amoniaco")
+    hc.close()
+
+    texto = "\n".join(audit.tail(50))
+    for dato in ("novedad=", "sorpresa=", "mirados=", "mejor=", "ms="):
+        assert dato in texto, f"falta {dato} en el registro:\n{texto}"
     for suf in ("", "-wal", "-shm"):
         Path(_DB + suf).unlink(missing_ok=True)
     Path(_LOG).unlink(missing_ok=True)
