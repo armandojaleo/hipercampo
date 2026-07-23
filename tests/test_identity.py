@@ -58,6 +58,30 @@ def test_no_se_mezcla_con_la_memoria_del_mundo():
     hc.close()
 
 
+def test_no_entra_por_la_puerta_de_los_enlaces():
+    """El agujero real: con HIPERCAMPO_LINKED='*' la identidad se colaba en recall
+    como si fuera un proyecto más. '*' significa 'todos MIS PROYECTOS', no 'todo
+    lo que hay en el fichero'."""
+    hc = memoria("id_enlaces", namespace="proyecto_a")
+    ruta = hc.store.path
+    hc.learn("una leccion que no debe aparecer mezclada con el mundo", "leccion")
+    hc.remember("un recuerdo normal del proyecto para que haya con que comparar", 0.6)
+    hc.close()
+
+    con_todo = Hipercampo(ruta, namespace="proyecto_a", linked=["*"])
+    assert SELF_NAMESPACE not in con_todo.store.linked, (
+        f"la identidad entró como proyecto enlazado: {con_todo.store.linked}")
+    hits = con_todo.recall("una leccion que no debe aparecer mezclada")
+    assert not any("no debe aparecer" in h["text"] for h in hits), (
+        f"la identidad se coló en recall: {hits}")
+    con_todo.close()
+
+    # y tampoco si alguien la pide por su nombre explícitamente
+    explicito = Hipercampo(ruta, namespace="proyecto_a", linked=[SELF_NAMESPACE])
+    assert SELF_NAMESPACE not in explicito.store.linked, "se coló pidiéndola a mano"
+    explicito.close()
+
+
 def test_una_leccion_no_se_olvida_por_desuso():
     """El olvido activo poda lo débil; una lección aprendida no es débil."""
     hc = memoria("id_no_olvida")

@@ -155,12 +155,17 @@ class Hipercampo:
             linked = os.environ.get("HIPERCAMPO_LINKED", "")
         if isinstance(linked, str):
             linked = [n.strip() for n in linked.split(",") if n.strip()]
+        from .identity import SELF_NAMESPACE
         if "*" in linked:
             with_all = Store(path, namespace=namespace)
             linked = [r[0] for r in with_all.db.execute(
-                "SELECT DISTINCT namespace FROM memories WHERE namespace<>?",
-                (namespace,))]
+                "SELECT DISTINCT namespace FROM memories WHERE namespace NOT IN (?,?)",
+                (namespace, SELF_NAMESPACE))]
             with_all.close()
+        # La identidad de trabajo NUNCA entra por la puerta de los enlaces: se lee
+        # a propósito con identity(), no mezclada entre los recuerdos del mundo.
+        # ("*" significa "todos mis proyectos", no "todo lo que hay en el fichero".)
+        linked = [n for n in linked if n != SELF_NAMESPACE]
         self.store = Store(path, namespace=namespace, linked=tuple(linked))
         audit.set_logfile(path)
         # Modelo de sorpresa: se "calienta" reproduciendo la memoria existente,

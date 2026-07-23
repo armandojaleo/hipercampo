@@ -22,6 +22,13 @@ All notable changes to this project are documented here. Format loosely based on
 - New suite `tests/test_identity.py` (9) — **29 suites**.
 
 ### Fixed
+- **The identity leaked in through the linked-contexts door.** With
+  `HIPERCAMPO_LINKED="*"` the wildcard enumerated *every* namespace in the file,
+  `__self__` included, so working-identity entries surfaced in ordinary `recall`
+  mixed with memories of the world. The isolation test only covered the direct
+  path, not the linked one. `*` now means "all my projects", never "everything in
+  the file", and `__self__` is refused even when named explicitly.
+  Caught in production, by the hook, one minute after shipping it.
 - `Hipercampo.close()` now closes the identity store too. Without it every hook
   invocation leaked a file handle (and on Windows locked the file).
 
