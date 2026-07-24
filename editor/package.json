@@ -1,0 +1,95 @@
+{
+  "name": "hipercampo-viewer",
+  "displayName": "hipercampo — visor de memoria",
+  "description": "Ver y explorar la memoria de hipercampo desde VS Code: lista, mapa, tiempo y ejes (local-first, sin red).",
+  "version": "0.2.0",
+  "publisher": "armandojaleo",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/armandojaleo/hipercampo" },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other", "Visualization"],
+  "keywords": ["hipercampo", "memory", "mcp", "claude"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hipercampo.showMemories",
+        "title": "hipercampo: ver memorias",
+        "icon": "$(database)"
+      },
+      {
+        "command": "hipercampo.refresh",
+        "title": "hipercampo: refrescar memorias",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hipercampoView",
+          "title": "hipercampo",
+          "icon": "media/brain.svg"
+        }
+      ]
+    },
+    "views": {
+      "hipercampoView": [
+        {
+          "id": "hipercampo.home",
+          "name": "Memoria"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "hipercampo.home",
+        "contents": "Explora tu memoria de hipercampo: lista, mapa asociativo, línea de tiempo y ejes.\n\n[Abrir el visor](command:hipercampo.showMemories)\n\nSe abre a un lado del editor."
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "hipercampo.showMemories",
+          "when": "view == hipercampo.home",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "hipercampo",
+      "properties": {
+        "hipercampo.command": {
+          "type": "string",
+          "default": "hipercampo",
+          "description": "Ejecutable de hipercampo. Si no está en el PATH, pon la ruta completa, o «python -m hipercampo.cli»."
+        },
+        "hipercampo.dbPath": {
+          "type": "string",
+          "default": "",
+          "description": "Ruta del fichero .db (HIPERCAMPO_DB). Vacío = el que hipercampo use por defecto."
+        },
+        "hipercampo.namespace": {
+          "type": "string",
+          "default": "",
+          "description": "Contexto a mostrar (HIPERCAMPO_NAMESPACE). Vacío = «default». Se ignora con «todos los contextos» activado."
+        },
+        "hipercampo.allNamespaces": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar todo el fichero, no solo un contexto."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

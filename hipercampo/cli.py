@@ -241,6 +241,91 @@ def cmd_identity(_args) -> int:
         hc.close()
 
 
+def cmd_list(args) -> int:
+    """Vuelca las memorias: JSON para el visor de VS Code, o una tabla legible."""
+    import time as _t
+
+    from .config import db_path
+    from .store import Store
+    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+    s = Store(db_path(), namespace=ns)
+    try:
+        filas = s.dump(all_namespaces=args.all_namespaces,
+                       include_dormant=args.include_dormant,
+                       kind=args.kind, limit=args.limit, order=args.sort)
+    finally:
+        s.close()
+
+    if args.json:
+        print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
+                          "count": len(filas), "memories": filas},
+                         ensure_ascii=False, default=str))
+        return 0
+
+    if not filas:
+        print("No hay memorias que mostrar en este criterio.")
+        return 0
+    ahora = _t.time()
+    print(f"{len(filas)} memoria(s)"
+          + (" · todo el fichero" if args.all_namespaces else f" · contexto «{ns}»") + "\n")
+    for m in filas:
+        edad_d = (ahora - m["last_access"]) / 86400
+        marcas = "".join(c for c, on in (("💤", m["dormant"]), ("📦", m["consolidated"]),
+                                         ("↩", m["superseded"])) if on)
+        cab = f"#{m['id']} [{m['kind']}]"
+        if args.all_namespaces:
+            cab += f" ⟨{m['namespace']}⟩"
+        texto = m["text"].replace("\n", " ")
+        if len(texto) > 100:
+            texto = texto[:97] + "…"
+        print(f"{cab} {marcas}")
+        print(f"   {texto}")
+        print(f"   imp {m['importance']:.2f} · fiab {m['confidence']:.2f} · "
+              f"fuerza {m['strength']:.2f} · usos {m['access_count']} · "
+              f"visto hace {edad_d:.0f}d")
+    return 0
+
+
+def cmd_graph(args) -> int:
+    """Vuelca el grafo asociativo (nodos + aristas) en JSON para el mapa del visor."""
+    from .config import db_path
+    from .store import Store
+    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+    s = Store(db_path(), namespace=ns)
+    try:
+        nodos = s.dump(all_namespaces=args.all_namespaces, include_dormant=True)
+        aristas = s.links_dump(all_namespaces=args.all_namespaces)
+    finally:
+        s.close()
+    # Solo aristas cuyos DOS extremos están entre los nodos mostrados (no colgar).
+    ids = {n["id"] for n in nodos}
+    aristas = [e for e in aristas if e["src"] in ids and e["dst"] in ids]
+    print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
+                      "nodes": nodos, "edges": aristas}, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_dormant(args) -> int:
+    """Adormece (o despierta con --wake) recuerdos por id. Escritura: solo el propio
+    contexto. Es el «olvidar» reversible del visor, distinto de purgar (físico)."""
+    from .config import db_path
+    from .store import Store
+    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+    try:
+        ids = [int(x) for x in args.ids.split(",") if x.strip()]
+    except ValueError:
+        print("--ids debe ser una lista de números separados por comas.", file=sys.stderr)
+        return 2
+    s = Store(db_path(), namespace=ns)
+    try:
+        s.set_dormant(ids, dormant=not args.wake)
+    finally:
+        s.close()
+    accion = "despiertos" if args.wake else "adormecidos"
+    print(json.dumps({accion: ids, "namespace": ns}, ensure_ascii=False))
+    return 0
+
+
 def cmd_purge(args) -> int:
     """Borrado FÍSICO y seguro. Irreversible: se enseña primero qué se va a borrar
     (ensayo) y se pide confirmación, salvo --yes. Es lo contrario del olvido normal,
@@ -249,6 +334,8 @@ def cmd_purge(args) -> int:
         print("Elige UNO: --ids 3,7,9  o  --older-than DÍAS.", file=sys.stderr)
         return 2
     ids = [int(x) for x in args.ids.split(",")] if args.ids else None
+    if getattr(args, "namespace", None):
+        os.environ["HIPERCAMPO_NAMESPACE"] = args.namespace   # acotar a ese contexto
     hc = _hc()
     try:
         ensayo = hc.purge(older_than_days=args.older_than, ids=ids, dry_run=True)
@@ -389,12 +476,33 @@ def main(argv=None) -> int:
             sp.add_argument("--confidence", type=float, default=0.5)
     bk = sub.add_parser("backup", help="copia de seguridad consistente")
     bk.add_argument("dest", nargs="?")
+    ls = sub.add_parser("list", help="volcar las memorias (tabla o --json para la UI)")
+    ls.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
+    ls.add_argument("--all-namespaces", "-A", action="store_true",
+                    help="todo el fichero, no solo el contexto actual")
+    ls.add_argument("--namespace", help="ver un contexto concreto (por defecto: el actual)")
+    ls.add_argument("--include-dormant", action="store_true",
+                    help="incluir los latentes (olvidados-pero-no-borrados)")
+    ls.add_argument("--kind", help="filtrar por tipo: episodic, semantic…")
+    ls.add_argument("--sort", default="recent",
+                    choices=("recent", "importance", "access", "created"),
+                    help="orden (por defecto: acceso más reciente)")
+    ls.add_argument("--limit", type=int, help="cuántas como mucho")
+    gr = sub.add_parser("graph", help="volcar el grafo (nodos + aristas) para el visor")
+    gr.add_argument("--all-namespaces", "-A", action="store_true")
+    gr.add_argument("--namespace", help="contexto (por defecto: el actual)")
+    gr.add_argument("--include-dormant", action="store_true", default=True)
+    dm = sub.add_parser("dormant", help="adormecer o despertar recuerdos por id")
+    dm.add_argument("--ids", required=True, help="ids separados por comas")
+    dm.add_argument("--wake", action="store_true", help="despertar en vez de adormecer")
+    dm.add_argument("--namespace", help="contexto (por defecto: el actual)")
     pg = sub.add_parser("purge", help="borrado FÍSICO y seguro (secretos, RGPD, espacio)")
     pg.add_argument("--ids", help="ids concretos a borrar, separados por comas")
     pg.add_argument("--older-than", type=float, metavar="DÍAS",
                     help="purga los LATENTES sin acceso desde hace más de N días")
     pg.add_argument("--no-vacuum", action="store_true",
                     help="no recuperar espacio (más rápido; el texto igual se sobrescribe)")
+    pg.add_argument("--namespace", help="contexto (por defecto: el actual)")
     pg.add_argument("--yes", action="store_true", help="no pedir confirmación")
     lg = sub.add_parser("log", help="qué ha decidido hipercampo últimamente")
     lg.add_argument("-n", type=int, default=20, help="cuántas líneas (0 = todas)")
@@ -431,6 +539,12 @@ def main(argv=None) -> int:
     if args.cmd == "backup":
         from .backup import backup
         print("Copia creada en:", backup(args.dest)); return 0
+    if args.cmd == "list":
+        return cmd_list(args)
+    if args.cmd == "graph":
+        return cmd_graph(args)
+    if args.cmd == "dormant":
+        return cmd_dormant(args)
     if args.cmd == "purge":
         return cmd_purge(args)
     if args.cmd == "log":

@@ -1,0 +1,41 @@
+name: Publicar visor (VS Code Marketplace)
+
+# Publica la extensión editor/ en el Marketplace al empujar un tag viewer-vX.Y.Z.
+# Requiere el secreto VSCE_PAT (ver editor/PUBLISHING.md). Sin ese secreto no hace nada.
+on:
+  push:
+    tags: ["viewer-v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar
+        run: npm run compile
+
+      - name: La versión del tag debe coincidir con package.json
+        run: |
+          TAG="${GITHUB_REF_NAME#viewer-v}"
+          PKG=$(node -p "require('./package.json').version")
+          echo "tag=$TAG  package.json=$PKG"
+          test "$TAG" = "$PKG" || { echo "::error::el tag ($TAG) no coincide con package.json ($PKG)"; exit 1; }
+
+      - name: Publicar en el Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::error::falta el secreto VSCE_PAT (ver editor/PUBLISHING.md)"; exit 1
+          fi
+          npx --yes @vscode/vsce publish -p "$VSCE_PAT"

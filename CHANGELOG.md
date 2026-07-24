@@ -5,6 +5,38 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Added
+- **A window into the memory, inside VS Code.** New viewer in `editor/` with four tabs
+  over the same single fetch:
+  - **List** — every memory as a card (type, the four axes, use count, last-seen, and
+    dormant/consolidated/superseded/soon-dormant flags), with per-card actions.
+  - **Map** — the associative graph, rendered as a force-directed layout on a plain
+    canvas (no external libs; the CSP forbids CDNs): nodes coloured by project and sized
+    by importance, edges by association, dream-bridges dashed. Drag, zoom, pan, click to
+    focus a node and its neighbours.
+  - **Timeline** — memories by recency with a strength bar, flagging the ones about to
+    go dormant.
+  - **Axes** — an importance × reliability scatter (size = strength) to spot the
+    "important but unreliable" at a glance.
+  - Cross-cutting: **project chips** to show/hide each namespace, a search with three
+    modes (instant client-side **text**, agent **recall**, and **muse** — the *eureka*
+    path that surfaces indirect and dormant associations), and launch icons in the
+    **status bar** and the **activity bar**. Read-only for browsing; forgetting and
+    deleting are explicit actions through the CLI with confirmation.
+- **New CLI commands the viewer stands on** (useful on their own too):
+  - `hipercampo list` — dump memories (table, or `--json`). Filters `--all-namespaces`,
+    `--include-dormant`, `--kind`, `--sort`, `--limit`.
+  - `hipercampo graph --json` — nodes + edges of the associative graph (only edges whose
+    both ends are shown).
+  - `hipercampo dormant --ids N[,M] [--wake]` — forget/reactivate by id (the reversible
+    "forget" the viewer's 💤/☀️ buttons use), and `purge --namespace` to scope a physical
+    delete. Tests in `tests/test_list.py` (no `hv` blob dumped; namespace isolation kept).
+  - A finding worth stating: on a real corpus of *long* memories, the viewer's default
+    search can't be `hc_recall` — the agent's abstention (calibrated `ANSWER_MIN_SCORE`
+    plus the length dilution documented in `memory.py`) makes it stay silent on long
+    entries, which is right for the agent and wrong for a human browsing. So text mode
+    filters client-side; recall/muse stay available as an explicit "search like the agent".
+
 ## [0.1.0b1] — 2026-07-23
 
 Primera **beta**: la superficie de la API queda congelada (contrato en

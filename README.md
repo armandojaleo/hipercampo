@@ -66,6 +66,13 @@ You'll see the algebra distinguishing word order and the full cycle
 across sessions, a project knowledge base with role queries, and creative
 brainstorming where forgotten memories resurface.
 
+**See your memory** without leaving the editor: the VS Code viewer in
+[`editor/`](editor/) has four tabs — a **list** of cards, the associative **map**
+(force-directed graph), a **timeline** with the forgetting curve, and an
+importance×reliability **scatter** — plus project filters and a *muse* "eureka"
+search. Read-only for browsing; it shells out to the CLI and never touches the
+database directly.
+
 ---
 
 ## Test battery — it does what it says

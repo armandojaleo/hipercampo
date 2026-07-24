@@ -625,6 +625,68 @@ class Store:
             q += " AND dormant = 0"
         return self.db.execute(q, args).fetchall()
 
+    _CAMPOS_DUMP = ("id", "text", "kind", "novelty", "importance", "confidence",
+                    "strength", "access_count", "created", "last_access",
+                    "consolidated", "superseded", "dormant", "namespace")
+
+    def dump(self, all_namespaces: bool = False, include_dormant: bool = True,
+             kind: str | None = None, limit: int | None = None,
+             order: str = "recent") -> list[dict]:
+        """Vuelca memorias como dicts SIN el hipervector (para inspección/UI), no como
+        filas crudas. Por defecto solo el contexto propio; `all_namespaces=True` mira
+        TODO el fichero — es una lectura de inspección del dueño de su propia memoria
+        (como `backup`/`stats`), no un cruce entre contextos durante una operación."""
+        campos = ", ".join(self._CAMPOS_DUMP)
+        if all_namespaces:
+            q, args = f"SELECT {campos} FROM memories", []
+            cond = []
+        else:
+            marks = ",".join("?" * len(self._ns_lectura))
+            q = f"SELECT {campos} FROM memories WHERE namespace IN ({marks})"
+            args = [*self._ns_lectura]
+            cond = []
+        if kind:
+            cond.append("kind = ?"); args.append(kind)
+        if not include_dormant:
+            cond.append("dormant = 0")
+        if cond:
+            q += (" WHERE " if all_namespaces else " AND ") + " AND ".join(cond)
+        orden = {"recent": "last_access DESC", "importance": "importance DESC",
+                 "access": "access_count DESC", "created": "created DESC"}.get(
+                     order, "last_access DESC")
+        q += f" ORDER BY {orden}"
+        if limit:
+            q += " LIMIT ?"; args.append(int(limit))
+        return [dict(r) for r in self.db.execute(q, args).fetchall()]
+
+    def links_dump(self, all_namespaces: bool = False,
+                   include_proposed: bool = True) -> list[dict]:
+        """Aristas del grafo asociativo como dicts (src, dst, weight, type, status).
+        Para el mapa de la red del visor. Por defecto el contexto propio; con
+        `all_namespaces` todo el fichero (inspección del dueño, como `dump`)."""
+        campos = "src, dst, weight, type, status, namespace"
+        if all_namespaces:
+            q, args = f"SELECT {campos} FROM links", []
+            cond = []
+        else:
+            marks = ",".join("?" * len(self._ns_lectura))
+            q = f"SELECT {campos} FROM links WHERE namespace IN ({marks})"
+            args = [*self._ns_lectura]
+            cond = []
+        if not include_proposed:
+            cond.append("status != 'proposed'")
+        if cond:
+            q += (" WHERE " if all_namespaces else " AND ") + " AND ".join(cond)
+        return [dict(r) for r in self.db.execute(q, args).fetchall()]
+
+    def set_dormant(self, ids: list[int], dormant: bool):
+        """Adormece o despierta recuerdos por id (para el visor). Acotado al propio
+        namespace: no se puede tocar lo de otro contexto ni lo enlazado (solo lectura)."""
+        if dormant:
+            self.mark_dormant(ids)
+        else:
+            self.reactivate(ids)
+
     def get(self, mem_id: int):
         # Acotado a lo LEGIBLE (propio + enlazados): un contexto no enlazado sigue
         # siendo invisible, ni siquiera por id.

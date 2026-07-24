@@ -1,0 +1,144 @@
+/* Tema-aware: usa las variables del tema de VS Code, así encaja en claro y oscuro. */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+
+header {
+  padding: 10px 14px 6px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
+}
+.row { display: flex; gap: 8px; align-items: center; }
+.row + .row { margin-top: 8px; }
+.meta { font-size: .9em; color: var(--vscode-descriptionForeground); flex-wrap: wrap; }
+
+#q {
+  flex: 1;
+  padding: 6px 10px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+}
+#q:focus { outline: 1px solid var(--vscode-focusBorder); }
+
+select, button {
+  padding: 6px 8px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+button { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; }
+button:hover { background: var(--vscode-button-hoverBackground); }
+
+.chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: .82em;
+  cursor: pointer;
+  border: 1px solid var(--chip, var(--vscode-panel-border));
+  color: var(--vscode-foreground);
+  opacity: .45;
+  user-select: none;
+}
+.chip.on { opacity: 1; background: color-mix(in srgb, var(--chip) 22%, transparent); }
+
+.scope { font-style: italic; }
+.count { margin-left: auto; }
+
+/* pestañas ------------------------------------------------------------------ */
+#tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
+}
+.tab {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 12px;
+}
+.tab:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,.12)); }
+.tab.active {
+  color: var(--vscode-foreground);
+  border-bottom-color: var(--vscode-focusBorder);
+}
+
+main { flex: 1; position: relative; overflow: hidden; }
+.view { position: absolute; inset: 0; overflow: auto; padding: 8px 14px 24px; display: none; }
+.view.active { display: block; }
+#view-graph.active, #view-axes.active { display: block; padding: 0; }
+
+/* lista --------------------------------------------------------------------- */
+.card {
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: var(--vscode-editorWidget-background, rgba(128,128,128,.06));
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.2));
+  border-left: 3px solid var(--accent, var(--vscode-textLink-foreground));
+  border-radius: 4px;
+}
+.card.dormant { opacity: .62; }
+.card.superseded .text { text-decoration: line-through; text-decoration-color: rgba(128,128,128,.6); }
+
+.card .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; font-size: .85em; color: var(--vscode-descriptionForeground); }
+.id { font-variant-numeric: tabular-nums; opacity: .7; }
+.badge { padding: 1px 7px; border-radius: 999px; font-size: .82em; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+.ns { font-style: italic; }
+.flags { letter-spacing: 2px; }
+.actions { margin-left: auto; display: flex; gap: 4px; }
+.actions button { padding: 2px 6px; font-size: .9em; background: transparent; color: var(--vscode-foreground); opacity: .6; }
+.actions button:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,.15)); }
+
+.text { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+.metrics { margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap; font-size: .82em; color: var(--vscode-descriptionForeground); }
+.metrics b { color: var(--vscode-foreground); font-weight: 600; }
+.bar { --v: 0; display: inline-block; width: 42px; height: 6px; vertical-align: middle; margin-left: 4px; border-radius: 3px; background: linear-gradient(to right, var(--vscode-textLink-foreground) calc(var(--v) * 100%), rgba(128,128,128,.25) 0); }
+
+/* canvas (mapa / ejes) ------------------------------------------------------ */
+canvas { display: block; width: 100%; height: 100%; }
+.legend { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; font-size: .8em; background: var(--vscode-editorWidget-background, rgba(30,30,30,.85)); border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.3)); border-radius: 6px; pointer-events: none; }
+.legend .k { display: flex; gap: 6px; align-items: center; }
+.legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+.legend .ln { width: 16px; height: 0; border-top: 2px solid; }
+
+.detail, .tip {
+  position: absolute; bottom: 12px; left: 12px; right: 12px;
+  max-height: 42%; overflow: auto;
+  padding: 10px 12px;
+  background: var(--vscode-editorWidget-background, rgba(30,30,30,.95));
+  border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.35));
+  border-radius: 6px;
+  font-size: .9em;
+}
+.tip { bottom: auto; right: auto; max-width: 320px; pointer-events: none; }
+.detail .actions { margin-top: 8px; }
+.detail .actions button { opacity: 1; padding: 4px 8px; }
+
+/* tiempo -------------------------------------------------------------------- */
+.tl { display: flex; gap: 10px; align-items: center; padding: 4px 0; font-size: .88em; border-bottom: 1px solid rgba(128,128,128,.12); }
+.tl-date { width: 84px; flex: none; color: var(--vscode-descriptionForeground); text-align: right; }
+.tl-bar { width: 90px; flex: none; height: 8px; border-radius: 4px; background: rgba(128,128,128,.2); overflow: hidden; }
+.tl-fill { display: block; height: 100%; }
+.tl-txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-flag { flex: none; color: var(--vscode-descriptionForeground); font-size: .9em; }
+
+.empty, .error { padding: 24px 16px; color: var(--vscode-descriptionForeground); }
+.error { color: var(--vscode-errorForeground); white-space: pre-wrap; font-family: var(--vscode-editor-font-family, monospace); }
+.hint { font-size: .9em; opacity: .8; }
+.hidden { display: none !important; }

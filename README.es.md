@@ -66,6 +66,12 @@ Verás el álgebra distinguiendo el orden de las palabras y el ciclo completo
 recuerda entre sesiones, una base de conocimiento con consultas por rol, y
 brainstorming creativo donde los recuerdos olvidados resurgen.
 
+**Ver la memoria** sin salir del editor: el visor de VS Code en [`editor/`](editor/)
+tiene cuatro pestañas — **lista** de tarjetas, el **mapa** asociativo (grafo
+force-directed), una **línea de tiempo** con la curva de olvido y una dispersión de
+**ejes** (importancia×fiabilidad) — con filtros por proyecto y búsqueda *muse* «eureka».
+De solo lectura para consultar: llama al CLI, nunca toca la base de datos directamente.
+
 ---
 
 ## Batería de pruebas — que hace lo que dice

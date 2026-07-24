@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="%CSP%">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="%STYLE%">
+  <title>hipercampo — memoria</title>
+</head>
+<body>
+  <header>
+    <div class="row">
+      <input id="q" type="search" placeholder="Filtrar por texto…" autocomplete="off">
+      <select id="mode" title="Cómo buscar">
+        <option value="text">texto</option>
+        <option value="recall">recall (agente)</option>
+        <option value="muse">muse (eureka)</option>
+      </select>
+      <button id="refresh" title="Refrescar">↻</button>
+    </div>
+    <div class="row meta">
+      <label><input type="checkbox" id="all"> todos los contextos</label>
+      <span id="chips" class="chips"></span>
+      <span id="scope" class="scope"></span>
+      <span id="count" class="count"></span>
+    </div>
+  </header>
+
+  <nav id="tabs">
+    <button class="tab active" data-view="list">Lista</button>
+    <button class="tab" data-view="graph">Mapa</button>
+    <button class="tab" data-view="timeline">Tiempo</button>
+    <button class="tab" data-view="axes">Ejes</button>
+  </nav>
+
+  <main>
+    <section id="view-list" class="view active"></section>
+    <section id="view-graph" class="view">
+      <canvas id="graph-canvas"></canvas>
+      <div id="graph-legend" class="legend"></div>
+      <div id="graph-detail" class="detail hidden"></div>
+    </section>
+    <section id="view-timeline" class="view"></section>
+    <section id="view-axes" class="view">
+      <canvas id="axes-canvas"></canvas>
+      <div id="axes-tip" class="tip hidden"></div>
+    </section>
+  </main>
+
+  <div id="empty" class="empty hidden">
+    <p>Nada que mostrar.</p>
+    <p class="hint">Prueba a limpiar el buscador o activa «todos los contextos».</p>
+  </div>
+  <div id="error" class="error hidden"></div>
+
+  <script nonce="%NONCE%" src="%SCRIPT%"></script>
+</body>
+</html>

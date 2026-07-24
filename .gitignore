@@ -20,3 +20,8 @@ data/
 .claude/settings.local.json
 .mcp.json
 *.bak-*
+
+# Extensión de VS Code (editor/): dependencias y build, no se versionan
+editor/node_modules/
+editor/out/
+editor/*.vsix
