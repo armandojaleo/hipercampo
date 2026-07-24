@@ -258,6 +258,7 @@ def cmd_list(args) -> int:
 
     if args.json:
         print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
+                          "db": os.path.abspath(db_path()),
                           "count": len(filas), "memories": filas},
                          ensure_ascii=False, default=str))
         return 0
@@ -301,6 +302,7 @@ def cmd_graph(args) -> int:
     ids = {n["id"] for n in nodos}
     aristas = [e for e in aristas if e["src"] in ids and e["dst"] in ids]
     print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
+                      "db": os.path.abspath(db_path()),
                       "nodes": nodos, "edges": aristas}, ensure_ascii=False, default=str))
     return 0
 

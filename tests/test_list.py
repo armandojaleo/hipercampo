@@ -10,7 +10,10 @@ Lo que se exige:
 Ejecuta:  python -m pytest tests/test_list.py
 """
 
+import contextlib
+import io
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +21,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from helpers import ejecutar, limpiar     # noqa: E402
+from hipercampo import cli                 # noqa: E402
 from hipercampo.memory import Hipercampo   # noqa: E402
 from hipercampo.store import Store         # noqa: E402
 
@@ -116,6 +121,48 @@ def test_dormant_y_wake_por_id():
     a.close()
 
 
+def _cli(args):
+    """Llama al CLI EN PROCESO (no subprocess) para que la cobertura cuente cli.py."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = cli.main(args)
+    return code, buf.getvalue()
+
+
+def test_cli_list_graph_dormant_en_proceso():
+    _sembrar()
+    os.environ["HIPERCAMPO_DB"] = _DB
+    os.environ["HIPERCAMPO_LOG"] = "0"
+    os.environ["HIPERCAMPO_NAMESPACE"] = "alice"
+    try:
+        code, out = _cli(["list", "--json", "--all-namespaces"])
+        assert code == 0 and '"memories"' in out
+        code, out = _cli(["list", "--all-namespaces", "--sort", "importance"])
+        assert code == 0                                   # tabla legible
+        code, out = _cli(["list", "--kind", "episodic", "--limit", "1"])
+        assert code == 0
+        code, out = _cli(["graph", "--all-namespaces"])
+        assert code == 0 and '"edges"' in out and '"nodes"' in out
+        # olvidar/despertar por id, en el propio contexto
+        mid = json.loads(_cli(["list", "--json"])[1])["memories"][0]["id"]
+        code, out = _cli(["dormant", "--ids", str(mid)])
+        assert code == 0 and "adormecidos" in out
+        code, out = _cli(["dormant", "--ids", str(mid), "--wake"])
+        assert code == 0 and "despiertos" in out
+        # entradas inválidas: se rechazan con código != 0, no revientan
+        assert _cli(["dormant", "--ids", "no-numero"])[0] != 0
+    finally:
+        os.environ.pop("HIPERCAMPO_DB", None)
+        os.environ.pop("HIPERCAMPO_NAMESPACE", None)
+
+
 def _env():
-    import os
     return dict(os.environ)
+
+
+if __name__ == "__main__":     # el bucle de cobertura de CI ejecuta este fichero como script
+    limpiar()
+    _clean()
+    codigo = ejecutar(dict(globals()))
+    _clean()
+    sys.exit(codigo)

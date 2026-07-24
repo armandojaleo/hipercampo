@@ -20,9 +20,11 @@ All notable changes to this project are documented here. Format loosely based on
     "important but unreliable" at a glance.
   - Cross-cutting: **project chips** to show/hide each namespace, a search with three
     modes (instant client-side **text**, agent **recall**, and **muse** — the *eureka*
-    path that surfaces indirect and dormant associations), and launch icons in the
-    **status bar** and the **activity bar**. Read-only for browsing; forgetting and
-    deleting are explicit actions through the CLI with confirmation.
+    path that surfaces indirect and dormant associations), and two ways in: a **status
+    bar** button (opens the wide side panel) and an **activity-bar** icon that hosts the
+    *full* viewer in the sidebar. It **auto-refreshes** when the `.db` changes (watching
+    the file, WAL-debounced) so edits made by the agent show up without reopening.
+    Read-only for browsing; forgetting and deleting are explicit CLI actions with confirmation.
 - **New CLI commands the viewer stands on** (useful on their own too):
   - `hipercampo list` — dump memories (table, or `--json`). Filters `--all-namespaces`,
     `--include-dormant`, `--kind`, `--sort`, `--limit`.
