@@ -36,7 +36,13 @@ enviar({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
 tools = [t["name"] for t in esperar(2)["result"]["tools"]]
 p.stdin.close(); p.terminate()
 
-faltan = {"hc_remember", "hc_recall", "hc_assist", "hc_health"} - set(tools)
+# Por defecto (HIPERCAMPO_TOOLS=auto) solo se anuncian las de uso DIARIO más la puerta
+# `hc_tools`; el resto (hc_health, hc_dream, hc_forget…) no desaparecen, se activan en
+# caliente. Así que el humo exige el núcleo anunciado + la puerta, no lo que ya no se
+# anuncia de entrada. (Antes pedía hc_health y por eso el release se caía tras el recorte
+# de tokens: el test se quedó viejo, no el servidor.)
+faltan = {"hc_remember", "hc_recall", "hc_assist", "hc_tools"} - set(tools)
 if faltan:
-    raise SystemExit(f"faltan herramientas: {sorted(faltan)} · hay {tools}")
-print(f"handshake MCP OK · {len(tools)} herramientas")
+    raise SystemExit(f"faltan herramientas anunciadas por defecto: {sorted(faltan)} · "
+                     f"hay {tools}")
+print(f"handshake MCP OK · {len(tools)} herramientas anunciadas (+ catálogo en hc_tools)")
