@@ -381,14 +381,21 @@ def cmd_log(args) -> int:
         return 1
 
     accion = "ERROR" if args.errores else args.accion
+
+    def leer(n):
+        return audit.tail(n, contiene=args.grep, solo_hoy=args.hoy, accion=accion)
+
+    if getattr(args, "json", False):        # salida estructurada para el visor
+        entradas = [_entrada_log(ln) for ln in leer(args.n if args.n else 200)]
+        print(json.dumps({"path": ruta, "entries": entradas},
+                         ensure_ascii=False, default=str))
+        return 0
+
     filtros = " · ".join(f for f in (
         f"acción={accion}" if accion else "",
         f"contiene «{args.grep}»" if args.grep else "",
         "solo hoy" if args.hoy else "") if f)
     print(f"# {ruta}{' · ' + filtros if filtros else ''}")
-
-    def leer(n):
-        return audit.tail(n, contiene=args.grep, solo_hoy=args.hoy, accion=accion)
 
     lineas = leer(args.n)
     if not lineas:
@@ -413,6 +420,107 @@ def cmd_log(args) -> int:
                     vistas.add(ln)
     except KeyboardInterrupt:
         print("\n-- fin --")
+    return 0
+
+
+def _entrada_log(ln: str) -> dict:
+    """Parte una línea del registro en {ts, accion, mensaje} (best-effort).
+    Formato: 'YYYY-MM-DD HH:MM:SS accion    mensaje'."""
+    ts = ln[:19]
+    resto = ln[20:] if len(ln) > 20 else ""
+    partes = resto.split(" ", 1)
+    accion = partes[0] if partes else ""
+    mensaje = partes[1].strip() if len(partes) > 1 else ""
+    return {"ts": ts, "accion": accion, "mensaje": mensaje, "raw": ln}
+
+
+def cmd_tokens(_args) -> int:
+    """La FACTURA de tokens, en JSON: el rasgo de la casa hecho visible. Cuánto ha
+    costado la memoria, cuánto se ahorró el presupuesto, y una serie temporal para
+    dibujarla. Siempre es ESTIMACIÓN y se dice (el tokenizador de Claude no es público)."""
+    from . import audit, budget
+    from .config import db_path
+    audit.set_logfile(db_path())
+    resumen = audit.coste_tokens()
+    resumen["presupuesto_hook"] = budget.HOOK_BUDGET
+    resumen["presupuesto_identidad"] = budget.IDENTITY_BUDGET
+    resumen["estimado"] = True
+    resumen["metodo"] = budget.metodo()
+    # serie temporal: cada inyección con su coste (para el gráfico del visor)
+    serie = []
+    for e in (_entrada_log(ln) for ln in audit.tail(0, accion="tokens")):
+        m = re.search(r"(\d+) tok", e["mensaje"])
+        if m:
+            serie.append({"ts": e["ts"], "tok": int(m.group(1)),
+                          "etiqueta": e["mensaje"].split(" ", 1)[0]})
+    print(json.dumps({"summary": resumen, "series": serie[-200:]},
+                     ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_status(_args) -> int:
+    """Estado de salud en JSON para el visor: CLI, base de datos, servidor MCP y
+    registro. Es el 'panel de control' de la memoria, sin adornos: dice qué vive."""
+    from . import __version__, audit
+    from .config import db_path
+    from .procs import listar
+    ruta = os.path.abspath(db_path())
+    out = {"version": __version__, "python": sys.version.split()[0], "db": {"path": ruta}}
+
+    try:
+        out["db"]["exists"] = os.path.isfile(ruta)
+        out["db"]["size"] = os.path.getsize(ruta) if os.path.isfile(ruta) else 0
+        carpeta = os.path.dirname(ruta) or "."
+        out["db"]["writable"] = os.access(carpeta, os.W_OK)
+    except OSError as e:
+        out["db"]["error"] = str(e)
+
+    try:
+        hc = _hc()
+        try:
+            salud = hc.store.health(full=False)
+            out["db"]["schema"] = hc.store.db.execute("PRAGMA user_version").fetchone()[0]
+            out["db"]["schema_expected"] = hc.store.SCHEMA_VERSION
+            out["db"]["healthy"] = bool(salud.get("sana"))
+            out["db"]["integrity"] = salud.get("integridad")
+            # Recuento de TODO el fichero (no solo el contexto actual), para que
+            # cuadre con lo que enseña el visor ("todos los contextos").
+            todos = hc.store.dump(all_namespaces=True, include_dormant=True)
+            por_ctx = {}
+            for m in todos:
+                por_ctx[m["namespace"]] = por_ctx.get(m["namespace"], 0) + 1
+            out["stats"] = {
+                "total": len(todos),
+                "episodicos_activos": sum(1 for m in todos if m["kind"] == "episodic"
+                                          and not m["dormant"] and not m["consolidated"]),
+                "semanticos": sum(1 for m in todos if m["kind"] == "semantic"),
+                "latentes": sum(1 for m in todos if m["dormant"]),
+                "archivados": sum(1 for m in todos if m["consolidated"]),
+                "por_contexto": por_ctx,
+                "tokens": hc.stats().get("tokens"),
+            }
+        finally:
+            hc.close()
+    except Exception as e:
+        out["db"]["error"] = str(e)
+
+    # Servidor MCP: en marcha o no (el cliente lo arranca al usar una herramienta).
+    try:
+        procesos = listar()
+        out["mcp"] = {"running": len(procesos), "servers": procesos}
+    except Exception as e:
+        out["mcp"] = {"error": str(e)}
+
+    # Registro (hooks y decisiones): activo, ruta y última actividad (señal de vida).
+    audit.set_logfile(db_path())
+    log = audit.logfile()
+    reg = {"enabled": bool(log), "path": log}
+    if log and os.path.isfile(log):
+        reg["last_activity"] = os.path.getmtime(log)
+        reg["size"] = os.path.getsize(log)
+    out["log"] = reg
+
+    print(json.dumps(out, ensure_ascii=False, default=str))
     return 0
 
 
@@ -494,6 +602,9 @@ def main(argv=None) -> int:
     gr.add_argument("--all-namespaces", "-A", action="store_true")
     gr.add_argument("--namespace", help="contexto (por defecto: el actual)")
     gr.add_argument("--include-dormant", action="store_true", default=True)
+    sub.add_parser("status", help="estado de salud en JSON (CLI, BD, MCP, registro)")
+    tk = sub.add_parser("tokens", help="factura de tokens en JSON (para el visor)")
+    tk.add_argument("--json", action="store_true", default=True, help=argparse.SUPPRESS)
     dm = sub.add_parser("dormant", help="adormecer o despertar recuerdos por id")
     dm.add_argument("--ids", required=True, help="ids separados por comas")
     dm.add_argument("--wake", action="store_true", help="despertar en vez de adormecer")
@@ -517,6 +628,7 @@ def main(argv=None) -> int:
     lg.add_argument("--hoy", action="store_true", help="solo lo de hoy")
     lg.add_argument("--errores", action="store_true", help="atajo para --accion ERROR")
     lg.add_argument("--ruta", action="store_true", help="solo decir dónde está el fichero")
+    lg.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
     args = p.parse_args(argv)
 
     if args.cmd in (None, "version"):
@@ -545,6 +657,10 @@ def main(argv=None) -> int:
         return cmd_list(args)
     if args.cmd == "graph":
         return cmd_graph(args)
+    if args.cmd == "status":
+        return cmd_status(args)
+    if args.cmd == "tokens":
+        return cmd_tokens(args)
     if args.cmd == "dormant":
         return cmd_dormant(args)
     if args.cmd == "purge":

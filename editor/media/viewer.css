@@ -138,6 +138,39 @@ canvas { display: block; width: 100%; height: 100%; }
 .tl-txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tl-flag { flex: none; color: var(--vscode-descriptionForeground); font-size: .9em; }
 
+/* estado -------------------------------------------------------------------- */
+.scard { margin: 10px 0; padding: 10px 12px; background: var(--vscode-editorWidget-background, rgba(128,128,128,.06)); border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.2)); border-radius: 6px; }
+.scard h3 { margin: 0 0 8px; font-size: .95em; color: var(--vscode-foreground); }
+.strow { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; font-size: .88em; }
+.slabel { width: 150px; flex: none; color: var(--vscode-descriptionForeground); }
+.sval { flex: 1; word-break: break-word; }
+.sval code { font-family: var(--vscode-editor-font-family, monospace); font-size: .92em; }
+.sem { flex: none; width: 1em; }
+.sem.ok { color: #5bd15b; }
+.sem.no { color: #e0813f; }
+
+/* tokens -------------------------------------------------------------------- */
+.hero { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.hnum { flex: 1; min-width: 110px; padding: 12px; text-align: center; background: var(--vscode-editorWidget-background, rgba(128,128,128,.06)); border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.2)); border-radius: 8px; }
+.hnum.good { border-color: color-mix(in srgb, #5bd15b 45%, transparent); }
+.hbig { display: block; font-size: 1.9em; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hnum.good .hbig { color: #5bd15b; }
+.hlbl { display: block; font-size: .8em; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+
+.gauge { position: relative; height: 12px; border-radius: 6px; background: rgba(128,128,128,.2); overflow: hidden; margin: 6px 0 10px; }
+.gfill { display: block; height: 100%; background: var(--vscode-textLink-foreground); }
+.gmark { position: absolute; top: -2px; bottom: -2px; right: 0; width: 2px; background: var(--vscode-descriptionForeground); }
+
+.chart { display: flex; align-items: flex-end; gap: 2px; height: 90px; padding-top: 6px; }
+.tbar { flex: 1; min-width: 2px; border-radius: 2px 2px 0 0; align-self: flex-end; }
+
+/* registro ------------------------------------------------------------------ */
+#view-log { font-family: var(--vscode-editor-font-family, monospace); font-size: .86em; }
+.lrow { display: flex; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(128,128,128,.08); align-items: baseline; }
+.ltime { flex: none; color: var(--vscode-descriptionForeground); }
+.lact { flex: none; min-width: 66px; text-align: center; padding: 0 6px; border: 1px solid; border-radius: 4px; font-size: .9em; }
+.lmsg { flex: 1; word-break: break-word; white-space: pre-wrap; }
+
 .empty, .error { padding: 24px 16px; color: var(--vscode-descriptionForeground); }
 .error { color: var(--vscode-errorForeground); white-space: pre-wrap; font-family: var(--vscode-editor-font-family, monospace); }
 .hint { font-size: .9em; opacity: .8; }

@@ -142,7 +142,23 @@ def test_cli_list_graph_dormant_en_proceso():
         code, out = _cli(["list", "--kind", "episodic", "--limit", "1"])
         assert code == 0
         code, out = _cli(["graph", "--all-namespaces"])
-        assert code == 0 and '"edges"' in out and '"nodes"' in out
+        assert code == 0 and '"edges"' in out and '"nodes"' in out and '"db"' in out
+        # estado de salud: CLI + BD + MCP + registro
+        code, out = _cli(["status"])
+        assert code == 0
+        estado = json.loads(out)
+        assert estado["db"]["healthy"] is True
+        assert "mcp" in estado and "log" in estado and "version" in estado
+        # registro y factura de tokens en JSON (para las pestañas del visor)
+        os.environ["HIPERCAMPO_LOG"] = "1"
+        _cli(["remember", "algo que deje rastro en el registro"])
+        code, out = _cli(["log", "-n", "20", "--json"])
+        assert code == 0 and "entries" in json.loads(out)
+        code, out = _cli(["tokens"])
+        assert code == 0
+        tok = json.loads(out)
+        assert "summary" in tok and "series" in tok
+        os.environ["HIPERCAMPO_LOG"] = "0"
         # olvidar/despertar por id, en el propio contexto
         mid = json.loads(_cli(["list", "--json"])[1])["memories"][0]["id"]
         code, out = _cli(["dormant", "--ids", str(mid)])

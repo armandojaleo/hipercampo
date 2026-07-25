@@ -18,12 +18,20 @@ All notable changes to this project are documented here. Format loosely based on
     go dormant.
   - **Axes** — an importance × reliability scatter (size = strength) to spot the
     "important but unreliable" at a glance.
+  - **Tokens** — the *bill*, made visible (the house trait): spent, saved-by-budget,
+    injections, today; a budget gauge and the per-injection history as bars. Always an
+    estimate, and says so.
+  - **Log** — the decision log live (recall / remember / sleep / forget / tokens…),
+    colour-coded by action, newest first.
+  - **Status** — health with traffic lights: CLI, database (integrity, schema, size),
+    memory per context, MCP server (running or not), and the log.
   - Cross-cutting: **project chips** to show/hide each namespace, a search with three
     modes (instant client-side **text**, agent **recall**, and **muse** — the *eureka*
     path that surfaces indirect and dormant associations), and two ways in: a **status
     bar** button (opens the wide side panel) and an **activity-bar** icon that hosts the
-    *full* viewer in the sidebar. It **auto-refreshes** when the `.db` changes (watching
-    the file, WAL-debounced) so edits made by the agent show up without reopening.
+    *full* viewer in the sidebar. It **auto-refreshes** when the `.db` or `.log` changes
+    (watching the folder, debounced) so what the agent does shows up without reopening;
+    the map keeps node positions across refreshes so it doesn't re-jump.
     Read-only for browsing; forgetting and deleting are explicit CLI actions with confirmation.
 - **New CLI commands the viewer stands on** (useful on their own too):
   - `hipercampo list` — dump memories (table, or `--json`). Filters `--all-namespaces`,
@@ -32,7 +40,12 @@ All notable changes to this project are documented here. Format loosely based on
     both ends are shown).
   - `hipercampo dormant --ids N[,M] [--wake]` — forget/reactivate by id (the reversible
     "forget" the viewer's 💤/☀️ buttons use), and `purge --namespace` to scope a physical
-    delete. Tests in `tests/test_list.py` (no `hv` blob dumped; namespace isolation kept).
+    delete.
+  - `hipercampo status` — health as JSON (CLI, DB integrity/schema/size, memory per
+    context across the whole file, MCP servers running, log). `hipercampo tokens` — the
+    token bill (aggregate + time series). `hipercampo log --json` — the decision log
+    structured. Tests in `tests/test_list.py` (in-process, so coverage counts them; no
+    `hv` blob dumped; namespace isolation kept).
   - A finding worth stating: on a real corpus of *long* memories, the viewer's default
     search can't be `hc_recall` — the agent's abstention (calibrated `ANSWER_MIN_SCORE`
     plus the length dilution documented in `memory.py`) makes it stay silent on long

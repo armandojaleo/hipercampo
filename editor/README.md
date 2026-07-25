@@ -7,13 +7,15 @@ contextos y aislamiento. Es de **solo lectura para consultar**, y toda escritura
 
 ## Cómo abrirlo
 
-- Icono **🗄 memoria** en la **barra de estado** (abajo a la izquierda) → un clic.
-- Icono de hipercampo en la **barra de actividad** (tira izquierda) → botón «Abrir el visor».
+- Botón **🗄 Hipercampo** en la **barra de estado** (abajo) → abre el panel ancho a un lado.
+- Icono de Hipercampo en la **barra de actividad** (tira izquierda) → el **visor completo**
+  vive ahí mismo (ensancha la barra arrastrando su borde si quieres más sitio).
 - O `Ctrl/Cmd+Shift+P` → **«hipercampo: ver memorias»**.
 
-Se abre a un lado del editor.
+**Se refresca solo**: vigila el `.db` y el `.log`, así que según el agente va guardando,
+recordando y decidiendo, las pestañas se actualizan en vivo sin cerrar y abrir.
 
-## Qué muestra (cuatro pestañas)
+## Qué muestra (siete pestañas)
 
 - **Lista** — una tarjeta por recuerdo: texto, tipo (episódico / semántico / identidad),
   y sus ejes medidos (importancia, fiabilidad, fuerza, usos, última vez visto). Estado con
@@ -22,11 +24,19 @@ Se abre a un lado del editor.
 - **Mapa** — el grafo asociativo real: nodos = recuerdos (color por proyecto, tamaño por
   importancia), aristas = asociaciones. Arrastra nodos, rueda para zoom, arrastra el fondo
   para desplazar, clic en un nodo lo resalta con sus vecinos y muestra detalle. Los puentes
-  oníricos (`hc_dream` propuestos) salen de puntos.
+  oníricos (`hc_dream` propuestos) salen de puntos. Las posiciones se conservan entre
+  refrescos (no re-baila).
 - **Tiempo** — recuerdos por acceso reciente, con barra de fuerza; marca los que están a
   punto de dormirse.
 - **Ejes** — dispersión importancia × fiabilidad (tamaño = fuerza); pasa el ratón para ver
   el texto. Caza de un vistazo lo «importante pero poco fiable».
+- **Tokens** — la **factura**: gastados, ahorrados por el presupuesto, inyecciones, hoy;
+  un medidor de media-por-inyección contra el presupuesto y el historial en barras. Siempre
+  es una estimación, y lo dice.
+- **Registro** — el log de decisiones en vivo (recall / remember / sleep / forget / tokens…),
+  coloreado por acción, más reciente arriba.
+- **Estado** — salud con semáforos: CLI, base de datos (integridad, esquema, tamaño),
+  memoria por contexto, servidor MCP (en marcha o no) y registro.
 
 ## Buscar y filtrar
 
@@ -72,6 +82,7 @@ Abre `editor/` en VS Code y **F5** (Run Extension). Publicación al Marketplace:
 
 ## Cómo lee los datos
 
-Ejecuta `hipercampo graph --json` (nodos + aristas) y `recall`/`muse` para la búsqueda de
-agente, con `HIPERCAMPO_LOG=0` para que el stdout sea JSON limpio. Esos comandos existen en
-el CLI y sirven también fuera de aquí.
+Todo por el CLI (que ya sabe de contextos y aislamiento): `graph --json` (nodos + aristas
++ ruta del `.db`), `list --json`, `status`, `tokens`, `log --json`, y `recall`/`muse` para
+la búsqueda de agente. La auditoría va a stderr, así que el stdout es JSON limpio. Esos
+comandos existen en el CLI y sirven también fuera de aquí.

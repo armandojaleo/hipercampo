@@ -25,3 +25,4 @@ data/
 editor/node_modules/
 editor/out/
 editor/*.vsix
+.coverage

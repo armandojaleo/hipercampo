@@ -101,6 +101,7 @@
   }
 
   function repintar() {
+    if (PIDE[VIEW]) return;   // estado/tokens/registro no se pintan desde aquí
     const items = visibles();
     const vacio = items.length === 0;
     $("empty").classList.toggle("hidden", !vacio);
@@ -111,6 +112,7 @@
     else if (VIEW === "graph") renderGraph(items);
     else if (VIEW === "timeline") renderTimeline(items);
     else if (VIEW === "axes") renderAxes(items);
+    else if (VIEW === "status") { /* se pide aparte, ver activarVista */ }
   }
 
   // ==========================================================================
@@ -175,24 +177,44 @@
   // ==========================================================================
   // MAPA (grafo force-directed en canvas)
   // ==========================================================================
-  let G = null;   // estado del grafo (nodos con posición, cámara, animación)
+  let G = null;             // estado del grafo (nodos con posición, cámara, animación)
+  const GPOS = new Map();   // id -> {x,y} PERSISTENTE entre refrescos (no re-baila)
+
+  const firmaNodos = (items) => items.map((m) => m.id).sort((a, b) => a - b).join(",");
 
   function renderGraph(items) {
     const canvas = $("graph-canvas");
     const vis = new Set(items.map((m) => m.id));
+    const aristas = EDGES.filter((e) => vis.has(e.src) && vis.has(e.dst));
+    const sig = firmaNodos(items);
+
+    // MISMO conjunto de nodos (caso típico del auto-refresh): NO resembrar ni
+    // resimular —eso es lo que hacía saltar el mapa—; solo refrescar datos y redibujar.
+    if (G && G.sig === sig) {
+      const byId = new Map(items.map((m) => [m.id, m]));
+      for (const n of G.nodos) n.m = byId.get(n.id) || n.m;
+      G.aristas = aristas;
+      leyenda(items); ajustarCanvas(canvas); dibujarGrafo();
+      return;
+    }
+
+    // Conjunto NUEVO: construir sembrando desde las posiciones guardadas (los nodos
+    // que ya existían se quedan donde estaban; solo los nuevos entran por el círculo).
+    if (G) cancelAnimationFrame(G.raf);
     const nodos = items.map((m) => ({ m, id: m.id }));
     const idx = new Map(nodos.map((n, i) => [n.id, i]));
-    const aristas = EDGES.filter((e) => vis.has(e.src) && vis.has(e.dst));
-
-    // Semilla determinista de posiciones (en círculo), para que no baile en cada pintado.
     const R = 180;
     nodos.forEach((n, i) => {
-      const a = (i / Math.max(1, nodos.length)) * Math.PI * 2;
-      n.x = Math.cos(a) * R; n.y = Math.sin(a) * R; n.vx = 0; n.vy = 0;
+      const g = GPOS.get(n.id);
+      if (g) { n.x = g.x; n.y = g.y; } else {
+        const a = (i / Math.max(1, nodos.length)) * Math.PI * 2;
+        n.x = Math.cos(a) * R; n.y = Math.sin(a) * R;
+      }
+      n.vx = 0; n.vy = 0;
     });
-
-    G = { canvas, ctx: canvas.getContext("2d"), nodos, idx, aristas,
-      scale: 1, ox: 0, oy: 0, sel: null, drag: null, alpha: 1, raf: 0 };
+    G = { canvas, ctx: canvas.getContext("2d"), nodos, idx, aristas, sig,
+      scale: (G && G.scale) || 1, ox: (G && G.ox) || 0, oy: (G && G.oy) || 0,
+      sel: null, drag: null, alpha: 1, raf: 0 };
     leyenda(items);
     ajustarCanvas(canvas);
     correrSim();
@@ -261,6 +283,7 @@
       if (n === (G.drag && G.drag.node)) continue;
       n.vx = (n.vx + n.fx * a) * 0.85; n.vy = (n.vy + n.fy * a) * 0.85;
       n.x += n.vx; n.y += n.vy;
+      GPOS.set(n.id, { x: n.x, y: n.y });   // recordar dónde quedó, para el próximo refresco
     }
   }
 
@@ -333,7 +356,7 @@
       const rect = c.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       if (G.drag.pan) { G.ox = mx - G.drag.sx; G.oy = my - G.drag.sy; dibujarGrafo(); }
-      else { const n = G.drag.node; n.x = (mx - G.w / 2 - G.ox) / G.scale; n.y = (my - G.h / 2 - G.oy) / G.scale; n.vx = n.vy = 0; dibujarGrafo(); }
+      else { const n = G.drag.node; n.x = (mx - G.w / 2 - G.ox) / G.scale; n.y = (my - G.h / 2 - G.oy) / G.scale; n.vx = n.vy = 0; GPOS.set(n.id, { x: n.x, y: n.y }); dibujarGrafo(); }
     };
     c.onpointerup = () => { G.drag = null; correrSim(); };
     c.onwheel = (e) => {
@@ -431,13 +454,145 @@
   }
 
   // ==========================================================================
+  // ESTADO (salud: CLI, BD, servidor MCP, registro)
+  // ==========================================================================
+  function bytes(n) {
+    if (n == null) return "—";
+    if (n < 1024) return n + " B";
+    if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
+    return (n / 1048576).toFixed(1) + " MB";
+  }
+  const semaforo = (ok) => `<span class="sem ${ok ? "ok" : "no"}">${ok ? "●" : "○"}</span>`;
+
+  function renderStatus(s) {
+    const c = $("view-status");
+    if (!s) { c.innerHTML = `<p class="hint">Consultando estado…</p>`; return; }
+    const db = s.db || {}, mcp = s.mcp || {}, log = s.log || {}, st = s.stats || {};
+    const schemaOk = db.schema === db.schema_expected;
+    const fila = (label, val, ok) =>
+      `<div class="strow">${ok === undefined ? "" : semaforo(ok)}`
+      + `<span class="slabel">${label}</span><span class="sval">${val}</span></div>`;
+    c.innerHTML =
+      `<div class="scard"><h3>CLI</h3>`
+      + fila("versión", esc(s.version || "?"), true)
+      + fila("python", esc(s.python || "?"))
+      + `</div>`
+      + `<div class="scard"><h3>Base de datos</h3>`
+      + fila("estado", db.healthy ? "sana" : "con problemas", !!db.healthy)
+      + fila("integridad", esc(db.integrity || "?"), db.integrity === "ok")
+      + fila("esquema", `v${db.schema} / esperada v${db.schema_expected}`, schemaOk)
+      + fila("escribible", db.writable ? "sí" : "no", !!db.writable)
+      + fila("tamaño", bytes(db.size))
+      + fila("ruta", `<code>${esc(db.path || "?")}</code>`)
+      + `</div>`
+      + `<div class="scard"><h3>Memoria</h3>`
+      + fila("total", `${st.total ?? "?"} recuerdos`)
+      + fila("episódicos activos", st.episodicos_activos ?? "—")
+      + fila("semánticos", st.semanticos ?? "—")
+      + fila("latentes", st.latentes ?? "—")
+      + fila("archivados", st.archivados ?? "—")
+      + (st.por_contexto ? Object.entries(st.por_contexto).sort((a, b) => b[1] - a[1])
+          .map(([ns, n]) => fila(`· ${esc(ns)}`,
+            `<span style="color:${nsColor(ns)}">${n}</span>`)).join("") : "")
+      + (st.tokens ? fila("tokens/turno (presup.)", st.tokens.presupuesto_por_turno ?? "—") : "")
+      + `</div>`
+      + `<div class="scard"><h3>Servidor MCP</h3>`
+      + fila("en marcha", mcp.running ? `sí (${mcp.running})` : "no (se arranca al usarse)", mcp.running > 0)
+      + ((mcp.servers || []).map((p) =>
+          fila(`· pid ${p.pid}`, `desde ${p.arranque ? fecha(p.arranque) : "?"}`)).join(""))
+      + `</div>`
+      + `<div class="scard"><h3>Registro (hooks y decisiones)</h3>`
+      + fila("activo", log.enabled ? "sí" : "no (HIPERCAMPO_LOG=0)", !!log.enabled)
+      + (log.last_activity ? fila("última actividad", fecha(log.last_activity)) : "")
+      + (log.path ? fila("ruta", `<code>${esc(log.path)}</code>`) : "")
+      + `</div>`
+      + `<p class="hint">El estado se consulta al abrir esta pestaña. Pulsa ↻ para actualizarlo.</p>`;
+  }
+
+  // ==========================================================================
+  // TOKENS (la factura de la casa, hecha visible)
+  // ==========================================================================
+  function renderTokens(d) {
+    const c = $("view-tokens");
+    if (!d) { c.innerHTML = `<p class="hint">Calculando la factura…</p>`; return; }
+    const s = d.summary || {}, serie = d.series || [];
+    const media = s.media_por_inyeccion || 0, presup = s.presupuesto_hook || 350;
+    const usoPct = Math.min(100, Math.round((media / presup) * 100));
+    const maxTok = Math.max(1, ...serie.map((x) => x.tok));
+    // mini-gráfico: últimas ~48 inyecciones como barras
+    const barras = serie.slice(-48).map((x) => {
+      const h = Math.round((x.tok / maxTok) * 100);
+      const over = x.tok > presup;
+      return `<span class="tbar" style="height:${Math.max(3, h)}%;`
+        + `background:${over ? "var(--sem-no,#e06c75)" : "var(--vscode-textLink-foreground)"}" `
+        + `title="${x.ts} · ${x.tok} tok (${esc(x.etiqueta || "")})"></span>`;
+    }).join("");
+    c.innerHTML =
+      `<div class="hero">`
+      + `<div class="hnum"><span class="hbig">${s.total ?? 0}</span><span class="hlbl">tokens gastados</span></div>`
+      + `<div class="hnum good"><span class="hbig">${s.ahorrado_por_presupuesto ?? 0}</span><span class="hlbl">ahorrados por el presupuesto</span></div>`
+      + `<div class="hnum"><span class="hbig">${s.inyecciones ?? 0}</span><span class="hlbl">inyecciones</span></div>`
+      + `<div class="hnum"><span class="hbig">${s.hoy ?? 0}</span><span class="hlbl">hoy</span></div>`
+      + `</div>`
+      + `<div class="scard"><h3>Media por inyección vs. presupuesto</h3>`
+      + `<div class="gauge"><span class="gfill" style="width:${usoPct}%"></span>`
+      + `<span class="gmark" title="presupuesto ${presup}"></span></div>`
+      + `<div class="strow"><span class="slabel">media</span><span class="sval">${media} tok</span></div>`
+      + `<div class="strow"><span class="slabel">presupuesto hook</span><span class="sval">${presup} tok/turno</span></div>`
+      + `<div class="strow"><span class="slabel">presupuesto identidad</span><span class="sval">${s.presupuesto_identidad ?? "—"} tok</span></div>`
+      + `</div>`
+      + (serie.length
+          ? `<div class="scard"><h3>Historia (${serie.length} inyecciones · rojo = sobre presupuesto)</h3>`
+            + `<div class="chart">${barras}</div></div>`
+          : "")
+      + `<p class="hint">Siempre es una <b>estimación</b> y lo dice: ${esc(s.metodo || "")}. `
+      + `El tokenizador de Claude no es público; solo su API es exacta.</p>`;
+  }
+
+  // ==========================================================================
+  // REGISTRO (el log de decisiones, en vivo y coloreado)
+  // ==========================================================================
+  const LOG_COL = {
+    recall: "#4aa3df", remember: "#7ec36b", update: "#7ec36b", sleep: "#c48ae0",
+    dream: "#d08770", forget: "#e0a33f", purge: "#e06c75", unlearn: "#e06c75",
+    tokens: "#56b6c2", assist: "#8a8a8a", learn: "#7ec36b", ERROR: "#e06c75",
+  };
+  function renderLog(d) {
+    const c = $("view-log");
+    if (!d) { c.innerHTML = `<p class="hint">Leyendo el registro…</p>`; return; }
+    const ent = (d.entries || []).slice().reverse();   // más reciente arriba
+    if (!ent.length) {
+      c.innerHTML = `<p class="hint">El registro está vacío o desactivado (HIPERCAMPO_LOG=0).</p>`;
+      return;
+    }
+    c.innerHTML = ent.map((e) => {
+      const col = LOG_COL[e.accion] || "var(--vscode-descriptionForeground)";
+      const hora = (e.ts || "").slice(11);
+      return `<div class="lrow"><span class="ltime">${esc(hora)}</span>`
+        + `<span class="lact" style="color:${col};border-color:${col}">${esc(e.accion || "?")}</span>`
+        + `<span class="lmsg">${esc(e.mensaje || "")}</span></div>`;
+    }).join("");
+  }
+
+  // ==========================================================================
   // pestañas, búsqueda, mensajes
   // ==========================================================================
+  const PIDE = {
+    status: () => vscode.postMessage({ type: "status-request" }),
+    tokens: () => vscode.postMessage({ type: "tokens-request" }),
+    log: () => vscode.postMessage({ type: "log-request" }),
+  };
+  const PLACEHOLDER_VACIO = { status: renderStatus, tokens: renderTokens, log: renderLog };
+
   function activarVista(v) {
     VIEW = v;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === v));
     document.querySelectorAll(".view").forEach((s) => s.classList.toggle("active", s.id === "view-" + v));
-    repintar();
+    if (PIDE[v]) {
+      $("empty").classList.add("hidden");
+      PLACEHOLDER_VACIO[v](null);   // "cargando…"
+      PIDE[v]();
+    } else repintar();
   }
 
   const PLACEHOLDER = {
@@ -464,10 +619,18 @@
     if (msg.type === "data") {
       MEM = msg.memories || []; EDGES = msg.edges || []; SCOPE = msg.scope || "";
       HITS = null; ACTIVE = null;
-      pintarChips(); repintar();
+      pintarChips();
+      if (PIDE[VIEW]) PIDE[VIEW]();   // estado/tokens/registro se re-piden en cada refresco
+      else repintar();
     } else if (msg.type === "search-result") {
       HITS = msg.memories || [];
       repintar();
+    } else if (msg.type === "status") {
+      renderStatus(msg.data);
+    } else if (msg.type === "tokens") {
+      renderTokens(msg.data);
+    } else if (msg.type === "log") {
+      renderLog(msg.data);
     } else if (msg.type === "error") {
       $("error").classList.remove("hidden");
       $("error").textContent = "No se pudo leer la memoria:\n\n" + msg.message;

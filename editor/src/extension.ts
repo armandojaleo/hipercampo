@@ -53,7 +53,11 @@ function candidates(): string[] {
 }
 
 function childEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, HIPERCAMPO_LOG: "0" };
+  // OJO: no se pone HIPERCAMPO_LOG=0. La auditoría escribe a stderr y al fichero,
+  // nunca a stdout (execFile los separa), así que el JSON sale limpio igual; y en
+  // cambio LOG=0 anula la RUTA del registro y dejaba la pestaña Registro sin poder
+  // leerlo ("registro desactivado" + código 1 = error en el visor).
+  const env: NodeJS.ProcessEnv = { ...process.env };
   const db = (cfg().get<string>("dbPath") || "").trim();
   const ns = (cfg().get<string>("namespace") || "").trim();
   if (db) env.HIPERCAMPO_DB = db;
@@ -109,6 +113,25 @@ async function agentSearch(query: string, mode: "recall" | "muse"): Promise<Memo
   return Array.isArray(hits) ? hits : [];
 }
 
+// Estado de salud: CLI, base de datos, servidor MCP y registro. Lo que dice si el
+// motor está vivo, no solo qué hay guardado.
+async function fetchStatus(): Promise<any> {
+  const out = await run(["status"]);
+  return JSON.parse(out);
+}
+
+// El registro de decisiones (recall/remember/sleep/forget/tokens…), estructurado.
+async function fetchLog(): Promise<any> {
+  const out = await run(["log", "-n", "300", "--json"]);
+  return JSON.parse(out);
+}
+
+// La factura de tokens: agregado + serie temporal. El rasgo de la casa, visible.
+async function fetchTokens(): Promise<any> {
+  const out = await run(["tokens"]);
+  return JSON.parse(out);
+}
+
 /** Adormece/despierta o purga un recuerdo, tras confirmación. Devuelve true si tocó algo. */
 async function mutate(id: number, namespace: string | undefined,
   action: "forget" | "wake" | "purge"): Promise<boolean> {
@@ -161,6 +184,12 @@ class Controller {
       } else if (msg.type === "mutate") {
         const changed = await mutate(msg.id, msg.namespace, msg.action);
         if (changed) { await this.load(); }
+      } else if (msg.type === "status-request") {
+        this.post({ type: "status", data: await fetchStatus() });
+      } else if (msg.type === "log-request") {
+        this.post({ type: "log", data: await fetchLog() });
+      } else if (msg.type === "tokens-request") {
+        this.post({ type: "tokens", data: await fetchTokens() });
       }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
@@ -183,11 +212,14 @@ class Controller {
   private vigilar(db: string) {
     this.watcher?.close();
     try {
-      const dir = path.dirname(db), base = path.basename(db);
+      const dir = path.dirname(db);
+      // El tronco del nombre (sin extensión) cubre .db, .db-wal, .db-shm Y el .log,
+      // que viven en la misma carpeta: así el registro en vivo también refresca.
+      const stem = path.basename(db).replace(/\.db$/, "");
       this.watcher = fs.watch(dir, (_ev, fn) => {
-        if (fn && (fn === base || fn.startsWith(base))) {   // .db, .db-wal, .db-shm
+        if (fn && fn.startsWith(stem)) {
           clearTimeout(this.pend);
-          this.pend = setTimeout(() => this.load(), 500);
+          this.pend = setTimeout(() => this.load(), 400);
         }
       });
     } catch { /* si no se puede vigilar, el botón ↻ sigue estando */ }
@@ -248,8 +280,8 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 export function activate(context: vscode.ExtensionContext) {
   // Botón siempre visible en la barra de estado (abajo): un clic abre el panel ancho.
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  status.text = "$(database) memoria";
-  status.tooltip = "hipercampo: ver memorias";
+  status.text = "$(database) Hipercampo";
+  status.tooltip = "Hipercampo: ver memorias";
   status.command = "hipercampo.showMemories";
   status.show();
 
