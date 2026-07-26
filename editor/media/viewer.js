@@ -11,6 +11,7 @@
   let HITS = null;       // resultados de recall/muse (null = no hay búsqueda de agente)
   let ACTIVE = null;     // Set de namespaces activos (chips); null = todos
   let VIEW = "list";
+  let PAUSED = false;    // modo 'no recordar'
 
   // --- utilidades -----------------------------------------------------------
   const norm = (s) => String(s || "").toLowerCase()
@@ -476,6 +477,7 @@
       `<div class="scard"><h3>CLI</h3>`
       + fila("versión", esc(s.version || "?"), true)
       + fila("python", esc(s.python || "?"))
+      + fila("memoria", s.paused ? "EN PAUSA (no recuerda)" : "activa (recordando)", !s.paused)
       + `</div>`
       + `<div class="scard"><h3>Base de datos</h3>`
       + fila("estado", db.healthy ? "sana" : "con problemas", !!db.healthy)
@@ -619,6 +621,7 @@
     if (msg.type === "data") {
       MEM = msg.memories || []; EDGES = msg.edges || []; SCOPE = msg.scope || "";
       HITS = null; ACTIVE = null;
+      PAUSED = !!msg.paused; pintarPausa();
       pintarChips();
       if (PIDE[VIEW]) PIDE[VIEW]();   // estado/tokens/registro se re-piden en cada refresco
       else repintar();
@@ -653,6 +656,16 @@
   $("refresh").onclick = () => { $("q").value = ""; HITS = null; vscode.postMessage({ type: "refresh" }); };
   $("all").addEventListener("change", (e) =>
     vscode.postMessage({ type: "setAllNamespaces", value: e.target.checked }));
+  $("pause").addEventListener("click", () =>
+    vscode.postMessage({ type: "setPaused", value: !PAUSED }));
+
+  function pintarPausa() {
+    $("paused-banner").classList.toggle("hidden", !PAUSED);
+    const b = $("pause");
+    b.textContent = PAUSED ? "▶️" : "⏸";
+    b.title = PAUSED ? "Reanudar la memoria" : "Pausar la memoria (modo 'no recordar')";
+    b.classList.toggle("on", PAUSED);
+  }
 
   window.addEventListener("resize", () => {
     if (VIEW === "graph" && G) { ajustarCanvas(G.canvas); dibujarGrafo(); }

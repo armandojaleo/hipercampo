@@ -289,7 +289,7 @@ def cmd_list(args) -> int:
 
 def cmd_graph(args) -> int:
     """Vuelca el grafo asociativo (nodos + aristas) en JSON para el mapa del visor."""
-    from .config import db_path
+    from .config import db_path, paused
     from .store import Store
     ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
     s = Store(db_path(), namespace=ns)
@@ -302,7 +302,7 @@ def cmd_graph(args) -> int:
     ids = {n["id"] for n in nodos}
     aristas = [e for e in aristas if e["src"] in ids and e["dst"] in ids]
     print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
-                      "db": os.path.abspath(db_path()),
+                      "db": os.path.abspath(db_path()), "paused": paused(),
                       "nodes": nodos, "edges": aristas}, ensure_ascii=False, default=str))
     return 0
 
@@ -441,6 +441,21 @@ def _entrada_log(ln: str) -> dict:
     return {"ts": ts, "accion": accion, "mensaje": mensaje, "raw": ln}
 
 
+def cmd_pause(args) -> int:
+    """Pausa o reanuda la memoria (modo 'no recordar'). En pausa no se graban recuerdos
+    nuevos ni se refuerzan los existentes; LEER sigue funcionando y no se borra nada."""
+    from .config import set_paused
+    quiere = not (args.cmd == "resume" or getattr(args, "off", False))
+    estado = set_paused(quiere)
+    forzado = os.environ.get("HIPERCAMPO_PAUSED", "") not in ("", "0", "false", "False")
+    salida = {"paused": estado}
+    if forzado and not quiere:
+        salida["aviso"] = ("HIPERCAMPO_PAUSED está fijada en el entorno y manda por "
+                           "encima del interruptor: sigue en pausa hasta quitarla.")
+    print(json.dumps(salida, ensure_ascii=False))
+    return 0
+
+
 def cmd_tokens(_args) -> int:
     """La FACTURA de tokens, en JSON: el rasgo de la casa hecho visible. Cuánto ha
     costado la memoria, cuánto se ahorró el presupuesto, y una serie temporal para
@@ -469,10 +484,11 @@ def cmd_status(_args) -> int:
     """Estado de salud en JSON para el visor: CLI, base de datos, servidor MCP y
     registro. Es el 'panel de control' de la memoria, sin adornos: dice qué vive."""
     from . import __version__, audit
-    from .config import db_path
+    from .config import db_path, paused
     from .procs import listar
     ruta = os.path.abspath(db_path())
-    out = {"version": __version__, "python": sys.version.split()[0], "db": {"path": ruta}}
+    out = {"version": __version__, "python": sys.version.split()[0],
+           "paused": paused(), "db": {"path": ruta}}
 
     try:
         out["db"]["exists"] = os.path.isfile(ruta)
@@ -610,6 +626,9 @@ def main(argv=None) -> int:
     gr.add_argument("--namespace", help="contexto (por defecto: el actual)")
     gr.add_argument("--include-dormant", action="store_true", default=True)
     sub.add_parser("status", help="estado de salud en JSON (CLI, BD, MCP, registro)")
+    pa = sub.add_parser("pause", help="PAUSAR la memoria: deja de grabar (modo 'no recordar')")
+    pa.add_argument("--off", action="store_true", help="reanudar en vez de pausar")
+    sub.add_parser("resume", help="reanudar la memoria tras una pausa")
     tk = sub.add_parser("tokens", help="factura de tokens en JSON (para el visor)")
     tk.add_argument("--json", action="store_true", default=True, help=argparse.SUPPRESS)
     dm = sub.add_parser("dormant", help="adormecer o despertar recuerdos por id")
@@ -668,6 +687,8 @@ def main(argv=None) -> int:
         return cmd_status(args)
     if args.cmd == "tokens":
         return cmd_tokens(args)
+    if args.cmd in ("pause", "resume"):
+        return cmd_pause(args)
     if args.cmd == "dormant":
         return cmd_dormant(args)
     if args.cmd == "purge":

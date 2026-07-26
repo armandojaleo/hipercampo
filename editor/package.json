@@ -2,7 +2,7 @@
   "name": "hipercampo-viewer",
   "displayName": "hipercampo — visor de memoria",
   "description": "Ver y explorar la memoria de hipercampo desde VS Code: lista, mapa, tiempo y ejes (local-first, sin red).",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "publisher": "armandojaleo",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/armandojaleo/hipercampo" },

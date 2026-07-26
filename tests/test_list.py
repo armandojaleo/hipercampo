@@ -199,6 +199,51 @@ def test_registro_y_tokens_con_log_activo():
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
 
+def test_pausa_no_recordar():
+    """En pausa no se graba ni se refuerza; al reanudar, vuelve a grabar. Y no borra
+    nada: leer sigue funcionando. Es el modo 'no recordar'."""
+    from hipercampo import config
+    _clean()
+    os.environ["HIPERCAMPO_DB"] = _DB
+    os.environ.pop("HIPERCAMPO_PAUSED", None)
+    try:
+        config.set_paused(False)
+        hc = Hipercampo(_DB, namespace="p")
+        assert hc.remember("esto sí se graba", 0.6).get("stored") is True
+
+        config.set_paused(True)
+        assert config.paused() is True
+        r = hc.remember("esto NO debe grabarse", 0.6)
+        assert r.get("stored") is False and r.get("paused") is True
+        assert hc.learn("una regla que tampoco se aprende").get("paused") is True
+        # leer sigue vivo aunque esté en pausa
+        assert isinstance(hc.recall("esto"), list)
+
+        config.set_paused(False)
+        assert hc.remember("otra vez se graba", 0.6).get("stored") is True
+        # total: 2 grabados, el de en medio no
+        assert len(hc.store.all(only_active=False)) == 2
+        hc.close()
+    finally:
+        config.set_paused(False)
+        os.environ.pop("HIPERCAMPO_DB", None)
+
+
+def test_pausa_por_variable_de_entorno_manda():
+    """HIPERCAMPO_PAUSED=1 fuerza la pausa por encima del fichero-bandera."""
+    from hipercampo import config
+    _clean()
+    os.environ["HIPERCAMPO_DB"] = _DB
+    os.environ["HIPERCAMPO_PAUSED"] = "1"
+    try:
+        config.set_paused(False)          # el fichero dice 'no', pero la env manda
+        assert config.paused() is True
+    finally:
+        os.environ.pop("HIPERCAMPO_PAUSED", None)
+        os.environ.pop("HIPERCAMPO_DB", None)
+        config.set_paused(False)
+
+
 def _env():
     return dict(os.environ)
 

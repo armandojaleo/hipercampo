@@ -6,6 +6,16 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **"Don't remember" mode (pause).** A switch — in the viewer's header and as
+  `hipercampo pause` / `resume` — that stops the memory from writing: while paused,
+  `remember`, `remember_fact` and `learn` are no-ops (they return `paused: true` and
+  store nothing) and `recall` doesn't reinforce (no strength/use bump). Reading still
+  works and **nothing is deleted** — resume and it's all there. For sensitive work or
+  throwaway sessions. It's a **flag file** (`hipercampo.paused`) next to the `.db` that
+  the MCP server, the hook and the CLI all check on every write, so it toggles **live
+  and across processes** without a restart; `HIPERCAMPO_PAUSED=1` forces it for a whole
+  session (overrides the switch). Surfaced in `hipercampo status` and the viewer's Status
+  tab. Tests in `tests/test_list.py`.
 - **A window into the memory, inside VS Code.** New viewer in `editor/` with four tabs
   over the same single fetch:
   - **List** — every memory as a card (type, the four axes, use count, last-seen, and

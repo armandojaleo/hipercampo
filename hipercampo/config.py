@@ -19,3 +19,44 @@ def default_db() -> str:
 def db_path() -> str:
     """La ruta efectiva: HIPERCAMPO_DB si está definida, si no la de por defecto."""
     return os.environ.get("HIPERCAMPO_DB", default_db())
+
+
+def _pause_flag() -> str:
+    """El fichero-bandera de 'memoria en pausa', junto a la base de datos."""
+    return os.path.join(os.path.dirname(os.path.abspath(db_path())) or ".",
+                        "hipercampo.paused")
+
+
+def paused() -> bool:
+    """¿Está la memoria EN PAUSA (modo 'no recordar')? Se consulta en cada escritura.
+
+    Dos fuentes, ambas válidas y consultadas EN CALIENTE (sin cachear), para que el
+    visor pueda encender/apagar el modo sin reiniciar el servidor MCP ni el hook:
+      - la variable HIPERCAMPO_PAUSED=1 (una sesión que nace en pausa), y
+      - un fichero-bandera junto al .db (el interruptor que togglea el visor).
+    Mientras esté activa, no se graban recuerdos nuevos ni se refuerzan los existentes;
+    LEER sigue funcionando. No borra nada: solo deja de escribir.
+    """
+    if os.environ.get("HIPERCAMPO_PAUSED", "") not in ("", "0", "false", "False"):
+        return True
+    try:
+        return os.path.isfile(_pause_flag())
+    except OSError:
+        return False
+
+
+def set_paused(on: bool) -> bool:
+    """Enciende o apaga la pausa creando/borrando el fichero-bandera. Devuelve el
+    estado resultante. La variable de entorno, si está, manda por encima de esto."""
+    flag = _pause_flag()
+    try:
+        if on:
+            os.makedirs(os.path.dirname(flag) or ".", exist_ok=True)
+            with open(flag, "w", encoding="utf-8") as f:
+                f.write("memoria en pausa (modo 'no recordar')\n")
+        else:
+            if os.path.isfile(flag):
+                os.remove(flag)
+    except OSError:
+        pass
+    return paused()

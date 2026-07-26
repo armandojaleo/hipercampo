@@ -41,6 +41,9 @@ select, button {
 button { color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; }
 button:hover { background: var(--vscode-button-hoverBackground); }
 
+#pause.on { background: #e0813f; color: #1a1a1a; }
+.banner { margin-top: 8px; padding: 6px 10px; border-radius: 4px; font-size: .88em; background: color-mix(in srgb, #e0813f 20%, transparent); border: 1px solid color-mix(in srgb, #e0813f 50%, transparent); }
+
 .chips { display: flex; gap: 5px; flex-wrap: wrap; }
 .chip {
   padding: 1px 8px;

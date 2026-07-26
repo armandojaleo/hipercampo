@@ -95,14 +95,14 @@ async function run(args: string[]): Promise<string> {
     + "«pip install --pre hipercampo», o pon la ruta en el ajuste hipercampo.command.");
 }
 
-async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: string; db?: string }> {
+async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: string; db?: string; paused?: boolean }> {
   const all = cfg().get<boolean>("allNamespaces");
   const args = ["graph"];
   if (all) args.push("--all-namespaces");
   const out = await run(args);
   const data = JSON.parse(out);
   const scope = data.all_namespaces ? "todos los contextos" : `contexto «${data.namespace}»`;
-  return { memories: data.nodes || [], edges: data.edges || [], scope, db: data.db };
+  return { memories: data.nodes || [], edges: data.edges || [], scope, db: data.db, paused: !!data.paused };
 }
 
 // Búsqueda "como el agente": recall (directo, sabe abstenerse) o muse (creativo, trae
@@ -190,6 +190,9 @@ class Controller {
         this.post({ type: "log", data: await fetchLog() });
       } else if (msg.type === "tokens-request") {
         this.post({ type: "tokens", data: await fetchTokens() });
+      } else if (msg.type === "setPaused") {
+        await run([msg.value ? "pause" : "resume"]);
+        await this.load();
       }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
@@ -199,8 +202,8 @@ class Controller {
   async load() {
     try {
       // Un solo fetch: `graph` trae nodos, aristas y la RUTA del .db (para vigilarla).
-      const { memories, edges, scope, db } = await fetchGraph();
-      this.post({ type: "data", memories, edges, scope });
+      const { memories, edges, scope, db, paused } = await fetchGraph();
+      this.post({ type: "data", memories, edges, scope, paused });
       if (db && db !== this.db) { this.db = db; this.vigilar(db); }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });

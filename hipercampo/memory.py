@@ -24,7 +24,7 @@ import time
 
 import numpy as np
 
-from . import audit, budget
+from . import audit, budget, config
 from .encoder import encode_text, semantic_active
 from .safety import redact_secrets, scan_injection, scan_secrets
 from .store import Store
@@ -266,6 +266,9 @@ class Hipercampo:
 
     def remember_fact(self, fields: dict, importance: float = 0.6,
                       confidence: float = 0.6, source: str | None = None) -> dict:
+        if config.paused():                    # modo 'no recordar'
+            return {"stored": False, "paused": True,
+                    "reason": "memoria en pausa (modo 'no recordar')"}
         return self.roles.remember_fact(fields, _clip01(importance), _clip01(confidence),
                                         source)
 
@@ -289,6 +292,9 @@ class Hipercampo:
         usuario. Es lo que hoy se pierde al cerrar la sesión y hace que la
         siguiente tropiece en la misma piedra."""
         from .identity import IMPORTANCIA_IDENTIDAD, TIPOS
+        if config.paused():                    # modo 'no recordar': tampoco se aprende
+            return {"stored": False, "paused": True,
+                    "reason": "memoria en pausa (modo 'no recordar')"}
         text = _validate_text(text)
         if tipo not in TIPOS:
             return {"error": f"tipo no válido: {tipo}",
@@ -369,6 +375,10 @@ class Hipercampo:
                  confidence: float = 0.5) -> dict:
         """Graba un episodio salvo doble veto: NO lo guarda si es redundante (ya hay
         algo casi igual) NI si es predecible (el modelo de sorpresa ya lo esperaba)."""
+        if config.paused():                    # modo 'no recordar': no se escribe nada
+            audit.log("remember", "en pausa: no se graba")
+            return {"stored": False, "paused": True,
+                    "reason": "memoria en pausa (modo 'no recordar')"}
         t0 = time.time()
         text = _validate_text(text)
         importance, confidence = _clip01(importance), _clip01(confidence)
@@ -633,8 +643,10 @@ class Hipercampo:
                 top = []                              # abstención
         # Reforzar SOLO lo claramente relevante (no un match por roce incidental),
         # para no darle utilidad a falsos positivos que luego se auto-protegerían.
+        # En PAUSA no se refuerza: reforzar también modifica la memoria (fuerza y uso).
         try:
-            self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
+            if not config.paused():
+                self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
         except sqlite3.Error as e:
             # El refuerzo es deseable, no imprescindible: en una BD de solo lectura
             # (o llena) LEER debe seguir funcionando aunque no se pueda reforzar.
