@@ -377,6 +377,13 @@ def cmd_log(args) -> int:
         print(ruta or "(registro desactivado: HIPERCAMPO_LOG=0)")
         return 0
     if not ruta:
+        # Log desactivado (HIPERCAMPO_LOG=0). Para el visor NO es un error: es un
+        # registro vacío, y así la pestaña Registro lo enseña con elegancia en vez
+        # de romperse. Para el humano, un aviso claro.
+        if getattr(args, "json", False):
+            print(json.dumps({"path": None, "enabled": False, "entries": []},
+                             ensure_ascii=False))
+            return 0
         print("El registro está desactivado (HIPERCAMPO_LOG=0).")
         return 1
 

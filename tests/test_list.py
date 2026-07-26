@@ -149,16 +149,15 @@ def test_cli_list_graph_dormant_en_proceso():
         estado = json.loads(out)
         assert estado["db"]["healthy"] is True
         assert "mcp" in estado and "log" in estado and "version" in estado
-        # registro y factura de tokens en JSON (para las pestañas del visor)
-        os.environ["HIPERCAMPO_LOG"] = "1"
-        _cli(["remember", "algo que deje rastro en el registro"])
+        # registro y factura de tokens en JSON (para las pestañas del visor). No
+        # dependen de que el log esté activo: con HIPERCAMPO_LOG=0 (como en el CI de
+        # cobertura) `log --json` devuelve una lista vacía y código 0, no un error.
         code, out = _cli(["log", "-n", "20", "--json"])
         assert code == 0 and "entries" in json.loads(out)
         code, out = _cli(["tokens"])
         assert code == 0
         tok = json.loads(out)
         assert "summary" in tok and "series" in tok
-        os.environ["HIPERCAMPO_LOG"] = "0"
         # olvidar/despertar por id, en el propio contexto
         mid = json.loads(_cli(["list", "--json"])[1])["memories"][0]["id"]
         code, out = _cli(["dormant", "--ids", str(mid)])
@@ -168,6 +167,34 @@ def test_cli_list_graph_dormant_en_proceso():
         # entradas inválidas: se rechazan con código != 0, no revientan
         assert _cli(["dormant", "--ids", "no-numero"])[0] != 0
     finally:
+        os.environ.pop("HIPERCAMPO_DB", None)
+        os.environ.pop("HIPERCAMPO_NAMESPACE", None)
+
+
+def test_registro_y_tokens_con_log_activo():
+    """Ejercita las ramas REALES de log/tokens/status con el registro encendido
+    (el CI de cobertura corre con HIPERCAMPO_LOG=0, que no las tocaría). Forzamos el
+    flag del módulo a mano para no depender del entorno."""
+    from hipercampo import audit
+    _sembrar()
+    os.environ["HIPERCAMPO_DB"] = _DB
+    os.environ["HIPERCAMPO_NAMESPACE"] = "alice"
+    previo = audit._ENABLED
+    audit._ENABLED = True
+    try:
+        _cli(["remember", "un dato que deja rastro en el registro"])
+        _cli(["recall", "dato rastro"])
+        code, out = _cli(["log", "-n", "50", "--json"])
+        assert code == 0
+        d = json.loads(out)
+        assert d["entries"], "con el log activo debería haber entradas"
+        assert all("accion" in e and "ts" in e for e in d["entries"])
+        code, out = _cli(["tokens"])
+        assert code == 0 and "series" in json.loads(out)
+        code, out = _cli(["status"])
+        assert code == 0 and json.loads(out)["log"]["enabled"] is True
+    finally:
+        audit._ENABLED = previo
         os.environ.pop("HIPERCAMPO_DB", None)
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
