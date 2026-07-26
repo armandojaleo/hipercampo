@@ -44,6 +44,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["hipercampo"]
 
+[tool.mypy]
+# Puerta de tipos sobre el núcleo. No es --strict (el código usa numpy y dicts
+# JSON heterogéneos donde el tipado total estorba más que ayuda); es el nivel que
+# caza bugs reales —Nones sin comprobar, asignaciones incompatibles— sin ahogar.
+python_version = "3.11"
+ignore_missing_imports = true
+
 [tool.ruff]
 line-length = 100
 

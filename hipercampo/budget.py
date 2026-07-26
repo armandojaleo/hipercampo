@@ -130,7 +130,7 @@ def _aviso(omitidas: int, presupuesto: int) -> str:
             f"{presupuesto} tokens; pídelos con hc_recall si hacen falta)")
 
 
-def ajustar(lineas: list[str], presupuesto: int = None) -> tuple[list[str], dict]:
+def ajustar(lineas: list[str], presupuesto: int | None = None) -> tuple[list[str], dict]:
     """Ajusta una lista de líneas (la primera es la cabecera) a un presupuesto.
 
     ENTEROS O NINGUNO. Un recuerdo cortado por la mitad es peor que un recuerdo

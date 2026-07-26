@@ -21,6 +21,7 @@ import functools
 import os
 import sqlite3
 import time
+from typing import Any
 
 import numpy as np
 
@@ -159,8 +160,9 @@ def abstention_gate(directa, n_top: int, semantic: bool = False,
     mejor = float(directa[0]) if len(directa) else 0.0
     n_excl = min(max(n_top, 1), max(1, len(directa) - NOISE_MIN_N))
     cola = directa[n_excl:]
-    diag = {"mejor": mejor, "suelo": suelo, "zmin": zmin, "n_cola": len(cola),
-            "mu": None, "sd": None, "umbral_z": None, "motivo": None}
+    diag: dict[str, Any] = {"mejor": mejor, "suelo": suelo, "zmin": zmin,
+                            "n_cola": len(cola), "mu": None, "sd": None,
+                            "umbral_z": None, "motivo": None}
 
     if mejor < suelo:                                 # nada relevante en absoluto
         diag["motivo"] = "nada relevante"
@@ -526,12 +528,14 @@ class Hipercampo:
                     if s >= LINK_SIMILARITY:
                         self.store.link(new_id, r["id"], weight=s, type="lexical")
             if confiable:
+                assert best is not None                   # 'confiable' ya lo garantiza
                 self.store.mark_superseded([best["id"]])
                 self.store.link(new_id, best["id"], weight=1.0,
                                 type="update")      # cadena de historia
         self.surprise.learn(new_text)                     # aprender tras confirmar
 
         if confiable:
+            assert best is not None                       # 'confiable' ya lo garantiza
             return {"updated": True, "new_id": new_id, "superseded_id": best["id"],
                     "replaced_text": best["text"], "match_similarity": round(best_sim, 3)}
         return {"updated": False, "reason": "sin match fiable que reemplazar",
@@ -584,7 +588,7 @@ class Hipercampo:
         directa_por_id = dict(activation)
 
         # propagación: la chispa salta a los vecinos, atenuada
-        seeds = sorted(activation, key=activation.get, reverse=True)[:k]
+        seeds = sorted(activation, key=lambda i: activation[i], reverse=True)[:k]
         frontier = list(seeds)
         for _ in range(hops):
             nxt = []
@@ -802,6 +806,7 @@ class Hipercampo:
             objetivo = [r for r in self.store.all(only_active=False, include_dormant=True,
                                                   own_only=True) if r["id"] in set(ids)]
         else:
+            assert older_than_days is not None            # el chequeo de arriba lo garantiza
             umbral = time.time() - older_than_days * 86400
             objetivo = [r for r in self.store.all(only_active=False, include_dormant=True,
                                                   own_only=True)
@@ -848,7 +853,7 @@ class Hipercampo:
         # (el recuerdo intermedio que trajo a cada uno: el porqué de la conexión).
         activacion = dict(directo)
         parent: dict[int, int] = {}
-        seeds = sorted(directo, key=directo.get, reverse=True)[:k]
+        seeds = sorted(directo, key=lambda i: directo[i], reverse=True)[:k]
         frontier = list(seeds)
         for _ in range(max(1, hops)):
             nxt = []

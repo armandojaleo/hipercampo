@@ -27,11 +27,12 @@ import os
 import re
 import sys
 import time
+from typing import Any
 
 from . import audit, budget
 
 try:                                                  # salida UTF-8 en Windows
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
 except Exception:
     pass
 
@@ -448,7 +449,7 @@ def cmd_pause(args) -> int:
     quiere = not (args.cmd == "resume" or getattr(args, "off", False))
     estado = set_paused(quiere)
     forzado = os.environ.get("HIPERCAMPO_PAUSED", "") not in ("", "0", "false", "False")
-    salida = {"paused": estado}
+    salida: dict[str, Any] = {"paused": estado}
     if forzado and not quiere:
         salida["aviso"] = ("HIPERCAMPO_PAUSED está fijada en el entorno y manda por "
                            "encima del interruptor: sigue en pausa hasta quitarla.")
@@ -487,8 +488,8 @@ def cmd_status(_args) -> int:
     from .config import db_path, paused
     from .procs import listar
     ruta = os.path.abspath(db_path())
-    out = {"version": __version__, "python": sys.version.split()[0],
-           "paused": paused(), "db": {"path": ruta}}
+    out: dict[str, Any] = {"version": __version__, "python": sys.version.split()[0],
+                           "paused": paused(), "db": {"path": ruta}}
 
     try:
         out["db"]["exists"] = os.path.isfile(ruta)
@@ -509,7 +510,7 @@ def cmd_status(_args) -> int:
             # Recuento de TODO el fichero (no solo el contexto actual), para que
             # cuadre con lo que enseña el visor ("todos los contextos").
             todos = hc.store.dump(all_namespaces=True, include_dormant=True)
-            por_ctx = {}
+            por_ctx: dict[str, int] = {}
             for m in todos:
                 por_ctx[m["namespace"]] = por_ctx.get(m["namespace"], 0) + 1
             out["stats"] = {
@@ -537,7 +538,7 @@ def cmd_status(_args) -> int:
     # Registro (hooks y decisiones): activo, ruta y última actividad (señal de vida).
     audit.set_logfile(db_path())
     log = audit.logfile()
-    reg = {"enabled": bool(log), "path": log}
+    reg: dict[str, Any] = {"enabled": bool(log), "path": log}
     if log and os.path.isfile(log):
         reg["last_activity"] = os.path.getmtime(log)
         reg["size"] = os.path.getsize(log)

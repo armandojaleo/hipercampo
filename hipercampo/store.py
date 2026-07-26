@@ -11,6 +11,7 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -152,7 +153,7 @@ class Store:
 
         Por defecto usa `quick_check` (barato aunque la memoria crezca); con
         `full=True` corre el `integrity_check` completo (`hipercampo doctor --full`)."""
-        info = {"db": os.path.abspath(self.path), "namespace": self.namespace}
+        info: dict[str, Any] = {"db": os.path.abspath(self.path), "namespace": self.namespace}
         try:
             comprobacion = "integrity_check" if full else "quick_check"
             info["integridad"] = self.db.execute(f"PRAGMA {comprobacion}").fetchone()[0]
@@ -407,6 +408,7 @@ class Store:
              self.namespace, fact_id),
         )
         self._commit()
+        assert cur.lastrowid is not None                   # tras un INSERT de una fila
         return cur.lastrowid
 
     def dormant_fact_ids(self) -> set:
@@ -425,6 +427,7 @@ class Store:
              valid_from if valid_from is not None else time.time(), supersedes, source),
         )
         self._commit()
+        assert cur.lastrowid is not None                   # tras un INSERT de una fila
         return cur.lastrowid
 
     # --- meta (contadores del propio sistema, por contexto) --------------
@@ -639,7 +642,7 @@ class Store:
         campos = ", ".join(self._CAMPOS_DUMP)
         if all_namespaces:
             q, args = f"SELECT {campos} FROM memories", []
-            cond = []
+            cond: list[str] = []
         else:
             marks = ",".join("?" * len(self._ns_lectura))
             q = f"SELECT {campos} FROM memories WHERE namespace IN ({marks})"
@@ -667,7 +670,7 @@ class Store:
         campos = "src, dst, weight, type, status, namespace"
         if all_namespaces:
             q, args = f"SELECT {campos} FROM links", []
-            cond = []
+            cond: list[str] = []
         else:
             marks = ",".join("?" * len(self._ns_lectura))
             q = f"SELECT {campos} FROM links WHERE namespace IN ({marks})"

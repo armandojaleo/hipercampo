@@ -134,9 +134,13 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   cualquier módulo del núcleo importa `mcp`/`server`/`cli`, y documentar la **API
   pública del core** (lo que un embebido puede usar). Promesa: *el core se importa
   y opera sin `mcp` instalado, y el CI lo defiende.*
-- ⚪ **`0.1.0b3` — Red de seguridad de CI.** Ruff + mypy + cobertura como **puertas**
-  (Fase 6). Suelo de cobertura con número y smoke tests del webview. Promesa: *un PR
-  que baje cobertura o rompa tipos no entra.*
+- 🟢 **`0.1.0b3` — Red de seguridad de CI.** Ruff (ya estaba) + **mypy** + cobertura
+  como **puertas**. Config de mypy en `pyproject.toml` (no `--strict`: caza Nones sin
+  comprobar y asignaciones incompatibles sin ahogar el numpy/dicts JSON). Suelo de
+  cobertura en 78% (total real 79%; no se sube el suelo para no dejarlo frágil). Y se
+  arregló un hueco: la matriz enumeraba los tests **a mano** y se dejaba fuera de
+  Windows/macOS cuatro ficheros (`list`, `budget`, `purge`, `core_embebible`) —justo
+  donde viven los bugs de plataforma—; ahora corre por **glob**. Falta: smoke del webview.
 - ⚪ **`0.1.0b4` — Idioma.** i18n del visor por el idioma de VS Code (en/es) y revisar
   los mensajes del core (hoy mezclan es/en). Promesa: *el visor arranca en inglés en
   un VS Code en inglés.*
