@@ -160,6 +160,7 @@ class Controller {
   private db: string | undefined;
   private watcher: fs.FSWatcher | undefined;
   private pend: NodeJS.Timeout | undefined;
+  private quietUntil = 0;   // ignora eventos del vigilante hasta aquí (ver más abajo)
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(private readonly webview: vscode.Webview,
@@ -171,7 +172,15 @@ class Controller {
 
   private post(m: any) { this.webview.postMessage(m); }
 
+  // CLAVE contra el bucle de CPU: cada comando del visor abre la BD en WAL, y ESO
+  // toca los ficheros -wal/-shm, que el propio vigilante vería como un cambio y
+  // dispararía otra recarga… en bucle. Tras cada operación nuestra silenciamos al
+  // vigilante un rato, para que solo reaccione a cambios EXTERNOS (el agente, otra
+  // sesión), no a los que causamos al leer.
+  private silenciar() { this.quietUntil = Date.now() + 1500; }
+
   private async onMessage(msg: any) {
+    this.silenciar();
     try {
       if (msg.type === "ready" || msg.type === "refresh") {
         await this.load();
@@ -200,6 +209,7 @@ class Controller {
   }
 
   async load() {
+    this.silenciar();
     try {
       // Un solo fetch: `graph` trae nodos, aristas y la RUTA del .db (para vigilarla).
       const { memories, edges, scope, db, paused } = await fetchGraph();
@@ -207,6 +217,8 @@ class Controller {
       if (db && db !== this.db) { this.db = db; this.vigilar(db); }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
+    } finally {
+      this.silenciar();   // la lectura recién hecha tocó -wal/-shm: no re-disparar por eso
     }
   }
 
@@ -220,10 +232,10 @@ class Controller {
       // que viven en la misma carpeta: así el registro en vivo también refresca.
       const stem = path.basename(db).replace(/\.db$/, "");
       this.watcher = fs.watch(dir, (_ev, fn) => {
-        if (fn && fn.startsWith(stem)) {
-          clearTimeout(this.pend);
-          this.pend = setTimeout(() => this.load(), 400);
-        }
+        if (!fn || !fn.startsWith(stem)) return;
+        if (Date.now() < this.quietUntil) return;   // fue nuestra propia lectura: ignora
+        clearTimeout(this.pend);
+        this.pend = setTimeout(() => { if (Date.now() >= this.quietUntil) this.load(); }, 700);
       });
     } catch { /* si no se puede vigilar, el botón ↻ sigue estando */ }
   }

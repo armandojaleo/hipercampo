@@ -243,7 +243,8 @@
     cancelAnimationFrame(G.raf);
     G.alpha = 1;
     const paso = () => {
-      if (!G || VIEW !== "graph") return;
+      // Se detiene si no estamos en el mapa o si el panel no se ve: cero CPU en reposo.
+      if (!G || VIEW !== "graph" || document.hidden) return;
       if (!G.drag) tick();
       dibujarGrafo();
       G.alpha *= 0.97;
