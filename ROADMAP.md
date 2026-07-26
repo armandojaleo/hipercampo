@@ -122,6 +122,37 @@ separar contextos *dentro de una misma máquina*:
 - 🟢 Release v0.1.0-alpha publicada en **PyPI** (trusted publishing + attestations).
 - ⚪ Observabilidad: logging estructurado, métricas.
 
+## Fase 7 — Madurez de ingeniería y camino a embebido
+El núcleo funciona; ahora toca que sea **serio para producción** y apto para
+sistemas embebidos y robots (SBC con Linux: Raspberry Pi, Jetson, ROS2). No es
+investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
+**betas pequeñas, cada una con una promesa medible**, para que el camino se vea.
+
+- 🟡 **`0.1.0b2` — El core se despega (la abstracción).** `mcp` ya solo se importa
+  en `server.py` (y perezosamente en el subcomando `serve`): `import hipercampo`
+  no arrastra `mcp` (medido). Falta **garantizarlo**: un test-guardia que falle si
+  cualquier módulo del núcleo importa `mcp`/`server`/`cli`, y documentar la **API
+  pública del core** (lo que un embebido puede usar). Promesa: *el core se importa
+  y opera sin `mcp` instalado, y el CI lo defiende.*
+- ⚪ **`0.1.0b3` — Red de seguridad de CI.** Ruff + mypy + cobertura como **puertas**
+  (Fase 6). Suelo de cobertura con número y smoke tests del webview. Promesa: *un PR
+  que baje cobertura o rompa tipos no entra.*
+- ⚪ **`0.1.0b4` — Idioma.** i18n del visor por el idioma de VS Code (en/es) y revisar
+  los mensajes del core (hoy mezclan es/en). Promesa: *el visor arranca en inglés en
+  un VS Code en inglés.*
+- ⚪ **`0.1.0b5` — Fiabilidad bajo estrés.** Lo que un robot exige: recall con **cota
+  de tiempo** ("lo mejor en N ms") y de RAM; comportamiento ante BD corrupta,
+  bloqueada o llena (ampliar `test_resilience.py`/`test_hardening.py`). Promesa:
+  *latencia p50/p95 publicada* (cierra hueco de Fase 2).
+- ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
+  i18n dentro, y UX que salga de usarlo de verdad.
+- ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos
+  en una Pi/Jetson. Sin ese número, "sirve para robots" es humo. Sirve de puerta a `1.0`.
+
+**Fuera de alcance aquí** (sigue siendo otro proyecto): un core en C/Rust para
+microcontroladores sin Linux (Liga B). El álgebra VSA es popcount+XOR y cabría en
+pocos KB, pero es un spin-off; se anota, no se mete en este repo.
+
 ---
 
 **Regla de la casa**: cada fase se cierra con *medición*, no con opinión. Nada de
