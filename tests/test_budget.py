@@ -212,8 +212,11 @@ def test_una_pregunta_dudosa_responde_si_encaja_de_sobra():
 def test_una_variable_de_entorno_ilegible_no_tumba_el_arranque():
     """budget se importa desde el servidor MCP: un int() suelto al importar
     convierte un typo en .mcp.json en 'no arranca', con stacktrace."""
+    # PYTHONIOENCODING=utf-8: el aviso "no es un número" lleva 'ú'. Sin esto, en
+    # Windows el hijo lo escribiría en cp1252 (byte 0xFA) y el padre, que lee utf-8,
+    # reventaría al decodificar. En Linux ya es utf-8; esto solo iguala Windows.
     env = dict(os.environ, HIPERCAMPO_HOOK_BUDGET="abc",
-               HIPERCAMPO_IDENTITY_BUDGET="-")
+               HIPERCAMPO_IDENTITY_BUDGET="-", PYTHONIOENCODING="utf-8")
     r = subprocess.run(
         [sys.executable, "-c",
          "import hipercampo.budget as b; print(b.HOOK_BUDGET, b.IDENTITY_BUDGET)"],

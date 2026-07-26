@@ -4,11 +4,19 @@ profundidad, transacciones atómicas y validación de entradas.
 Ejecuta:  python tests/test_namespaces.py
 """
 
+import gc
+import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Hermeticidad: no depender de la config ambiental del desarrollador (ver helpers.py).
+# HIPERCAMPO_LINKED=* haría que un namespace "aislado" viese a los demás.
+for _v in ("HIPERCAMPO_LINKED", "HIPERCAMPO_PAUSED", "HIPERCAMPO_NAMESPACE", "HIPERCAMPO_DB"):
+    os.environ.pop(_v, None)
 
 from hipercampo.memory import Hipercampo             # noqa: E402
 from hipercampo.store import Store                   # noqa: E402
@@ -17,8 +25,18 @@ _DB = "data/_test_ns.db"
 
 
 def _clean():
+    """Borra el .db y sus sidecars WAL. En Windows, un handle recién cerrado (sobre
+    todo tras hilos concurrentes) puede tardar un instante en soltarse: gc + reintento
+    corto en vez de reventar. POSIX borraría el fichero aunque siguiera abierto."""
+    gc.collect()
     for suf in ("", "-wal", "-shm"):
-        Path(_DB + suf).unlink(missing_ok=True)
+        p = Path(_DB + suf)
+        for _ in range(10):
+            try:
+                p.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                time.sleep(0.02)
 
 
 # --- aislamiento -------------------------------------------------------------

@@ -9,10 +9,19 @@ _open/_clean (15 de 19 ficheros): aquí vive una sola vez.
     limpiar()                      # cierra y borra (.db, -wal, -shm)
 """
 
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Hermeticidad: los tests no deben depender de la config ambiental de quien los corre.
+# Un desarrollador con HIPERCAMPO_LINKED=* (memoria cross-project) o HIPERCAMPO_PAUSED=1
+# en su shell vería fallos FALSOS: p.ej. un namespace "aislado" que de pronto ve a los
+# demás, o escrituras que no graban. CI no tiene estas variables y por eso pasa; el
+# desarrollador local, sí. Se limpian al importar; el test que necesite una, la pone él.
+for _v in ("HIPERCAMPO_LINKED", "HIPERCAMPO_PAUSED", "HIPERCAMPO_NAMESPACE", "HIPERCAMPO_DB"):
+    os.environ.pop(_v, None)
 
 from hipercampo.memory import Hipercampo             # noqa: E402
 

@@ -20,10 +20,21 @@ from hipercampo.memory import Hipercampo  # noqa: E402
 _DB = "data/_t_linked.db"
 
 
+def _limpiar_db():
+    """Borra el .db y sus sidecars WAL. En modo WAL un `-wal` huérfano puede colar
+    datos del test anterior al reabrir; en Windows, además, un handle abierto impide
+    el borrado (POSIX sí deja borrar un fichero abierto, por eso Linux lo disimula)."""
+    for suf in ("", "-wal", "-shm"):
+        try:
+            Path(_DB + suf).unlink(missing_ok=True)
+        except PermissionError:
+            pass
+
+
 def _sembrar():
     """Dos proyectos con saberes distintos + uno que nadie enlaza."""
     limpiar()
-    Path(_DB).unlink(missing_ok=True)
+    _limpiar_db()
     a = Hipercampo(_DB, namespace="player")
     a.remember("IIS rechaza con 400 los segmentos de ruta de mas de 260 caracteres", 0.8)
     a.store.close()
@@ -120,8 +131,7 @@ def test_asterisco_enlaza_todos_los_demas():
 
 if __name__ == "__main__":
     limpiar()
-    Path(_DB).unlink(missing_ok=True)
+    _limpiar_db()
     codigo = ejecutar(dict(globals()))
-    for suf in ("", "-wal", "-shm"):
-        Path(_DB + suf).unlink(missing_ok=True)
+    _limpiar_db()
     sys.exit(codigo)
