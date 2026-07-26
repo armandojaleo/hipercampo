@@ -26,3 +26,6 @@ editor/node_modules/
 editor/out/
 editor/*.vsix
 .coverage
+
+# Volcados de bash al petar en comandos pesados (Windows)
+*.stackdump
