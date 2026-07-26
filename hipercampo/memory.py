@@ -546,21 +546,30 @@ class Hipercampo:
     # 2 -------------------------------------------------------------------
     @resiliente
     def recall(self, query: str, k: int = 5, hops: int = 1,
-               include_history: bool = False) -> list[dict]:
+               include_history: bool = False, max_scan: int | None = None) -> list[dict]:
         """
         Recupera por similitud (semillas) + propagación de activación (asociados).
         Puede devolver LISTA VACÍA si nada supera el umbral mínimo de relevancia
         (saber decir "no tengo nada" evita reforzar falsos positivos por ruido).
         Por defecto NO devuelve historia (episodios ya consolidados ni superados);
         pon include_history=True para verla. Solo refuerza lo realmente devuelto.
+
+        max_scan acota la búsqueda a los N recuerdos más VIVOS (fuerza + recencia):
+        una COTA de tiempo y RAM para embebidos/robots, donde no cabe escanear 100k
+        hipervectores en cada paso. No es gratis: si la respuesta está fuera de esos
+        N, no se encuentra. Es un compromiso honesto —mejor una respuesta acotada a
+        tiempo que un cuelgue—, y el registro dice cuántos se miraron y si se acotó.
         """
         t0 = time.time()
         k = max(1, min(int(k), 100))
         hops = max(0, min(int(hops), 5))
         if not isinstance(query, str) or not query.strip():
             return []                                # consulta vacía -> sin resultados
+        if max_scan is not None:
+            max_scan = max(1, int(max_scan))
         qhv = encode_text(query)
-        rows = self.store.all(only_active=False)
+        rows = self.store.all(only_active=False, limit=max_scan)
+        acotado = max_scan is not None and len(rows) >= max_scan
         if not include_history:                      # nada de archivados ni superados
             rows = [r for r in rows if not r["consolidated"] and not r["superseded"]]
         if not rows:
@@ -657,7 +666,8 @@ class Hipercampo:
             audit.log("recall", f"sin refuerzo ({e}); sigo en solo lectura")
 
         audit.log("recall", f"{len(top)} resultado(s)", consulta=query[:60],
-                  mirados=len(rows), mejor=round(top[0][0], 3) if top else None,
+                  mirados=len(rows), tope=max_scan if acotado else None,
+                  mejor=round(top[0][0], 3) if top else None,
                   ids=",".join(str(r["id"]) for _, _, r in top[:5]) or None,
                   enlazados=",".join(self.store.linked) or None,
                   ms=round((time.time() - t0) * 1000))

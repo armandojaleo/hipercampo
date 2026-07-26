@@ -88,6 +88,7 @@ _INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_kind ON memories(namespace, kind, consolidated);
 CREATE INDEX IF NOT EXISTS idx_links_ns ON links(namespace);
 CREATE INDEX IF NOT EXISTS idx_facts_ns ON facts(namespace);
+CREATE INDEX IF NOT EXISTS idx_vivos ON memories(namespace, strength DESC, last_access DESC);
 """
 
 
@@ -609,12 +610,17 @@ class Store:
 
     # --- lectura (siempre acotada al namespace del store) ----------------
     def all(self, kind=None, only_active=True, include_dormant=False,
-            own_only=False) -> list[sqlite3.Row]:
+            own_only=False, limit: int | None = None) -> list[sqlite3.Row]:
         # Lectura: el contexto propio MÁS los enlazados (inspiración entre proyectos).
         # La escritura (add/touch/…) sigue acotada a self.namespace: leer no ensucia.
         # own_only=True es para el MANTENIMIENTO (consolidar/olvidar/soñar): cuidar
         # la memoria propia no debe ni leer la ajena — fundir episodios de otro
         # proyecto en un semántico propio sería copiarse su texto.
+        #
+        # limit=N acota cuántas filas se traen (RAM y tiempo de recall en un embebido).
+        # Se eligen las más VIVAS —strength (refuerzo·decaimiento) y recencia— porque
+        # es lo que un agente/robot más probablemente necesita cuando no cabe todo. El
+        # LIMIT va en SQL, así no se cargan 100k blobs de hipervector para tirar 99k.
         ns = (self.namespace,) if own_only else self._ns_lectura
         marks = ",".join("?" * len(ns))
         q = f"SELECT * FROM memories WHERE namespace IN ({marks})"
@@ -626,6 +632,9 @@ class Store:
             q += " AND consolidated = 0"
         if not include_dormant:
             q += " AND dormant = 0"
+        if limit is not None:
+            q += " ORDER BY strength DESC, last_access DESC LIMIT ?"
+            args.append(int(limit))
         return self.db.execute(q, args).fetchall()
 
     _CAMPOS_DUMP = ("id", "text", "kind", "novelty", "importance", "confidence",

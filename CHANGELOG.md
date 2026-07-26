@@ -6,6 +6,30 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Embeddable core, now by contract.** The core (VSA + store + memory cycle) does
+  not depend on `mcp` — that's just one transport — so `import hipercampo` runs with
+  only `numpy`, fit for embedded systems and robots (Linux SBCs). This was true by
+  luck; now it's enforced: a guard test (`tests/test_core_embebible.py`) fails CI if any
+  core module imports `mcp`/`.server`, or if importing the package pulls `mcp` into a
+  clean interpreter. The public core API is documented in `hipercampo/__init__.py`.
+- **Bounded recall (`max_scan=N`) — a time/RAM budget for robots.** `recall(query,
+  max_scan=N)` scans only the N most *alive* memories (strength + recency) instead of
+  the whole store, so latency and RAM stay bounded where scanning 100k hypervectors per
+  step isn't an option. It's an honest trade-off (an answer outside the top-N won't be
+  found) and it's never silent: the decision log reports how many were scanned and
+  whether it capped. Measured first — the naïve cap was *slower* (an unindexed `ORDER
+  BY` cost more than a full scan), so an index (`idx_vivos`) was added: at 10k memories,
+  capped recall runs **p50 ~35 ms vs ~200 ms full (5–6×) and flat as N grows**. Latency
+  p50/p95/p99 and per-recall RAM are published in CI (`scripts/latency.py`). Tests in
+  `tests/test_bounded.py`. (Python API for now — the embedded surface; MCP exposure later.)
+- **CI safety net: mypy gate + full-matrix tests.** mypy is now a gate (config in
+  `pyproject.toml`); 34 real type sloppiness cases were cleaned in the core (JSON dicts
+  typed as `object`, unchecked `None`s before indexing/multiplying, `int|None` returned
+  as `int`), none changing behaviour. The test matrix now discovers test files by
+  **glob** instead of a hand-kept list that had been silently skipping four files
+  (`list`, `budget`, `purge`, `core_embebible`) on Windows/macOS — exactly where
+  platform bugs hide. Coverage floor stays at 78% (79% actual).
+
 - **"Don't remember" mode (pause).** A switch — in the viewer's header and as
   `hipercampo pause` / `resume` — that stops the memory from writing: while paused,
   `remember`, `remember_fact` and `learn` are no-ops (they return `paused: true` and
@@ -61,6 +85,17 @@ All notable changes to this project are documented here. Format loosely based on
     plus the length dilution documented in `memory.py`) makes it stay silent on long
     entries, which is right for the agent and wrong for a human browsing. So text mode
     filters client-side; recall/muse stay available as an explicit "search like the agent".
+
+### Fixed
+- **Four Windows-only test bugs the Linux-only CI had been hiding** (the house lesson,
+  live). `test_linked` deleted the `.db` but not its `-wal`/`-shm` sidecars, letting an
+  orphan WAL leak the previous test's data on reopen (POSIX `unlink` of an open file
+  masked it on Linux). Test hermeticity: a developer with `HIPERCAMPO_LINKED=*` (or
+  `PAUSED`/`NAMESPACE`/`DB`) in their shell saw false failures — an "isolated" namespace
+  suddenly seeing others; the harness now neutralises ambient config on import.
+  `test_namespaces` failed to delete a `.db` whose handle had just been closed after
+  concurrent threads (Windows won't delete an open file) — now gc + short retry. And a
+  cp1252-vs-utf-8 clash reading the word "número" from a child process.
 
 ## [0.1.0b1] — 2026-07-23
 

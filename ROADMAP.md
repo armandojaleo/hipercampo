@@ -144,10 +144,15 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
 - ⚪ **`0.1.0b4` — Idioma.** i18n del visor por el idioma de VS Code (en/es) y revisar
   los mensajes del core (hoy mezclan es/en). Promesa: *el visor arranca en inglés en
   un VS Code en inglés.*
-- ⚪ **`0.1.0b5` — Fiabilidad bajo estrés.** Lo que un robot exige: recall con **cota
-  de tiempo** ("lo mejor en N ms") y de RAM; comportamiento ante BD corrupta,
-  bloqueada o llena (ampliar `test_resilience.py`/`test_hardening.py`). Promesa:
-  *latencia p50/p95 publicada* (cierra hueco de Fase 2).
+- 🟢 **`0.1.0b5` — Fiabilidad bajo estrés.** Lo que un robot exige: recall con **cota
+  de tiempo/RAM** (`max_scan=N`: mira solo los N recuerdos más vivos —fuerza y
+  recencia—; el registro dice cuántos miró y si acotó, sin caps silenciosos). Se midió
+  primero y la cota INGENUA salía **más lenta** (el `ORDER BY` sin índice costaba más
+  que escanear todo); se añadió el índice `idx_vivos` y entonces sí: a **10k recuerdos,
+  cota p50 ~35 ms vs ~200 ms completo (5–6×) y PLANA con N**. La BD corrupta/bloqueada/
+  llena ya estaba cubierta (`test_resilience`/`test_failures`). Tests en `test_bounded.py`;
+  latencia p50/p95/p99 publicada en CI (`scripts/latency.py`) — cierra hueco de Fase 2.
+  Falta: exponer `max_scan` también por MCP (hoy en la API Python, la del embebido).
 - ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
   i18n dentro, y UX que salga de usarlo de verdad.
 - ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos
