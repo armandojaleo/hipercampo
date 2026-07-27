@@ -348,6 +348,29 @@ def cmd_dormant(args) -> int:
     return 0
 
 
+def cmd_reclassify(args) -> int:
+    """Mueve recuerdos PROPIOS a otro contexto (curación del dueño). Escritura: solo
+    el contexto origen; no toca lo enlazado ni lo ajeno. Recoloca los enlaces."""
+    from .config import db_path
+    from .store import Store
+    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+    destino = (args.to or "").strip()
+    if not destino:
+        print("Falta --to (contexto destino).", file=sys.stderr); return 2
+    try:
+        ids = [int(x) for x in args.ids.split(",") if x.strip()]
+    except ValueError:
+        print("--ids debe ser una lista de números separados por comas.", file=sys.stderr)
+        return 2
+    s = Store(db_path(), namespace=ns)
+    try:
+        movidos = s.reclassify(ids, destino)
+    finally:
+        s.close()
+    print(json.dumps({"movidos": movidos, "de": ns, "a": destino}, ensure_ascii=False))
+    return 0
+
+
 def cmd_purge(args) -> int:
     """Borrado FÍSICO y seguro. Irreversible: se enseña primero qué se va a borrar
     (ensayo) y se pide confirmación, salvo --yes. Es lo contrario del olvido normal,
@@ -627,6 +650,10 @@ def main(argv=None) -> int:
         if nombre == "remember":
             sp.add_argument("--importance", type=float, default=0.5)
             sp.add_argument("--confidence", type=float, default=0.5)
+    rc = sub.add_parser("reclassify", help="mover recuerdos PROPIOS a otro contexto (curación)")
+    rc.add_argument("--ids", required=True, help="ids separados por comas")
+    rc.add_argument("--to", required=True, help="contexto destino")
+    rc.add_argument("--namespace", help="contexto origen (por defecto el del entorno)")
     dm2 = sub.add_parser("dream", help="proponer PUENTES entre recuerdos distantes (ideas)")
     dm2.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
     dm2.add_argument("--max", type=int, default=8, help="cuántas hipótesis como mucho")
@@ -699,6 +726,8 @@ def main(argv=None) -> int:
         return cmd_servers(args)
     if args.cmd == "restart":
         return cmd_restart(args)
+    if args.cmd == "reclassify":
+        return cmd_reclassify(args)
     if args.cmd == "dream":
         return cmd_dream(args)
     if args.cmd == "backup":

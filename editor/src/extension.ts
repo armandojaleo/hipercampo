@@ -142,6 +142,33 @@ async function fetchIdeas(): Promise<any> {
   return JSON.parse(out);
 }
 
+/** Mueve un recuerdo a otro contexto (curación). Pregunta el destino: uno existente
+ * o uno nuevo. Es reversible (se puede volver a mover), así que no pide modal. */
+async function reclassify(id: number, namespace: string | undefined): Promise<boolean> {
+  const origen = namespace || "default";
+  let nss: string[] = [];
+  try {
+    const data = JSON.parse(await run(["graph", "--all-namespaces"]));
+    nss = [...new Set((data.nodes || []).map((n: any) => n.namespace))]
+      .filter((n): n is string => typeof n === "string" && n !== origen).sort();
+  } catch { /* sin lista, se podrá teclear uno nuevo igual */ }
+  const es = vscode.env.language.toLowerCase().startsWith("es");
+  const NUEVO = es ? "＋ nuevo contexto…" : "＋ new context…";
+  const pick = await vscode.window.showQuickPick([...nss, NUEVO], {
+    placeHolder: es ? `Mover del contexto «${origen}» a…` : `Move from context “${origen}” to…`,
+  });
+  if (!pick) return false;
+  let destino: string | undefined = pick;
+  if (pick === NUEVO) {
+    destino = (await vscode.window.showInputBox({
+      prompt: es ? "Nombre del contexto destino" : "Target context name",
+    }))?.trim();
+  }
+  if (!destino) return false;
+  await run(["reclassify", "--ids", String(id), "--to", destino, "--namespace", origen]);
+  return true;
+}
+
 /** Adormece/despierta o purga un recuerdo, tras confirmación. Devuelve true si tocó algo. */
 async function mutate(id: number, namespace: string | undefined,
   action: "forget" | "wake" | "purge"): Promise<boolean> {
@@ -202,6 +229,9 @@ class Controller {
         this.post({ type: "search-result", memories: hits, query: msg.query, mode: msg.mode });
       } else if (msg.type === "mutate") {
         const changed = await mutate(msg.id, msg.namespace, msg.action);
+        if (changed) { await this.load(); }
+      } else if (msg.type === "reclassify") {
+        const changed = await reclassify(msg.id, msg.namespace);
         if (changed) { await this.load(); }
       } else if (msg.type === "status-request") {
         this.post({ type: "status", data: await fetchStatus() });

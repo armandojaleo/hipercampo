@@ -28,7 +28,7 @@
       nadaMostrar: "Nada que mostrar. Prueba a limpiar el buscador o activa «todos los contextos».",
       mImp: "imp", mFiab: "fiab", mFuerza: "fuerza", mUsos: "usos", mVisto: "visto",
       relevancia: "relevancia", flagsTitle: "latente/consolidado/reemplazado/pronto-latente",
-      actMuse: "Conexiones (muse)", actWake: "Despertar",
+      actMuse: "Conexiones (muse)", actWake: "Despertar", actMove: "Mover a otro contexto",
       actForget: "Olvidar (reversible)", actPurge: "Borrar del todo (irreversible)",
       leyAsociacion: "asociación", leyPuente: "puente onírico",
       detMuse: "💡 conexiones", detWake: "☀️ despertar", detForget: "💤 olvidar",
@@ -98,7 +98,7 @@
       nadaMostrar: "Nothing to show. Try clearing the search or turn on “all contexts”.",
       mImp: "imp", mFiab: "conf", mFuerza: "strength", mUsos: "uses", mVisto: "seen",
       relevancia: "relevance", flagsTitle: "dormant/consolidated/superseded/soon-dormant",
-      actMuse: "Connections (muse)", actWake: "Wake",
+      actMuse: "Connections (muse)", actWake: "Wake", actMove: "Move to another context",
       actForget: "Forget (reversible)", actPurge: "Delete for good (irreversible)",
       leyAsociacion: "association", leyPuente: "dream bridge",
       detMuse: "💡 connections", detWake: "☀️ wake", detForget: "💤 forget",
@@ -315,6 +315,7 @@
       + `<span class="flags" title="${L.flagsTitle}">${flags}</span>`
       + `<span class="actions">`
       + `<button data-act="muse" title="${L.actMuse}">💡</button>`
+      + `<button data-act="move" title="${L.actMove}">📁</button>`
       + (m.dormant
           ? `<button data-act="wake" title="${L.actWake}">☀️</button>`
           : `<button data-act="forget" title="${L.actForget}">💤</button>`)
@@ -332,6 +333,8 @@
     if (act === "muse") {
       $("mode").value = "muse"; $("q").value = m.text.slice(0, 60);
       lanzarBusquedaAgente();
+    } else if (act === "move") {
+      vscode.postMessage({ type: "reclassify", id: m.id, namespace: m.namespace });
     } else {
       vscode.postMessage({ type: "mutate", id: m.id, namespace: m.namespace, action: act });
     }

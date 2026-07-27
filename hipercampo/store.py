@@ -699,6 +699,42 @@ class Store:
         else:
             self.reactivate(ids)
 
+    def reclassify(self, ids: list[int], to_namespace: str) -> int:
+        """Mueve recuerdos PROPIOS a otro contexto: curación del dueño sobre su memoria.
+        Solo toca lo del propio namespace (nunca lo enlazado, que es de solo lectura, ni
+        lo de otro contexto). Los enlaces se recolocan: los que quedan con los DOS
+        extremos en el destino van con ellos; los que cruzarían contextos se ELIMINAN
+        (un enlace entre contextos rompería el aislamiento). Devuelve cuántos se movieron."""
+        destino = str(to_namespace or "").strip()
+        if not destino:
+            raise ValueError("contexto destino vacío")
+        ids = [int(i) for i in ids]
+        if not ids:
+            return 0
+        marks = ",".join("?" * len(ids))
+        with self.transaction():
+            propios = [r[0] for r in self.db.execute(
+                f"SELECT id FROM memories WHERE namespace=? AND id IN ({marks})",
+                (self.namespace, *ids)).fetchall()]
+            if not propios:
+                return 0
+            movidos = set(propios)
+            pm = ",".join("?" * len(propios))
+            afectados = self.db.execute(
+                f"SELECT src, dst FROM links WHERE namespace=? "
+                f"AND (src IN ({pm}) OR dst IN ({pm}))",
+                (self.namespace, *propios, *propios)).fetchall()
+            self.db.execute(
+                f"UPDATE memories SET namespace=? WHERE namespace=? AND id IN ({pm})",
+                (destino, self.namespace, *propios))
+            for src, dst in afectados:
+                if src in movidos and dst in movidos:      # el enlace se muda entero
+                    self.db.execute("UPDATE links SET namespace=? WHERE src=? AND dst=?",
+                                    (destino, src, dst))
+                else:                                      # cruzaría contextos: se corta
+                    self.db.execute("DELETE FROM links WHERE src=? AND dst=?", (src, dst))
+        return len(propios)
+
     def get(self, mem_id: int):
         # Acotado a lo LEGIBLE (propio + enlazados): un contexto no enlazado sigue
         # siendo invisible, ni siquiera por id.
