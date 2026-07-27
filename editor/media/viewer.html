@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="%LANG%">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="%CSP%">
@@ -18,12 +18,13 @@
       </select>
       <button id="pause" title="Pausar la memoria (modo 'no recordar')">⏸</button>
       <button id="refresh" title="Refrescar">↻</button>
+      <button id="issue" title="Reportar un problema (GitHub)">🐛</button>
     </div>
     <div id="paused-banner" class="banner hidden">
       ⏸ Memoria <b>en pausa</b>: no se graban recuerdos nuevos ni se refuerzan (leer sí funciona).
     </div>
     <div class="row meta">
-      <label><input type="checkbox" id="all"> todos los contextos</label>
+      <label><input type="checkbox" id="all"> <span id="all-label">todos los contextos</span></label>
       <span id="chips" class="chips"></span>
       <span id="scope" class="scope"></span>
       <span id="count" class="count"></span>
@@ -35,6 +36,7 @@
     <button class="tab" data-view="graph">Mapa</button>
     <button class="tab" data-view="timeline">Tiempo</button>
     <button class="tab" data-view="axes">Ejes</button>
+    <button class="tab" data-view="ideas">Ideas</button>
     <button class="tab" data-view="tokens">Tokens</button>
     <button class="tab" data-view="log">Registro</button>
     <button class="tab" data-view="status">Estado</button>
@@ -52,6 +54,7 @@
       <canvas id="axes-canvas"></canvas>
       <div id="axes-tip" class="tip hidden"></div>
     </section>
+    <section id="view-ideas" class="view"></section>
     <section id="view-tokens" class="view"></section>
     <section id="view-log" class="view"></section>
     <section id="view-status" class="view"></section>

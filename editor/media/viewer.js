@@ -4,6 +4,152 @@
   const vscode = acquireVsCodeApi();
   const $ = (id) => document.getElementById(id);
 
+  // --- idioma (es/en) — lo fija la extensión desde vscode.env.language ----------
+  // Comunidad bilingüe: por defecto inglés, español si VS Code está en español.
+  const lang = (document.documentElement.lang || "en").toLowerCase().startsWith("es")
+    ? "es" : "en";
+  const DICT = {
+    es: {
+      filtrar: "Filtrar por texto…", comoBuscar: "Cómo buscar",
+      optText: "texto", optRecall: "recall (agente)", optMuse: "muse (eureka)",
+      pausar: "Pausar la memoria (modo 'no recordar')", reanudar: "Reanudar la memoria",
+      refrescar: "Refrescar", todosContextos: "todos los contextos",
+      banner: "⏸ Memoria <b>en pausa</b>: no se graban recuerdos nuevos ni se refuerzan (leer sí funciona).",
+      tabs: { list: "Lista", graph: "Mapa", timeline: "Tiempo", axes: "Ejes",
+        ideas: "Ideas", tokens: "Tokens", log: "Registro", status: "Estado" },
+      vacio: "Nada que mostrar.",
+      vacioHint: "Prueba a limpiar el buscador o activa «todos los contextos».",
+      guion: "—", hoy: "hoy", dias: (n) => `hace ${n} d`, mes: (n) => `hace ${n} mes`,
+      anos: (x) => `hace ${x} a`,
+      chipTitle: "Mostrar/ocultar este contexto",
+      deTotal: (n, t) => `${n} de ${t}`,
+      escribeConsulta: (m) => `Escribe una consulta y pulsa Enter para buscar con ${m}.`,
+      noEncontro: "No encontró nada. En modo recall puede haberse abstenido (sabe decir «no tengo nada»); prueba muse para conexiones indirectas.",
+      nadaMostrar: "Nada que mostrar. Prueba a limpiar el buscador o activa «todos los contextos».",
+      mImp: "imp", mFiab: "fiab", mFuerza: "fuerza", mUsos: "usos", mVisto: "visto",
+      relevancia: "relevancia", flagsTitle: "latente/consolidado/reemplazado/pronto-latente",
+      actMuse: "Conexiones (muse)", actWake: "Despertar",
+      actForget: "Olvidar (reversible)", actPurge: "Borrar del todo (irreversible)",
+      leyAsociacion: "asociación", leyPuente: "puente onírico",
+      detMuse: "💡 conexiones", detWake: "☀️ despertar", detForget: "💤 olvidar",
+      detPurge: "🗑️ borrar",
+      tlLatente: "💤 latente", tlPronto: "⚠️ pronto latente",
+      axImportancia: "importancia →", axFiabilidad: "fiabilidad →",
+      consultandoEstado: "Consultando estado…",
+      hCLI: "CLI", hBD: "Base de datos", hMemoria: "Memoria", hMCP: "Servidor MCP",
+      hRegistro: "Registro (hooks y decisiones)",
+      sVersion: "versión", sPython: "python", sMemoria: "memoria",
+      sEnPausa: "EN PAUSA (no recuerda)", sActiva: "activa (recordando)",
+      sEstado: "estado", sSana: "sana", sConProblemas: "con problemas",
+      sIntegridad: "integridad", sEsquema: "esquema",
+      sEsperada: (v, e) => `v${v} / esperada v${e}`,
+      sEscribible: "escribible", sSi: "sí", sNo: "no", sTamano: "tamaño", sRuta: "ruta",
+      sTotal: "total", sRecuerdos: (n) => `${n} recuerdos`,
+      sEpisodicos: "episódicos activos", sSemanticos: "semánticos",
+      sLatentes: "latentes", sArchivados: "archivados",
+      sTokensTurno: "tokens/turno (presup.)",
+      sEnMarcha: "en marcha", sMcpSi: (n) => `sí (${n})`, sMcpNo: "no (se arranca al usarse)",
+      sDesde: (f) => `desde ${f}`,
+      sActivo: "activo", sLogNo: "no (HIPERCAMPO_LOG=0)", sUltima: "última actividad",
+      estadoHint: "El estado se consulta al abrir esta pestaña. Pulsa ↻ para actualizarlo.",
+      calculandoFactura: "Calculando la factura…",
+      tGastados: "tokens gastados", tAhorrados: "ahorrados por el presupuesto",
+      tInyecciones: "inyecciones", tHoy: "hoy",
+      tMediaVs: "Media por inyección vs. presupuesto",
+      tMedia: "media", tPresupHook: "presupuesto hook", tPresupId: "presupuesto identidad",
+      tTok: "tok", tTokTurno: "tok/turno",
+      tHistoria: (n) => `Historia (${n} inyecciones · rojo = sobre presupuesto)`,
+      tEstimacion: (m) => `Siempre es una <b>estimación</b> y lo dice: ${m}. El tokenizador de Claude no es público; solo su API es exacta.`,
+      leyendoRegistro: "Leyendo el registro…",
+      registroVacio: "El registro está vacío o desactivado (HIPERCAMPO_LOG=0).",
+      phRecall: "Escribe una consulta y pulsa Enter (recall, como el agente)…",
+      phMuse: "Escribe una semilla y pulsa Enter (muse: conexiones eureka)…",
+      buscandoCon: (m) => `buscando con ${m}…`,
+      errorLeer: "No se pudo leer la memoria:\n\n",
+      issueTitle: "Reportar un problema (GitHub)",
+      abrirLog: "Abrir el fichero de registro",
+      backup: "Copia de seguridad",
+      backupHint: "Crea una copia consistente del .db",
+      sMcpDb: "memoria", sMcpDesconocida: "(desconocida)",
+      ideasCargando: "Buscando ideas (puentes entre recuerdos)…",
+      ideasVacio: "Sin ideas nuevas por ahora. El sueño propone puentes cuando dos recuerdos comparten un asociado común pero no están conectados; con poca memoria aún no hay qué cruzar.",
+      ideasIntro: "Hipótesis que la memoria sugiere — conexiones que aún no sabías. Son propuestas, no verdades: no se han grabado.",
+      ideasVia: "ambos evocan",
+      ideasHipotesis: (a, b, via) => `«${a}» y «${b}» quizá se relacionan`,
+      ideasSim: "afinidad",
+    },
+    en: {
+      filtrar: "Filter by text…", comoBuscar: "How to search",
+      optText: "text", optRecall: "recall (agent)", optMuse: "muse (eureka)",
+      pausar: "Pause the memory ('don't remember' mode)", reanudar: "Resume the memory",
+      refrescar: "Refresh", todosContextos: "all contexts",
+      banner: "⏸ Memory <b>paused</b>: no new memories are written or reinforced (reading still works).",
+      tabs: { list: "List", graph: "Map", timeline: "Timeline", axes: "Axes",
+        ideas: "Ideas", tokens: "Tokens", log: "Log", status: "Status" },
+      vacio: "Nothing to show.",
+      vacioHint: "Try clearing the search or turn on “all contexts”.",
+      guion: "—", hoy: "today", dias: (n) => `${n}d ago`, mes: (n) => `${n}mo ago`,
+      anos: (x) => `${x}y ago`,
+      chipTitle: "Show/hide this context",
+      deTotal: (n, t) => `${n} of ${t}`,
+      escribeConsulta: (m) => `Type a query and press Enter to search with ${m}.`,
+      noEncontro: "Nothing found. In recall mode it may have abstained (it can say “I have nothing”); try muse for indirect connections.",
+      nadaMostrar: "Nothing to show. Try clearing the search or turn on “all contexts”.",
+      mImp: "imp", mFiab: "conf", mFuerza: "strength", mUsos: "uses", mVisto: "seen",
+      relevancia: "relevance", flagsTitle: "dormant/consolidated/superseded/soon-dormant",
+      actMuse: "Connections (muse)", actWake: "Wake",
+      actForget: "Forget (reversible)", actPurge: "Delete for good (irreversible)",
+      leyAsociacion: "association", leyPuente: "dream bridge",
+      detMuse: "💡 connections", detWake: "☀️ wake", detForget: "💤 forget",
+      detPurge: "🗑️ delete",
+      tlLatente: "💤 dormant", tlPronto: "⚠️ soon dormant",
+      axImportancia: "importance →", axFiabilidad: "reliability →",
+      consultandoEstado: "Checking status…",
+      hCLI: "CLI", hBD: "Database", hMemoria: "Memory", hMCP: "MCP server",
+      hRegistro: "Log (hooks and decisions)",
+      sVersion: "version", sPython: "python", sMemoria: "memory",
+      sEnPausa: "PAUSED (not remembering)", sActiva: "active (remembering)",
+      sEstado: "state", sSana: "healthy", sConProblemas: "has problems",
+      sIntegridad: "integrity", sEsquema: "schema",
+      sEsperada: (v, e) => `v${v} / expected v${e}`,
+      sEscribible: "writable", sSi: "yes", sNo: "no", sTamano: "size", sRuta: "path",
+      sTotal: "total", sRecuerdos: (n) => `${n} memories`,
+      sEpisodicos: "active episodic", sSemanticos: "semantic",
+      sLatentes: "dormant", sArchivados: "archived",
+      sTokensTurno: "tokens/turn (budget)",
+      sEnMarcha: "running", sMcpSi: (n) => `yes (${n})`, sMcpNo: "no (starts on use)",
+      sDesde: (f) => `since ${f}`,
+      sActivo: "enabled", sLogNo: "no (HIPERCAMPO_LOG=0)", sUltima: "last activity",
+      estadoHint: "Status is fetched when you open this tab. Press ↻ to refresh it.",
+      calculandoFactura: "Computing the bill…",
+      tGastados: "tokens spent", tAhorrados: "saved by the budget",
+      tInyecciones: "injections", tHoy: "today",
+      tMediaVs: "Average per injection vs. budget",
+      tMedia: "average", tPresupHook: "hook budget", tPresupId: "identity budget",
+      tTok: "tok", tTokTurno: "tok/turn",
+      tHistoria: (n) => `History (${n} injections · red = over budget)`,
+      tEstimacion: (m) => `Always an <b>estimate</b>, and it says so: ${m}. Claude's tokenizer isn't public; only its API is exact.`,
+      leyendoRegistro: "Reading the log…",
+      registroVacio: "The log is empty or disabled (HIPERCAMPO_LOG=0).",
+      phRecall: "Type a query and press Enter (recall, like the agent)…",
+      phMuse: "Type a seed and press Enter (muse: eureka connections)…",
+      buscandoCon: (m) => `searching with ${m}…`,
+      errorLeer: "Couldn't read the memory:\n\n",
+      issueTitle: "Report a problem (GitHub)",
+      abrirLog: "Open the log file",
+      backup: "Backup",
+      backupHint: "Make a consistent copy of the .db",
+      sMcpDb: "memory", sMcpDesconocida: "(unknown)",
+      ideasCargando: "Looking for ideas (bridges between memories)…",
+      ideasVacio: "No new ideas yet. Dreaming proposes bridges when two memories share a common associate but aren't connected; with little memory there's nothing to cross yet.",
+      ideasIntro: "Hypotheses the memory suggests — connections you didn't know yet. They're proposals, not truths: nothing has been saved.",
+      ideasVia: "both evoke",
+      ideasHipotesis: (a, b, via) => `“${a}” and “${b}” might be related`,
+      ideasSim: "affinity",
+    },
+  };
+  const L = DICT[lang];
+
   // --- estado ---------------------------------------------------------------
   let MEM = [];          // nodos (memorias) del último fetch
   let EDGES = [];        // aristas del grafo
@@ -15,7 +161,7 @@
 
   // --- utilidades -----------------------------------------------------------
   const norm = (s) => String(s || "").toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    .normalize("NFD").replace(/[̀-ͯ]/g, "");
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -32,12 +178,12 @@
   const nsColor = (ns) => `hsl(${hue(ns)} 60% 55%)`;
 
   function fecha(ts) {
-    if (!ts) return "—";
+    if (!ts) return L.guion;
     const d = (Date.now() / 1000 - ts) / 86400;
-    if (d < 1) return "hoy";
-    if (d < 30) return `hace ${Math.round(d)} d`;
-    if (d < 365) return `hace ${Math.round(d / 30)} mes`;
-    return `hace ${(d / 365).toFixed(1)} a`;
+    if (d < 1) return L.hoy;
+    if (d < 30) return L.dias(Math.round(d));
+    if (d < 365) return L.mes(Math.round(d / 30));
+    return L.anos((d / 365).toFixed(1));
   }
 
   // Heurística "pronto latente": débil, viejo y aún despierto. Es aproximada (el
@@ -60,6 +206,28 @@
     return base;
   }
 
+  // --- etiquetas estáticas: se aplican según el idioma al arrancar ----------
+  function aplicarIdioma() {
+    $("q").placeholder = L.filtrar;
+    $("mode").title = L.comoBuscar;
+    const opts = $("mode").options;
+    opts[0].textContent = L.optText;
+    opts[1].textContent = L.optRecall;
+    opts[2].textContent = L.optMuse;
+    $("refresh").title = L.refrescar;
+    $("issue").title = L.issueTitle;
+    $("paused-banner").innerHTML = L.banner;
+    $("all-label").textContent = L.todosContextos;
+    document.querySelectorAll(".tab").forEach((t) => {
+      const k = t.dataset.view;
+      if (L.tabs[k]) t.textContent = L.tabs[k];
+    });
+    const emptyPs = $("empty").querySelectorAll("p");
+    if (emptyPs[0]) emptyPs[0].textContent = L.vacio;
+    if (emptyPs[1]) emptyPs[1].textContent = L.vacioHint;
+    pintarPausa();   // fija el título del botón de pausa según idioma+estado
+  }
+
   // --- chips de namespace ---------------------------------------------------
   function pintarChips() {
     const cont = $("chips");
@@ -72,7 +240,7 @@
       el.className = "chip" + (on ? " on" : "");
       el.style.setProperty("--chip", nsColor(ns));
       el.textContent = ns;
-      el.title = "Mostrar/ocultar este contexto";
+      el.title = L.chipTitle;
       el.onclick = () => {
         if (!ACTIVE) ACTIVE = new Set(todos);
         if (ACTIVE.has(ns)) ACTIVE.delete(ns); else ACTIVE.add(ns);
@@ -88,17 +256,17 @@
     const total = (HITS !== null ? HITS : MEM).length;
     $("scope").textContent = HITS !== null
       ? `${$("mode").value} · ${SCOPE}` : SCOPE;
-    $("count").textContent = n === total ? `${total}` : `${n} de ${total}`;
+    $("count").textContent = n === total ? `${total}` : L.deTotal(n, total);
   }
 
   // --- repintar la vista activa --------------------------------------------
   function mensajeVacio() {
     const m = $("mode").value;
     if (m !== "text" && HITS === null)
-      return `Escribe una consulta y pulsa Enter para buscar con ${m}.`;
+      return L.escribeConsulta(m);
     if (HITS !== null)
-      return "No encontró nada. En modo recall puede haberse abstenido (sabe decir «no tengo nada»); prueba muse para conexiones indirectas.";
-    return "Nada que mostrar. Prueba a limpiar el buscador o activa «todos los contextos».";
+      return L.noEncontro;
+    return L.nadaMostrar;
   }
 
   function repintar() {
@@ -133,22 +301,22 @@
       m.superseded ? "↩" : "", prontoLatente(m) ? "⚠️" : ""].join("");
     const ns = m.namespace ? `<span class="ns" style="color:${nsColor(m.namespace)}">⟨${esc(m.namespace)}⟩</span>` : "";
     const score = (m.score != null)
-      ? `<span class="badge" title="relevancia">score ${(+m.score).toFixed(2)}</span>` : "";
-    const metrics = [metric("imp", m.importance), metric("fiab", m.confidence),
-      metric("fuerza", m.strength),
-      (m.access_count != null ? `<span>usos <b>${m.access_count}</b></span>` : ""),
-      (m.last_access != null ? `<span>visto <b>${fecha(m.last_access)}</b></span>` : "")]
+      ? `<span class="badge" title="${L.relevancia}">score ${(+m.score).toFixed(2)}</span>` : "";
+    const metrics = [metric(L.mImp, m.importance), metric(L.mFiab, m.confidence),
+      metric(L.mFuerza, m.strength),
+      (m.access_count != null ? `<span>${L.mUsos} <b>${m.access_count}</b></span>` : ""),
+      (m.last_access != null ? `<span>${L.mVisto} <b>${fecha(m.last_access)}</b></span>` : "")]
       .filter(Boolean).join("");
     el.innerHTML =
       `<div class="head"><span class="id">#${m.id}</span>`
       + `<span class="badge">${esc(m.kind || "?")}</span>${ns}${score}`
-      + `<span class="flags" title="latente/consolidado/reemplazado/pronto-latente">${flags}</span>`
+      + `<span class="flags" title="${L.flagsTitle}">${flags}</span>`
       + `<span class="actions">`
-      + `<button data-act="muse" title="Conexiones (muse)">💡</button>`
+      + `<button data-act="muse" title="${L.actMuse}">💡</button>`
       + (m.dormant
-          ? `<button data-act="wake" title="Despertar">☀️</button>`
-          : `<button data-act="forget" title="Olvidar (reversible)">💤</button>`)
-      + `<button data-act="purge" title="Borrar del todo (irreversible)">🗑️</button>`
+          ? `<button data-act="wake" title="${L.actWake}">☀️</button>`
+          : `<button data-act="forget" title="${L.actForget}">💤</button>`)
+      + `<button data-act="purge" title="${L.actPurge}">🗑️</button>`
       + `</span></div>`
       + `<div class="text">${esc(m.text || "")}</div>`
       + (metrics ? `<div class="metrics">${metrics}</div>` : "");
@@ -227,8 +395,8 @@
     const l = $("graph-legend");
     l.innerHTML = nss.map((ns) =>
       `<div class="k"><span class="dot" style="background:${nsColor(ns)}"></span>${esc(ns)}</div>`).join("")
-      + `<div class="k"><span class="ln" style="border-color:var(--vscode-foreground);opacity:.5"></span>asociación</div>`
-      + `<div class="k"><span class="ln" style="border-color:var(--vscode-textLink-foreground);border-top-style:dashed"></span>puente onírico</div>`;
+      + `<div class="k"><span class="ln" style="border-color:var(--vscode-foreground);opacity:.5"></span>${L.leyAsociacion}</div>`
+      + `<div class="k"><span class="ln" style="border-color:var(--vscode-textLink-foreground);border-top-style:dashed"></span>${L.leyPuente}</div>`;
   }
 
   function ajustarCanvas(c) {
@@ -377,9 +545,9 @@
       + `<span class="ns" style="color:${nsColor(m.namespace)}">⟨${esc(m.namespace)}⟩</span></div>`
       + `<div class="text">${esc(m.text)}</div>`
       + `<div class="actions">`
-      + `<button data-act="muse">💡 conexiones</button>`
-      + (m.dormant ? `<button data-act="wake">☀️ despertar</button>` : `<button data-act="forget">💤 olvidar</button>`)
-      + `<button data-act="purge">🗑️ borrar</button></div>`;
+      + `<button data-act="muse">${L.detMuse}</button>`
+      + (m.dormant ? `<button data-act="wake">${L.detWake}</button>` : `<button data-act="forget">${L.detForget}</button>`)
+      + `<button data-act="purge">${L.detPurge}</button></div>`;
     d.querySelectorAll("button[data-act]").forEach((b) => b.onclick = () => accion(b.dataset.act, m));
   }
 
@@ -392,7 +560,7 @@
     c.innerHTML = orden.map((m) => {
       const s = Math.max(0, Math.min(1, m.strength || 0));
       const col = nsColor(m.namespace);
-      const flag = m.dormant ? "💤 latente" : (prontoLatente(m) ? "⚠️ pronto latente" : "");
+      const flag = m.dormant ? L.tlLatente : (prontoLatente(m) ? L.tlPronto : "");
       return `<div class="tl">`
         + `<span class="tl-date">${fecha(m.last_access)}</span>`
         + `<span class="tl-bar"><span class="tl-fill" style="width:${(s * 100).toFixed(0)}%;background:${col}"></span></span>`
@@ -419,9 +587,9 @@
     ctx.beginPath(); ctx.moveTo(pad, H - pad); ctx.lineTo(W - pad / 2, H - pad);
     ctx.moveTo(pad, H - pad); ctx.lineTo(pad, pad / 2); ctx.stroke();
     ctx.fillStyle = getVar("--vscode-descriptionForeground"); ctx.font = "11px sans-serif";
-    ctx.fillText("importancia →", W - 110, H - pad + 16);
+    ctx.fillText(L.axImportancia, W - 110, H - pad + 16);
     ctx.save(); ctx.translate(14, pad + 60); ctx.rotate(-Math.PI / 2);
-    ctx.fillText("fiabilidad →", 0, 0); ctx.restore();
+    ctx.fillText(L.axFiabilidad, 0, 0); ctx.restore();
     // guía diagonal (importante pero poco fiable = arriba-izq / abajo-der)
     AX = { canvas, pts: [] };
     for (const m of items) {
@@ -442,7 +610,7 @@
         tip.style.left = Math.min(mx + 12, rect.width - 300) + "px";
         tip.style.top = (my + 12) + "px";
         tip.innerHTML = `#${hit.m.id} <b>${esc(hit.m.namespace)}</b><br>${esc((hit.m.text || "").slice(0, 160))}`
-          + `<br><small>imp ${(hit.m.importance || 0).toFixed(2)} · fiab ${(hit.m.confidence || 0).toFixed(2)} · fuerza ${(hit.m.strength || 0).toFixed(2)}</small>`;
+          + `<br><small>${L.mImp} ${(hit.m.importance || 0).toFixed(2)} · ${L.mFiab} ${(hit.m.confidence || 0).toFixed(2)} · ${L.mFuerza} ${(hit.m.strength || 0).toFixed(2)}</small>`;
       } else tip.classList.add("hidden");
     };
     canvas.onpointerleave = () => $("axes-tip").classList.add("hidden");
@@ -459,7 +627,7 @@
   // ESTADO (salud: CLI, BD, servidor MCP, registro)
   // ==========================================================================
   function bytes(n) {
-    if (n == null) return "—";
+    if (n == null) return L.guion;
     if (n < 1024) return n + " B";
     if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
     return (n / 1048576).toFixed(1) + " MB";
@@ -468,48 +636,60 @@
 
   function renderStatus(s) {
     const c = $("view-status");
-    if (!s) { c.innerHTML = `<p class="hint">Consultando estado…</p>`; return; }
+    if (!s) { c.innerHTML = `<p class="hint">${L.consultandoEstado}</p>`; return; }
     const db = s.db || {}, mcp = s.mcp || {}, log = s.log || {}, st = s.stats || {};
     const schemaOk = db.schema === db.schema_expected;
     const fila = (label, val, ok) =>
       `<div class="strow">${ok === undefined ? "" : semaforo(ok)}`
       + `<span class="slabel">${label}</span><span class="sval">${val}</span></div>`;
     c.innerHTML =
-      `<div class="scard"><h3>CLI</h3>`
-      + fila("versión", esc(s.version || "?"), true)
-      + fila("python", esc(s.python || "?"))
-      + fila("memoria", s.paused ? "EN PAUSA (no recuerda)" : "activa (recordando)", !s.paused)
+      `<div class="scard"><h3>${L.hCLI}</h3>`
+      + fila(L.sVersion, esc(s.version || "?"), true)
+      + fila(L.sPython, esc(s.python || "?"))
+      + fila(L.sMemoria, s.paused ? L.sEnPausa : L.sActiva, !s.paused)
       + `</div>`
-      + `<div class="scard"><h3>Base de datos</h3>`
-      + fila("estado", db.healthy ? "sana" : "con problemas", !!db.healthy)
-      + fila("integridad", esc(db.integrity || "?"), db.integrity === "ok")
-      + fila("esquema", `v${db.schema} / esperada v${db.schema_expected}`, schemaOk)
-      + fila("escribible", db.writable ? "sí" : "no", !!db.writable)
-      + fila("tamaño", bytes(db.size))
-      + fila("ruta", `<code>${esc(db.path || "?")}</code>`)
+      + `<div class="scard"><h3>${L.hBD}</h3>`
+      + fila(L.sEstado, db.healthy ? L.sSana : L.sConProblemas, !!db.healthy)
+      + fila(L.sIntegridad, esc(db.integrity || "?"), db.integrity === "ok")
+      + fila(L.sEsquema, L.sEsperada(db.schema, db.schema_expected), schemaOk)
+      + fila(L.sEscribible, db.writable ? L.sSi : L.sNo, !!db.writable)
+      + fila(L.sTamano, bytes(db.size))
+      + fila(L.sRuta, `<code>${esc(db.path || "?")}</code>`)
+      + `<div class="strow"><button class="sbtn" data-cmd="backup" title="${L.backupHint}">💾 ${L.backup}</button></div>`
       + `</div>`
-      + `<div class="scard"><h3>Memoria</h3>`
-      + fila("total", `${st.total ?? "?"} recuerdos`)
-      + fila("episódicos activos", st.episodicos_activos ?? "—")
-      + fila("semánticos", st.semanticos ?? "—")
-      + fila("latentes", st.latentes ?? "—")
-      + fila("archivados", st.archivados ?? "—")
+      + `<div class="scard"><h3>${L.hMemoria}</h3>`
+      + fila(L.sTotal, L.sRecuerdos(st.total ?? "?"))
+      + fila(L.sEpisodicos, st.episodicos_activos ?? L.guion)
+      + fila(L.sSemanticos, st.semanticos ?? L.guion)
+      + fila(L.sLatentes, st.latentes ?? L.guion)
+      + fila(L.sArchivados, st.archivados ?? L.guion)
       + (st.por_contexto ? Object.entries(st.por_contexto).sort((a, b) => b[1] - a[1])
           .map(([ns, n]) => fila(`· ${esc(ns)}`,
             `<span style="color:${nsColor(ns)}">${n}</span>`)).join("") : "")
-      + (st.tokens ? fila("tokens/turno (presup.)", st.tokens.presupuesto_por_turno ?? "—") : "")
+      + (st.tokens ? fila(L.sTokensTurno, st.tokens.presupuesto_por_turno ?? L.guion) : "")
       + `</div>`
-      + `<div class="scard"><h3>Servidor MCP</h3>`
-      + fila("en marcha", mcp.running ? `sí (${mcp.running})` : "no (se arranca al usarse)", mcp.running > 0)
-      + ((mcp.servers || []).map((p) =>
-          fila(`· pid ${p.pid}`, `desde ${p.arranque ? fecha(p.arranque) : "?"}`)).join(""))
+      + `<div class="scard"><h3>${L.hMCP}</h3>`
+      + fila(L.sEnMarcha, mcp.running ? L.sMcpSi(mcp.running) : L.sMcpNo, mcp.running > 0)
+      + ((mcp.servers || []).map((p) => {
+          const fichero = (p.db || "").split(/[\\/]/).pop();
+          const quien = fichero ? `${L.sMcpDb}: ${esc(fichero)}` : L.sMcpDesconocida;
+          return fila(`· ${quien}`, `${L.sDesde(p.arranque ? fecha(p.arranque) : "?")} · pid ${p.pid}`);
+        }).join(""))
       + `</div>`
-      + `<div class="scard"><h3>Registro (hooks y decisiones)</h3>`
-      + fila("activo", log.enabled ? "sí" : "no (HIPERCAMPO_LOG=0)", !!log.enabled)
-      + (log.last_activity ? fila("última actividad", fecha(log.last_activity)) : "")
-      + (log.path ? fila("ruta", `<code>${esc(log.path)}</code>`) : "")
+      + `<div class="scard"><h3>${L.hRegistro}</h3>`
+      + fila(L.sActivo, log.enabled ? L.sSi : L.sLogNo, !!log.enabled)
+      + (log.last_activity ? fila(L.sUltima, fecha(log.last_activity)) : "")
+      + (log.path ? fila(L.sRuta, `<code>${esc(log.path)}</code>`) : "")
+      + (log.path ? `<div class="strow"><button class="sbtn" data-cmd="open-log" data-path="${esc(log.path)}">📄 ${L.abrirLog}</button></div>` : "")
       + `</div>`
-      + `<p class="hint">El estado se consulta al abrir esta pestaña. Pulsa ↻ para actualizarlo.</p>`;
+      + `<p class="hint">${L.estadoHint}</p>`;
+    c.querySelectorAll("button[data-cmd]").forEach((b) => {
+      b.onclick = () => {
+        if (b.dataset.cmd === "backup") vscode.postMessage({ type: "backup" });
+        else if (b.dataset.cmd === "open-log")
+          vscode.postMessage({ type: "open-log", path: b.dataset.path || "" });
+      };
+    });
   }
 
   // ==========================================================================
@@ -517,7 +697,7 @@
   // ==========================================================================
   function renderTokens(d) {
     const c = $("view-tokens");
-    if (!d) { c.innerHTML = `<p class="hint">Calculando la factura…</p>`; return; }
+    if (!d) { c.innerHTML = `<p class="hint">${L.calculandoFactura}</p>`; return; }
     const s = d.summary || {}, serie = d.series || [];
     const media = s.media_por_inyeccion || 0, presup = s.presupuesto_hook || 350;
     const usoPct = Math.min(100, Math.round((media / presup) * 100));
@@ -532,24 +712,23 @@
     }).join("");
     c.innerHTML =
       `<div class="hero">`
-      + `<div class="hnum"><span class="hbig">${s.total ?? 0}</span><span class="hlbl">tokens gastados</span></div>`
-      + `<div class="hnum good"><span class="hbig">${s.ahorrado_por_presupuesto ?? 0}</span><span class="hlbl">ahorrados por el presupuesto</span></div>`
-      + `<div class="hnum"><span class="hbig">${s.inyecciones ?? 0}</span><span class="hlbl">inyecciones</span></div>`
-      + `<div class="hnum"><span class="hbig">${s.hoy ?? 0}</span><span class="hlbl">hoy</span></div>`
+      + `<div class="hnum"><span class="hbig">${s.total ?? 0}</span><span class="hlbl">${L.tGastados}</span></div>`
+      + `<div class="hnum good"><span class="hbig">${s.ahorrado_por_presupuesto ?? 0}</span><span class="hlbl">${L.tAhorrados}</span></div>`
+      + `<div class="hnum"><span class="hbig">${s.inyecciones ?? 0}</span><span class="hlbl">${L.tInyecciones}</span></div>`
+      + `<div class="hnum"><span class="hbig">${s.hoy ?? 0}</span><span class="hlbl">${L.tHoy}</span></div>`
       + `</div>`
-      + `<div class="scard"><h3>Media por inyección vs. presupuesto</h3>`
+      + `<div class="scard"><h3>${L.tMediaVs}</h3>`
       + `<div class="gauge"><span class="gfill" style="width:${usoPct}%"></span>`
-      + `<span class="gmark" title="presupuesto ${presup}"></span></div>`
-      + `<div class="strow"><span class="slabel">media</span><span class="sval">${media} tok</span></div>`
-      + `<div class="strow"><span class="slabel">presupuesto hook</span><span class="sval">${presup} tok/turno</span></div>`
-      + `<div class="strow"><span class="slabel">presupuesto identidad</span><span class="sval">${s.presupuesto_identidad ?? "—"} tok</span></div>`
+      + `<span class="gmark" title="${L.tPresupHook} ${presup}"></span></div>`
+      + `<div class="strow"><span class="slabel">${L.tMedia}</span><span class="sval">${media} ${L.tTok}</span></div>`
+      + `<div class="strow"><span class="slabel">${L.tPresupHook}</span><span class="sval">${presup} ${L.tTokTurno}</span></div>`
+      + `<div class="strow"><span class="slabel">${L.tPresupId}</span><span class="sval">${s.presupuesto_identidad ?? L.guion} ${L.tTok}</span></div>`
       + `</div>`
       + (serie.length
-          ? `<div class="scard"><h3>Historia (${serie.length} inyecciones · rojo = sobre presupuesto)</h3>`
+          ? `<div class="scard"><h3>${L.tHistoria(serie.length)}</h3>`
             + `<div class="chart">${barras}</div></div>`
           : "")
-      + `<p class="hint">Siempre es una <b>estimación</b> y lo dice: ${esc(s.metodo || "")}. `
-      + `El tokenizador de Claude no es público; solo su API es exacta.</p>`;
+      + `<p class="hint">${L.tEstimacion(esc(s.metodo || ""))}</p>`;
   }
 
   // ==========================================================================
@@ -562,10 +741,10 @@
   };
   function renderLog(d) {
     const c = $("view-log");
-    if (!d) { c.innerHTML = `<p class="hint">Leyendo el registro…</p>`; return; }
+    if (!d) { c.innerHTML = `<p class="hint">${L.leyendoRegistro}</p>`; return; }
     const ent = (d.entries || []).slice().reverse();   // más reciente arriba
     if (!ent.length) {
-      c.innerHTML = `<p class="hint">El registro está vacío o desactivado (HIPERCAMPO_LOG=0).</p>`;
+      c.innerHTML = `<p class="hint">${L.registroVacio}</p>`;
       return;
     }
     c.innerHTML = ent.map((e) => {
@@ -578,14 +757,36 @@
   }
 
   // ==========================================================================
+  // IDEAS (puentes que propone el sueño: hipótesis, no evidencia)
+  // ==========================================================================
+  function renderIdeas(d) {
+    const c = $("view-ideas");
+    if (!d) { c.innerHTML = `<p class="hint">${L.ideasCargando}</p>`; return; }
+    const br = d.bridges || [];
+    if (!br.length) { c.innerHTML = `<p class="hint">${L.ideasVacio}</p>`; return; }
+    const corta = (s) => esc((s || "").slice(0, 70));
+    c.innerHTML = `<p class="hint">${L.ideasIntro}</p>` + br.map((b) =>
+      `<div class="idea">`
+      + `<div class="idea-h">💡 ${esc(L.ideasHipotesis(corta(b.a), corta(b.b), corta(b.via)))}</div>`
+      + `<div class="idea-pair">`
+      + `<span class="idea-node">#${b.a_id} ${esc(b.a || "")}</span>`
+      + `<span class="idea-node">#${b.b_id} ${esc(b.b || "")}</span></div>`
+      + `<div class="idea-via"><small>${L.ideasVia}: «${esc(b.via || "")}» · `
+      + `${L.ideasSim} ${(+b.similarity || 0).toFixed(2)}</small></div>`
+      + `</div>`).join("");
+  }
+
+  // ==========================================================================
   // pestañas, búsqueda, mensajes
   // ==========================================================================
   const PIDE = {
     status: () => vscode.postMessage({ type: "status-request" }),
     tokens: () => vscode.postMessage({ type: "tokens-request" }),
     log: () => vscode.postMessage({ type: "log-request" }),
+    ideas: () => vscode.postMessage({ type: "ideas-request" }),
   };
-  const PLACEHOLDER_VACIO = { status: renderStatus, tokens: renderTokens, log: renderLog };
+  const PLACEHOLDER_VACIO = { status: renderStatus, tokens: renderTokens, log: renderLog,
+    ideas: renderIdeas };
 
   function activarVista(v) {
     VIEW = v;
@@ -599,9 +800,9 @@
   }
 
   const PLACEHOLDER = {
-    text: "Filtrar por texto…",
-    recall: "Escribe una consulta y pulsa Enter (recall, como el agente)…",
-    muse: "Escribe una semilla y pulsa Enter (muse: conexiones eureka)…",
+    text: L.filtrar,
+    recall: L.phRecall,
+    muse: L.phMuse,
   };
 
   function actualizarModo(foco) {
@@ -613,7 +814,7 @@
   function lanzarBusquedaAgente() {
     const q = $("q").value.trim();
     if (!q) { HITS = null; repintar(); return; }   // sin semilla: repintar avisa
-    $("scope").textContent = `buscando con ${$("mode").value}…`;
+    $("scope").textContent = L.buscandoCon($("mode").value);
     vscode.postMessage({ type: "search", query: q, mode: $("mode").value });
   }
 
@@ -635,9 +836,11 @@
       renderTokens(msg.data);
     } else if (msg.type === "log") {
       renderLog(msg.data);
+    } else if (msg.type === "ideas") {
+      renderIdeas(msg.data);
     } else if (msg.type === "error") {
       $("error").classList.remove("hidden");
-      $("error").textContent = "No se pudo leer la memoria:\n\n" + msg.message;
+      $("error").textContent = L.errorLeer + msg.message;
     }
   });
 
@@ -659,12 +862,15 @@
     vscode.postMessage({ type: "setAllNamespaces", value: e.target.checked }));
   $("pause").addEventListener("click", () =>
     vscode.postMessage({ type: "setPaused", value: !PAUSED }));
+  $("issue").addEventListener("click", () =>
+    vscode.postMessage({ type: "open-external",
+      url: "https://github.com/armandojaleo/hipercampo/issues/new" }));
 
   function pintarPausa() {
     $("paused-banner").classList.toggle("hidden", !PAUSED);
     const b = $("pause");
     b.textContent = PAUSED ? "▶️" : "⏸";
-    b.title = PAUSED ? "Reanudar la memoria" : "Pausar la memoria (modo 'no recordar')";
+    b.title = PAUSED ? L.reanudar : L.pausar;
     b.classList.toggle("on", PAUSED);
   }
 
@@ -673,6 +879,7 @@
     else if (VIEW === "axes") repintar();
   });
 
+  aplicarIdioma();
   $("all").checked = true;
   vscode.postMessage({ type: "ready" });
 }());

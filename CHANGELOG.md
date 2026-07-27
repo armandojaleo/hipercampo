@@ -6,6 +6,16 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **The viewer speaks your language (en/es), plus new tools (extension v0.6.0).** The
+  viewer now follows VS Code's UI language: English by default, Spanish when VS Code is
+  in Spanish. Strings live in an in-webview dictionary; the manifest uses `package.nls`;
+  the language is injected from `vscode.env.language`. New in the viewer:
+  - **Ideas tab** — the bridges *dreaming* proposes between distant memories that share a
+    common associate but aren't linked (hypotheses, not evidence). Backed by a new
+    `hipercampo dream --json`, always dry-run: it shows ideas, never persists them.
+  - **Status** gained an *open the log* button, each **MCP server**'s identity (which
+    memory file it serves), and a **backup** button (runs `hipercampo backup`).
+  - A **report-an-issue** button (opens GitHub) in the header.
 - **Embeddable core, now by contract.** The core (VSA + store + memory cycle) does
   not depend on `mcp` — that's just one transport — so `import hipercampo` runs with
   only `numpy`, fit for embedded systems and robots (Linux SBCs). This was true by

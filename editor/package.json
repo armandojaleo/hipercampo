@@ -1,8 +1,8 @@
 {
   "name": "hipercampo-viewer",
-  "displayName": "hipercampo — visor de memoria",
-  "description": "Ver y explorar la memoria de hipercampo desde VS Code: lista, mapa, tiempo y ejes (local-first, sin red).",
-  "version": "0.5.1",
+  "displayName": "%ext.displayName%",
+  "description": "%ext.description%",
+  "version": "0.6.0",
   "publisher": "armandojaleo",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/armandojaleo/hipercampo" },
@@ -15,12 +15,12 @@
     "commands": [
       {
         "command": "hipercampo.showMemories",
-        "title": "hipercampo: ver memorias",
+        "title": "%cmd.showMemories%",
         "icon": "$(database)"
       },
       {
         "command": "hipercampo.refresh",
-        "title": "hipercampo: refrescar memorias",
+        "title": "%cmd.refresh%",
         "icon": "$(refresh)"
       }
     ],
@@ -37,7 +37,7 @@
       "hipercampoView": [
         {
           "id": "hipercampo.home",
-          "name": "Memoria",
+          "name": "%view.home%",
           "type": "webview"
         }
       ]
@@ -57,22 +57,22 @@
         "hipercampo.command": {
           "type": "string",
           "default": "hipercampo",
-          "description": "Ejecutable de hipercampo. Si no está en el PATH, pon la ruta completa, o «python -m hipercampo.cli»."
+          "description": "%config.command%"
         },
         "hipercampo.dbPath": {
           "type": "string",
           "default": "",
-          "description": "Ruta del fichero .db (HIPERCAMPO_DB). Vacío = el que hipercampo use por defecto."
+          "description": "%config.dbPath%"
         },
         "hipercampo.namespace": {
           "type": "string",
           "default": "",
-          "description": "Contexto a mostrar (HIPERCAMPO_NAMESPACE). Vacío = «default». Se ignora con «todos los contextos» activado."
+          "description": "%config.namespace%"
         },
         "hipercampo.allNamespaces": {
           "type": "boolean",
           "default": true,
-          "description": "Mostrar todo el fichero, no solo un contexto."
+          "description": "%config.allNamespaces%"
         }
       }
     }

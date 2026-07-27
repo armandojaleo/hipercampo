@@ -143,6 +143,12 @@ def test_cli_list_graph_dormant_en_proceso():
         assert code == 0
         code, out = _cli(["graph", "--all-namespaces"])
         assert code == 0 and '"edges"' in out and '"nodes"' in out and '"db"' in out
+        # ideas (puentes del sueño) en JSON para el visor: dry-run, bien formado.
+        code, out = _cli(["dream", "--json", "--max", "5"])
+        assert code == 0
+        ideas = json.loads(out)
+        assert "bridges" in ideas and isinstance(ideas["bridges"], list)
+        assert ideas.get("dry_run") is True, "el visor NUNCA debe persistir ideas"
         # estado de salud: CLI + BD + MCP + registro
         code, out = _cli(["status"])
         assert code == 0

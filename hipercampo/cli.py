@@ -308,6 +308,25 @@ def cmd_graph(args) -> int:
     return 0
 
 
+def cmd_dream(args) -> int:
+    """Propone PUENTES entre recuerdos que comparten un asociado común pero no están
+    conectados: ideas —hipótesis— que la memoria sugiere. En DRY-RUN: solo las muestra,
+    no las persiste ni contamina la evidencia (esa es la regla del sueño)."""
+    hc = _hc()
+    try:
+        d = hc.dream(max_bridges=max(1, int(getattr(args, "max", 8))), dry_run=True)
+    finally:
+        hc.close()
+    if getattr(args, "json", False):
+        print(json.dumps(d, ensure_ascii=False, default=str))
+    else:
+        for b in d.get("bridges", []):
+            print(f"· {b['hypothesis']}")
+        if not d.get("bridges"):
+            print("Sin ideas nuevas por ahora (nada que conectar).")
+    return 0
+
+
 def cmd_dormant(args) -> int:
     """Adormece (o despierta con --wake) recuerdos por id. Escritura: solo el propio
     contexto. Es el «olvidar» reversible del visor, distinto de purgar (físico)."""
@@ -608,6 +627,9 @@ def main(argv=None) -> int:
         if nombre == "remember":
             sp.add_argument("--importance", type=float, default=0.5)
             sp.add_argument("--confidence", type=float, default=0.5)
+    dm2 = sub.add_parser("dream", help="proponer PUENTES entre recuerdos distantes (ideas)")
+    dm2.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
+    dm2.add_argument("--max", type=int, default=8, help="cuántas hipótesis como mucho")
     bk = sub.add_parser("backup", help="copia de seguridad consistente")
     bk.add_argument("dest", nargs="?")
     ls = sub.add_parser("list", help="volcar las memorias (tabla o --json para la UI)")
@@ -677,6 +699,8 @@ def main(argv=None) -> int:
         return cmd_servers(args)
     if args.cmd == "restart":
         return cmd_restart(args)
+    if args.cmd == "dream":
+        return cmd_dream(args)
     if args.cmd == "backup":
         from .backup import backup
         print("Copia creada en:", backup(args.dest)); return 0

@@ -101,7 +101,10 @@ async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: 
   if (all) args.push("--all-namespaces");
   const out = await run(args);
   const data = JSON.parse(out);
-  const scope = data.all_namespaces ? "todos los contextos" : `contexto «${data.namespace}»`;
+  const es = vscode.env.language.toLowerCase().startsWith("es");
+  const scope = data.all_namespaces
+    ? (es ? "todos los contextos" : "all contexts")
+    : (es ? `contexto «${data.namespace}»` : `context “${data.namespace}”`);
   return { memories: data.nodes || [], edges: data.edges || [], scope, db: data.db, paused: !!data.paused };
 }
 
@@ -129,6 +132,13 @@ async function fetchLog(): Promise<any> {
 // La factura de tokens: agregado + serie temporal. El rasgo de la casa, visible.
 async function fetchTokens(): Promise<any> {
   const out = await run(["tokens"]);
+  return JSON.parse(out);
+}
+
+// Ideas: PUENTES que el sueño propone entre recuerdos distantes con un asociado común
+// (hipótesis, no evidencia). dry-run por construcción: solo se muestran, no se graban.
+async function fetchIdeas(): Promise<any> {
+  const out = await run(["dream", "--json", "--max", "12"]);
   return JSON.parse(out);
 }
 
@@ -199,9 +209,25 @@ class Controller {
         this.post({ type: "log", data: await fetchLog() });
       } else if (msg.type === "tokens-request") {
         this.post({ type: "tokens", data: await fetchTokens() });
+      } else if (msg.type === "ideas-request") {
+        this.post({ type: "ideas", data: await fetchIdeas() });
       } else if (msg.type === "setPaused") {
         await run([msg.value ? "pause" : "resume"]);
         await this.load();
+      } else if (msg.type === "backup") {
+        const out = (await run(["backup"])).trim();
+        vscode.window.showInformationMessage(out || "Copia creada.");
+        this.post({ type: "status", data: await fetchStatus() });   // refrescar tamaños
+      } else if (msg.type === "open-log") {
+        if (msg.path) {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(msg.path));
+          await vscode.window.showTextDocument(doc, { preview: true });
+        } else {
+          vscode.window.showInformationMessage(
+            "El registro está desactivado (HIPERCAMPO_LOG=0): no hay fichero que abrir.");
+        }
+      } else if (msg.type === "open-external") {
+        if (msg.url) { await vscode.env.openExternal(vscode.Uri.parse(msg.url)); }
       }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
@@ -253,10 +279,14 @@ function html(webview: vscode.Webview, ctx: vscode.ExtensionContext): string {
     webview.asWebviewUri(vscode.Uri.file(path.join(ctx.extensionPath, "media", f)));
   const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; `
     + `script-src 'nonce-${nonce}';`;
+  // Idioma del visor = el de VS Code (es/en). La comunidad es bilingüe; por defecto
+  // inglés, español si VS Code está en español. El webview lee document.documentElement.lang.
+  const lang = vscode.env.language.toLowerCase().startsWith("es") ? "es" : "en";
   let page = fs.readFileSync(path.join(ctx.extensionPath, "media", "viewer.html"), "utf8");
   return page
     .replace(/%CSP%/g, csp)
     .replace(/%NONCE%/g, nonce)
+    .replace(/%LANG%/g, lang)
     .replace(/%SCRIPT%/g, String(uri("viewer.js")))
     .replace(/%STYLE%/g, String(uri("viewer.css")));
 }

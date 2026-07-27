@@ -1,0 +1,11 @@
+{
+  "ext.displayName": "hipercampo — memory viewer",
+  "ext.description": "View and explore hipercampo's memory from VS Code: list, map, timeline, axes, ideas (local-first, no network).",
+  "cmd.showMemories": "hipercampo: view memories",
+  "cmd.refresh": "hipercampo: refresh memories",
+  "view.home": "Memory",
+  "config.command": "hipercampo executable. If it isn't on PATH, put the full path, or \"python -m hipercampo.cli\".",
+  "config.dbPath": "Path to the .db file (HIPERCAMPO_DB). Empty = whatever hipercampo uses by default.",
+  "config.namespace": "Context to show (HIPERCAMPO_NAMESPACE). Empty = \"default\". Ignored when \"all contexts\" is on.",
+  "config.allNamespaces": "Show the whole file, not just one context."
+}

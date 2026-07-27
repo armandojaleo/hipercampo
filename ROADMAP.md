@@ -141,9 +141,15 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   arregló un hueco: la matriz enumeraba los tests **a mano** y se dejaba fuera de
   Windows/macOS cuatro ficheros (`list`, `budget`, `purge`, `core_embebible`) —justo
   donde viven los bugs de plataforma—; ahora corre por **glob**. Falta: smoke del webview.
-- ⚪ **`0.1.0b4` — Idioma.** i18n del visor por el idioma de VS Code (en/es) y revisar
-  los mensajes del core (hoy mezclan es/en). Promesa: *el visor arranca en inglés en
-  un VS Code en inglés.*
+- 🟢 **`0.1.0b4` — Idioma + mejoras del visor (extensión v0.6.0).** i18n del visor por
+  el idioma de VS Code (en/es): diccionario en el webview, `package.nls` para el
+  manifiesto, y el idioma inyectado desde `vscode.env.language`. Promesa cumplida: *el
+  visor arranca en inglés en un VS Code en inglés.* De paso, mejoras pedidas por el
+  dueño: pestaña **Ideas** (los puentes que propone el sueño —hipótesis— vía nuevo
+  `hipercampo dream --json`, dry-run: no contamina); en **Estado**, botón para abrir el
+  registro, identidad de cada **servidor MCP** (qué fichero de memoria sirve) y botón de
+  **backup**; y botón de **nueva issue** a GitHub. Falta: revisar los mensajes es/en
+  mezclados del *core* (el visor ya está).
 - 🟢 **`0.1.0b5` — Fiabilidad bajo estrés.** Lo que un robot exige: recall con **cota
   de tiempo/RAM** (`max_scan=N`: mira solo los N recuerdos más vivos —fuerza y
   recencia—; el registro dice cuántos miró y si acotó, sin caps silenciosos). Se midió

@@ -1,0 +1,11 @@
+{
+  "ext.displayName": "hipercampo — visor de memoria",
+  "ext.description": "Ver y explorar la memoria de hipercampo desde VS Code: lista, mapa, tiempo, ejes e ideas (local-first, sin red).",
+  "cmd.showMemories": "hipercampo: ver memorias",
+  "cmd.refresh": "hipercampo: refrescar memorias",
+  "view.home": "Memoria",
+  "config.command": "Ejecutable de hipercampo. Si no está en el PATH, pon la ruta completa, o «python -m hipercampo.cli».",
+  "config.dbPath": "Ruta del fichero .db (HIPERCAMPO_DB). Vacío = el que hipercampo use por defecto.",
+  "config.namespace": "Contexto a mostrar (HIPERCAMPO_NAMESPACE). Vacío = «default». Se ignora con «todos los contextos» activado.",
+  "config.allNamespaces": "Mostrar todo el fichero, no solo un contexto."
+}
