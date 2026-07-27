@@ -205,6 +205,17 @@ def cmd_restart(args) -> int:
         print("No hay ningún servidor en marcha: no hay nada que reiniciar.")
         print("El cliente arrancará uno nuevo (ya con el código actual) al usarlo.")
         return 0
+    objetivo = getattr(args, "pids", None)
+    if objetivo:                                       # cerrar solo los pedidos
+        try:
+            quiero = {int(x) for x in objetivo.split(",") if x.strip()}
+        except ValueError:
+            print("--pids debe ser una lista de números separados por comas.", file=sys.stderr)
+            return 2
+        procesos = [p for p in procesos if p["pid"] in quiero]
+        if not procesos:
+            print("Ninguno de esos pids es un servidor de hipercampo en marcha.")
+            return 0
     print(f"{len(procesos)} servidor(es) en marcha:")
     for p in procesos:
         print(_describe(p))
@@ -345,6 +356,28 @@ def cmd_dormant(args) -> int:
         s.close()
     accion = "despiertos" if args.wake else "adormecidos"
     print(json.dumps({accion: ids, "namespace": ns}, ensure_ascii=False))
+    return 0
+
+
+def cmd_budget(args) -> int:
+    """Ver o fijar el presupuesto de tokens del hook (lo que la memoria inyecta por
+    turno). Se persiste junto al .db y el hook lo respeta al turno siguiente, sin
+    reiniciar nada. La variable HIPERCAMPO_HOOK_BUDGET, si está, manda por encima."""
+    from . import config
+    if getattr(args, "reset", False):
+        config.set_hook_budget(None)
+    elif args.set is not None:
+        config.set_hook_budget(max(0, int(args.set)))
+    env = (os.environ.get("HIPERCAMPO_HOOK_BUDGET") or "").strip()
+    persistido = config.hook_budget_persisted()
+    if env.isdigit():
+        efectivo, fuente = int(env), "entorno"
+    elif persistido is not None:
+        efectivo, fuente = persistido, "guardado"
+    else:
+        efectivo, fuente = 350, "por defecto"
+    print(json.dumps({"hook_budget": efectivo, "fuente": fuente,
+                      "guardado": persistido, "por_defecto": 350}, ensure_ascii=False))
     return 0
 
 
@@ -640,6 +673,11 @@ def main(argv=None) -> int:
     rs = sub.add_parser("restart", help="reiniciar los servidores tras actualizar")
     rs.add_argument("--dry-run", action="store_true",
                     help="enseñar qué se cerraría, sin cerrar nada")
+    rs.add_argument("--pids", help="cerrar SOLO estos pids (separados por comas); "
+                                   "por defecto, todos")
+    bg = sub.add_parser("budget", help="ver o fijar el presupuesto de tokens del hook")
+    bg.add_argument("--set", type=int, help="fijar el presupuesto (tokens por turno)")
+    bg.add_argument("--reset", action="store_true", help="volver al de fábrica (350)")
     sub.add_parser("version", help="versión instalada")
     for nombre, ayuda in (("assist", "qué toca hacer en este momento (hooks)"),
                           ("recall", "recuperar"), ("muse", "inspiración"),
@@ -726,6 +764,8 @@ def main(argv=None) -> int:
         return cmd_servers(args)
     if args.cmd == "restart":
         return cmd_restart(args)
+    if args.cmd == "budget":
+        return cmd_budget(args)
     if args.cmd == "reclassify":
         return cmd_reclassify(args)
     if args.cmd == "dream":

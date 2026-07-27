@@ -96,15 +96,13 @@ async function run(args: string[]): Promise<string> {
 }
 
 async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: string; db?: string; paused?: boolean }> {
-  const all = cfg().get<boolean>("allNamespaces");
-  const args = ["graph"];
-  if (all) args.push("--all-namespaces");
-  const out = await run(args);
+  // El visor SIEMPRE trae todos los contextos; la selección (ver uno, ver todos) es
+  // client-side vía los chips. Así, desmarcar "todos los contextos" nunca vacía la
+  // pantalla por depender del fetch de un namespace que quizá no existe.
+  const out = await run(["graph", "--all-namespaces"]);
   const data = JSON.parse(out);
   const es = vscode.env.language.toLowerCase().startsWith("es");
-  const scope = data.all_namespaces
-    ? (es ? "todos los contextos" : "all contexts")
-    : (es ? `contexto «${data.namespace}»` : `context “${data.namespace}”`);
+  const scope = es ? "todos los contextos" : "all contexts";
   return { memories: data.nodes || [], edges: data.edges || [], scope, db: data.db, paused: !!data.paused };
 }
 
@@ -258,6 +256,12 @@ class Controller {
         }
       } else if (msg.type === "open-external") {
         if (msg.url) { await vscode.env.openExternal(vscode.Uri.parse(msg.url)); }
+      } else if (msg.type === "kill-server") {
+        await run(["restart", "--pids", String(msg.pid)]);
+        this.post({ type: "status", data: await fetchStatus() });   // refrescar la lista
+      } else if (msg.type === "set-budget") {
+        await run(msg.reset ? ["budget", "--reset"] : ["budget", "--set", String(msg.value)]);
+        this.post({ type: "tokens", data: await fetchTokens() });
       }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });

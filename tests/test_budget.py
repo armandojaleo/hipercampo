@@ -226,6 +226,36 @@ def test_una_variable_de_entorno_ilegible_no_tumba_el_arranque():
     assert "no es un número" in r.stderr, "hay que AVISAR de que se ignoró el valor"
 
 
+def test_presupuesto_persistido_y_precedencia():
+    """El presupuesto se puede fijar y persiste junto al .db; el hook (proceso nuevo)
+    lo respeta al turno siguiente. La variable de entorno manda por encima."""
+    from hipercampo import config
+    os.environ["HIPERCAMPO_DB"] = _DB
+    os.environ.pop("HIPERCAMPO_HOOK_BUDGET", None)
+    try:
+        config.set_hook_budget(500)
+        assert config.hook_budget_persisted() == 500
+        # un proceso NUEVO (como el hook) lee el valor persistido
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "from hipercampo import budget; print(budget.HOOK_BUDGET)"],
+            capture_output=True, text=True, encoding="utf-8",
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+        assert r.stdout.strip() == "500", r.stderr
+        # la variable de entorno manda por encima del fichero
+        r2 = subprocess.run(
+            [sys.executable, "-c",
+             "from hipercampo import budget; print(budget.HOOK_BUDGET)"],
+            capture_output=True, text=True, encoding="utf-8",
+            env={**os.environ, "HIPERCAMPO_HOOK_BUDGET": "200", "PYTHONIOENCODING": "utf-8"})
+        assert r2.stdout.strip() == "200", r2.stderr
+        config.set_hook_budget(None)
+        assert config.hook_budget_persisted() is None
+    finally:
+        config.set_hook_budget(None)
+        os.environ.pop("HIPERCAMPO_DB", None)
+
+
 def test_el_umbral_de_interrupcion_es_mas_exigente_que_el_de_respuesta():
     from hipercampo.policy import VOLUNTEER_MIN_SCORE
     assert VOLUNTEER_MIN_SIM > VOLUNTEER_MIN_SCORE, \

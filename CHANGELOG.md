@@ -6,6 +6,24 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Curation & control — put memories where they belong, tame the servers and the
+  budget (extension v0.8.0).** Using the viewer for real surfaced that memories were
+  landing in the wrong context (project notes in `personal`, because an MCP server was
+  configured with `HIPERCAMPO_NAMESPACE=personal`). So:
+  - **Reclassify** — move your own memories to another context. `store.reclassify()`,
+    `hipercampo reclassify --ids … --to <context>`, and a per-card action in the viewer
+    (pick an existing context or create a new one). Only touches your own memories, never
+    linked/other contexts; links whose both ends move go with them, links that would
+    cross contexts are cut (isolation holds). Tests in `test_reclassify.py`.
+  - **Tame the servers** — each MCP server now shows *which context it serves* (via
+    `psutil`, an optional `[procs]` extra), so duplicates/orphans are visible; a **✕**
+    per server closes it (`restart --pids`), and the client relaunches it fresh.
+  - **Tune the token budget** — the hook budget is now adjustable and *persisted* next
+    to the `.db` (`hipercampo budget --set N`, and −/+/reset in the Tokens tab); the hook
+    respects it the next turn, no restart. `HIPERCAMPO_HOOK_BUDGET` still wins if set.
+  - **Context selection that doesn't vanish** — clicking a context chip now shows *only*
+    that context (click again for all); unchecking "all contexts" isolates one instead of
+    emptying the screen. The viewer always fetches all contexts and filters client-side.
 - **The viewer speaks your language (en/es), plus new tools (extension v0.6.0).** The
   viewer now follows VS Code's UI language: English by default, Spanish when VS Code is
   in Spanish. Strings live in an in-webview dictionary; the manifest uses `package.nls`;

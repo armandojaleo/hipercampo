@@ -45,7 +45,16 @@ def _entero(variable: str, por_defecto: int) -> int:
 # Presupuesto por inyección del hook. 350 tokens es aproximadamente media pantalla
 # de texto: suficiente para 2-3 recuerdos útiles, poco para molestar. 0 = sin límite
 # (no recomendado: el coste crece con la memoria, sin techo).
-HOOK_BUDGET = _entero("HIPERCAMPO_HOOK_BUDGET", 350)
+# Precedencia: variable de entorno HIPERCAMPO_HOOK_BUDGET > valor persistido (que fija
+# el visor) > 350 de fábrica. Se evalúa al importar, y el hook es un proceso corto y
+# nuevo en cada turno, así que un cambio desde el visor se nota al turno siguiente.
+def _budget_por_defecto() -> int:
+    from . import config
+    persistido = config.hook_budget_persisted()
+    return persistido if persistido is not None else 350
+
+
+HOOK_BUDGET = _entero("HIPERCAMPO_HOOK_BUDGET", _budget_por_defecto())
 
 # La identidad de trabajo se paga UNA vez al arrancar la sesión, no en cada turno:
 # puede permitirse ser más generosa. Aun así tiene techo, porque el número de

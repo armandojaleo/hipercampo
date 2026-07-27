@@ -57,6 +57,7 @@
       tInyecciones: "inyecciones", tHoy: "hoy",
       tMediaVs: "Media por inyección vs. presupuesto",
       tMedia: "media", tPresupHook: "presupuesto hook", tPresupId: "presupuesto identidad",
+      tReset: "reset", matarServidor: "Cerrar este servidor (el cliente lo relanza al usarlo)",
       tTok: "tok", tTokTurno: "tok/turno",
       tHistoria: (n) => `Historia (${n} inyecciones · rojo = sobre presupuesto)`,
       tEstimacion: (m) => `Siempre es una <b>estimación</b> y lo dice: ${m}. El tokenizador de Claude no es público; solo su API es exacta.`,
@@ -127,6 +128,7 @@
       tInyecciones: "injections", tHoy: "today",
       tMediaVs: "Average per injection vs. budget",
       tMedia: "average", tPresupHook: "hook budget", tPresupId: "identity budget",
+      tReset: "reset", matarServidor: "Close this server (the client relaunches it on use)",
       tTok: "tok", tTokTurno: "tok/turn",
       tHistoria: (n) => `History (${n} injections · red = over budget)`,
       tEstimacion: (m) => `Always an <b>estimate</b>, and it says so: ${m}. Claude's tokenizer isn't public; only its API is exact.`,
@@ -244,13 +246,20 @@
       el.textContent = ns;
       el.title = L.chipTitle;
       el.onclick = () => {
-        if (!ACTIVE) ACTIVE = new Set(todos);
-        if (ACTIVE.has(ns)) ACTIVE.delete(ns); else ACTIVE.add(ns);
-        if (ACTIVE.size === todos.length) ACTIVE = null;
-        pintarChips(); repintar();
+        // Clic = ver SOLO este contexto; volver a pulsarlo (ya aislado) = ver todos.
+        const soloEste = ACTIVE && ACTIVE.size === 1 && ACTIVE.has(ns);
+        ACTIVE = soloEste ? null : new Set([ns]);
+        sincronizarAll(todos); pintarChips(); repintar();
       };
       cont.appendChild(el);
     }
+  }
+
+  // El checkbox "todos los contextos" refleja si se ven todos; nunca deja la pantalla
+  // vacía. Marcarlo = ver todos; desmarcarlo = aislar UNO (el primero), no ninguno.
+  function sincronizarAll(todos) {
+    const chk = $("all");
+    if (chk) chk.checked = (ACTIVE === null);
   }
 
   // --- cabecera / contador --------------------------------------------------
@@ -681,7 +690,10 @@
           const quien = ctx
             ? ctx + (fichero ? ` · ${esc(fichero)}` : "")
             : (fichero ? `${L.sMcpDb}: ${esc(fichero)}` : L.sMcpDesconocida);
-          return fila(`· ${quien}`, `${L.sDesde(p.arranque ? fecha(p.arranque) : "?")} · pid ${p.pid}`);
+          const cerrar = `<button class="sbtn kill" data-cmd="kill" data-pid="${p.pid}" `
+            + `title="${L.matarServidor}">✕</button>`;
+          return fila(`· ${quien}`,
+            `${L.sDesde(p.arranque ? fecha(p.arranque) : "?")} · pid ${p.pid} ${cerrar}`);
         }).join(""))
       + `</div>`
       + `<div class="scard"><h3>${L.hRegistro}</h3>`
@@ -701,6 +713,8 @@
           renderStatus(null);                 // "consultando…"
           vscode.postMessage({ type: "status-request" });
         }
+        else if (b.dataset.cmd === "kill")
+          vscode.postMessage({ type: "kill-server", pid: Number(b.dataset.pid) });
       };
     });
   }
@@ -734,7 +748,11 @@
       + `<div class="gauge"><span class="gfill" style="width:${usoPct}%"></span>`
       + `<span class="gmark" title="${L.tPresupHook} ${presup}"></span></div>`
       + `<div class="strow"><span class="slabel">${L.tMedia}</span><span class="sval">${media} ${L.tTok}</span></div>`
-      + `<div class="strow"><span class="slabel">${L.tPresupHook}</span><span class="sval">${presup} ${L.tTokTurno}</span></div>`
+      + `<div class="strow"><span class="slabel">${L.tPresupHook}</span><span class="sval">`
+      + `<button class="sbtn" data-budget="-50" title="−50">−</button> `
+      + `<b>${presup}</b> ${L.tTokTurno} `
+      + `<button class="sbtn" data-budget="50" title="+50">+</button> `
+      + `<button class="sbtn" data-budget="reset">${L.tReset}</button></span></div>`
       + `<div class="strow"><span class="slabel">${L.tPresupId}</span><span class="sval">${s.presupuesto_identidad ?? L.guion} ${L.tTok}</span></div>`
       + `</div>`
       + (serie.length
@@ -742,6 +760,13 @@
             + `<div class="chart">${barras}</div></div>`
           : "")
       + `<p class="hint">${L.tEstimacion(esc(s.metodo || ""))}</p>`;
+    c.querySelectorAll("button[data-budget]").forEach((b) => {
+      b.onclick = () => {
+        const op = b.dataset.budget;
+        if (op === "reset") vscode.postMessage({ type: "set-budget", reset: true });
+        else vscode.postMessage({ type: "set-budget", value: Math.max(0, presup + Number(op)) });
+      };
+    });
   }
 
   // ==========================================================================
@@ -871,8 +896,12 @@
     if ($("mode").value === "text") repintar(); else lanzarBusquedaAgente();
   });
   $("refresh").onclick = () => { $("q").value = ""; HITS = null; vscode.postMessage({ type: "refresh" }); };
-  $("all").addEventListener("change", (e) =>
-    vscode.postMessage({ type: "setAllNamespaces", value: e.target.checked }));
+  $("all").addEventListener("change", () => {
+    const todos = [...new Set(MEM.map((m) => m.namespace))].sort();
+    // Marcar = ver todos; desmarcar = aislar UNO (nunca dejar la pantalla vacía).
+    ACTIVE = ($("all").checked || !todos.length) ? null : new Set([todos[0]]);
+    pintarChips(); repintar();
+  });
   $("pause").addEventListener("click", () =>
     vscode.postMessage({ type: "setPaused", value: !PAUSED }));
   $("issue").addEventListener("click", () =>
