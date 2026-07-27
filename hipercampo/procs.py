@@ -41,13 +41,15 @@ def _via_psutil() -> list[dict] | None:
             cmd = " ".join(p.info["cmdline"] or [])
             if not _coincide(cmd) or p.info["pid"] == os.getpid():
                 continue
-            db = None
+            db = ns = None
             try:                                     # puede no dejarnos: no pasa nada
-                db = (p.environ() or {}).get("HIPERCAMPO_DB")
+                env = p.environ() or {}
+                db = env.get("HIPERCAMPO_DB")
+                ns = env.get("HIPERCAMPO_NAMESPACE")
             except Exception:
                 pass
             fuera.append({"pid": p.info["pid"], "arranque": p.info["create_time"],
-                          "cmd": cmd, "db": db})
+                          "cmd": cmd, "db": db, "namespace": ns})
         except Exception:
             continue                                 # el proceso pudo morir al mirarlo
     return fuera

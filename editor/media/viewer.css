@@ -67,8 +67,16 @@ button:hover { background: var(--vscode-button-hoverBackground); }
   padding: 0 10px;
   background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;   /* Firefox/Chromium: barra fina, no un pegote */
 }
+#tabs::-webkit-scrollbar { height: 4px; }
+#tabs::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(128,128,128,.4)); border-radius: 2px; }
 .tab {
+  flex: 0 0 auto;          /* no encoger: si no caben, la barra se desliza */
+  white-space: nowrap;
   background: transparent;
   color: var(--vscode-descriptionForeground);
   border: none;

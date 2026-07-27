@@ -70,7 +70,8 @@
       abrirLog: "Abrir el fichero de registro",
       backup: "Copia de seguridad",
       backupHint: "Crea una copia consistente del .db",
-      sMcpDb: "memoria", sMcpDesconocida: "(desconocida)",
+      sMcpDb: "memoria", sMcpCtx: "contexto",
+      sMcpDesconocida: "(no legible en este sistema)",
       ideasCargando: "Buscando ideas (puentes entre recuerdos)…",
       ideasVacio: "Sin ideas nuevas por ahora. El sueño propone puentes cuando dos recuerdos comparten un asociado común pero no están conectados; con poca memoria aún no hay qué cruzar.",
       ideasIntro: "Hipótesis que la memoria sugiere — conexiones que aún no sabías. Son propuestas, no verdades: no se han grabado.",
@@ -139,7 +140,8 @@
       abrirLog: "Open the log file",
       backup: "Backup",
       backupHint: "Make a consistent copy of the .db",
-      sMcpDb: "memory", sMcpDesconocida: "(unknown)",
+      sMcpDb: "memory", sMcpCtx: "context",
+      sMcpDesconocida: "(not readable on this system)",
       ideasCargando: "Looking for ideas (bridges between memories)…",
       ideasVacio: "No new ideas yet. Dreaming proposes bridges when two memories share a common associate but aren't connected; with little memory there's nothing to cross yet.",
       ideasIntro: "Hypotheses the memory suggests — connections you didn't know yet. They're proposals, not truths: nothing has been saved.",
@@ -672,7 +674,10 @@
       + fila(L.sEnMarcha, mcp.running ? L.sMcpSi(mcp.running) : L.sMcpNo, mcp.running > 0)
       + ((mcp.servers || []).map((p) => {
           const fichero = (p.db || "").split(/[\\/]/).pop();
-          const quien = fichero ? `${L.sMcpDb}: ${esc(fichero)}` : L.sMcpDesconocida;
+          const ctx = p.namespace ? `${L.sMcpCtx}: ${esc(p.namespace)}` : "";
+          const quien = ctx
+            ? ctx + (fichero ? ` · ${esc(fichero)}` : "")
+            : (fichero ? `${L.sMcpDb}: ${esc(fichero)}` : L.sMcpDesconocida);
           return fila(`· ${quien}`, `${L.sDesde(p.arranque ? fecha(p.arranque) : "?")} · pid ${p.pid}`);
         }).join(""))
       + `</div>`
@@ -682,12 +687,17 @@
       + (log.path ? fila(L.sRuta, `<code>${esc(log.path)}</code>`) : "")
       + (log.path ? `<div class="strow"><button class="sbtn" data-cmd="open-log" data-path="${esc(log.path)}">📄 ${L.abrirLog}</button></div>` : "")
       + `</div>`
-      + `<p class="hint">${L.estadoHint}</p>`;
+      + `<p class="hint">${L.estadoHint} `
+      + `<button class="sbtn" data-cmd="refresh-status">↻ ${L.refrescar}</button></p>`;
     c.querySelectorAll("button[data-cmd]").forEach((b) => {
       b.onclick = () => {
         if (b.dataset.cmd === "backup") vscode.postMessage({ type: "backup" });
         else if (b.dataset.cmd === "open-log")
           vscode.postMessage({ type: "open-log", path: b.dataset.path || "" });
+        else if (b.dataset.cmd === "refresh-status") {
+          renderStatus(null);                 // "consultando…"
+          vscode.postMessage({ type: "status-request" });
+        }
       };
     });
   }

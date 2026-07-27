@@ -33,6 +33,10 @@ Changelog = "https://github.com/armandojaleo/hipercampo/blob/main/CHANGELOG.md"
 # Hook semántico OPCIONAL. Trae modelos de terceros con su propia licencia
 # (ver ATTRIBUTION.md). No se instala por defecto: el core es VSA puro, CPU.
 semantic = ["sentence-transformers>=2.2"]
+# OPCIONAL: mejora `servers`/`restart`/`status` para identificar qué fichero y
+# contexto sirve cada servidor MCP (lee el entorno del proceso). Sin él, todo
+# funciona igual pero esa identidad no siempre es legible (sobre todo en Windows).
+procs = ["psutil>=5.9"]
 
 [project.scripts]
 hipercampo = "hipercampo.cli:main"
