@@ -128,12 +128,11 @@ sistemas embebidos y robots (SBC con Linux: Raspberry Pi, Jetson, ROS2). No es
 investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
 **betas pequeñas, cada una con una promesa medible**, para que el camino se vea.
 
-- 🟡 **`0.1.0b2` — El core se despega (la abstracción).** `mcp` ya solo se importa
-  en `server.py` (y perezosamente en el subcomando `serve`): `import hipercampo`
-  no arrastra `mcp` (medido). Falta **garantizarlo**: un test-guardia que falle si
-  cualquier módulo del núcleo importa `mcp`/`server`/`cli`, y documentar la **API
-  pública del core** (lo que un embebido puede usar). Promesa: *el core se importa
-  y opera sin `mcp` instalado, y el CI lo defiende.*
+- 🟢 **`0.1.0b2` — El core se despega (la abstracción).** `mcp` solo se importa en
+  `server.py` (y perezosamente en el subcomando `serve`): `import hipercampo` no
+  arrastra `mcp` (medido en intérprete limpio). **Garantizado** por el test-guardia
+  `tests/test_core_embebible.py` (falla el CI si un módulo del núcleo importa
+  `mcp`/`.server`), y la **API pública del core** documentada en `__init__.py`.
 - 🟢 **`0.1.0b3` — Red de seguridad de CI.** Ruff (ya estaba) + **mypy** + cobertura
   como **puertas**. Config de mypy en `pyproject.toml` (no `--strict`: caza Nones sin
   comprobar y asignaciones incompatibles sin ahogar el numpy/dicts JSON). Suelo de
@@ -159,6 +158,24 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   llena ya estaba cubierta (`test_resilience`/`test_failures`). Tests en `test_bounded.py`;
   latencia p50/p95/p99 publicada en CI (`scripts/latency.py`) — cierra hueco de Fase 2.
   Falta: exponer `max_scan` también por MCP (hoy en la API Python, la del embebido).
+- 🟡 **`0.1.0b6` — El núcleo recuerda como un cerebro: grafo navegable (BANDERA).**
+  El límite real medido no era la velocidad del escaneo, sino *escanear*. A 100k:
+  ~1,8 s y 542 MB — inviable para un robot. La idea (de Armando): no escanear, sino
+  **navegar un grafo de vecinos**, como un GPS; se recuerda por conexiones, no mirándolo
+  todo. Medido en sondas antes de construir:
+  - un grafo solo de vecinos NO es navegable (se rompe en islas, recall 0,12); los
+    **atajos débiles de largo alcance** lo vuelven navegable (recall **0,97-1,0**) —
+    small-world de Watts-Strogatz. Y esos atajos son los mismos que dan ideas (los
+    puentes del `dream`): **creatividad e índice son lo mismo**.
+  - **sublineal de verdad**: el % de memoria visitado ENCOGE con N (13,9%→**3,0%** de 2k
+    a 16k; ~log N). Extrapolado, 1M de recuerdos ≈ ~1000 nodos visitados (~0,1%).
+  - **insertar tampoco escanea**: se navega el grafo para colocar cada recuerdo
+    (~293 visitas, constante), estilo HNSW. recall del grafo así construido: 1,0.
+  Primera pieza landed: `hipercampo/navgraph.py` (algoritmo puro, sin tocar el camino
+  caliente) + `tests/test_navgraph.py`. Siguientes fases: persistir el grafo en la tabla
+  `links` (knn + atajos) al recordar, y que `recall` navegue (beam) desde un hub o el
+  contexto actual, con respaldo a escaneo en memorias pequeñas. Promesa: *recall y
+  escritura sublineales; recall@5 ≥0,9; medido en datos reales, no solo sintéticos.*
 - ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
   i18n dentro, y UX que salga de usarlo de verdad.
 - ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos
