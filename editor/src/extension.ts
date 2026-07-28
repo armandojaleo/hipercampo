@@ -262,6 +262,11 @@ class Controller {
       } else if (msg.type === "set-budget") {
         await run(msg.reset ? ["budget", "--reset"] : ["budget", "--set", String(msg.value)]);
         this.post({ type: "tokens", data: await fetchTokens() });
+      } else if (msg.type === "reindex") {
+        const out = JSON.parse(await run(["reindex"]));
+        vscode.window.showInformationMessage(
+          `Grafo tejido: ${out.enlaces_tejidos ?? 0} enlaces nuevos en el mapa.`);
+        await this.load();                              // refresca el mapa, ya denso
       }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });

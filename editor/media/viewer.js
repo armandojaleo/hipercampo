@@ -68,6 +68,7 @@
       buscandoCon: (m) => `buscando con ${m}…`,
       errorLeer: "No se pudo leer la memoria:\n\n",
       issueTitle: "Reportar un problema (GitHub)",
+      tejer: "Tejer el grafo de vecinos (densifica el mapa)",
       abrirLog: "Abrir el fichero de registro",
       backup: "Copia de seguridad",
       backupHint: "Crea una copia consistente del .db",
@@ -139,6 +140,7 @@
       buscandoCon: (m) => `searching with ${m}…`,
       errorLeer: "Couldn't read the memory:\n\n",
       issueTitle: "Report a problem (GitHub)",
+      tejer: "Weave the neighbor graph (densifies the map)",
       abrirLog: "Open the log file",
       backup: "Backup",
       backupHint: "Make a consistent copy of the .db",
@@ -219,6 +221,7 @@
     opts[1].textContent = L.optRecall;
     opts[2].textContent = L.optMuse;
     $("refresh").title = L.refrescar;
+    $("weave").title = L.tejer;
     $("issue").title = L.issueTitle;
     $("paused-banner").innerHTML = L.banner;
     $("all-label").textContent = L.todosContextos;
@@ -862,6 +865,7 @@
       MEM = msg.memories || []; EDGES = msg.edges || []; SCOPE = msg.scope || "";
       HITS = null; ACTIVE = null;
       PAUSED = !!msg.paused; pintarPausa();
+      const w = $("weave"); if (w) w.disabled = false;   // re-activar tras tejer
       pintarChips();
       if (PIDE[VIEW]) PIDE[VIEW]();   // estado/tokens/registro se re-piden en cada refresco
       else repintar();
@@ -907,6 +911,10 @@
   $("issue").addEventListener("click", () =>
     vscode.postMessage({ type: "open-external",
       url: "https://github.com/armandojaleo/hipercampo/issues/new" }));
+  $("weave").addEventListener("click", () => {
+    $("weave").disabled = true;
+    vscode.postMessage({ type: "reindex" });
+  });
 
   function pintarPausa() {
     $("paused-banner").classList.toggle("hidden", !PAUSED);
