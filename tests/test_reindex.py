@@ -101,6 +101,43 @@ def test_reindex_se_queda_en_su_contexto():
     otro.close(); hc.close()
 
 
+def test_reindex_all_namespaces_teje_cada_contexto():
+    """El visor muestra TODOS los contextos; tejer solo el 'default' (vacío) no hacía
+    nada. --all-namespaces teje cada contexto por dentro, sin cruzarlos."""
+    import json
+    import os
+    from hipercampo import cli
+    hc = memoria("reindex_all", namespace="proj-a")
+    _sembrar(hc, n_temas=5, por=6, seed=1)
+    db = hc.store.path
+    hc.close()
+    otro = Store(db, namespace="proj-b")
+    for i in range(20):
+        t = f"contexto b palabra{i % 5} palabra{(i + 2) % 5} extra{i}"
+        otro.add(t, encode_text(t), 1.0, 0.6, 0.6)
+    otro.commit(); otro.close()
+
+    os.environ["HIPERCAMPO_DB"] = db
+    try:
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = cli.main(["reindex", "--all-namespaces"])
+        assert code == 0
+        out = json.loads(buf.getvalue())
+        assert out["enlaces_tejidos"] > 0, "debió tejer en los contextos con datos"
+        assert {"proj-a", "proj-b"} <= set(out["contextos"])
+    finally:
+        os.environ.pop("HIPERCAMPO_DB", None)
+    # aislamiento: ningún enlace cruza contextos
+    s = Store(db, namespace="proj-a")
+    cruces = [e for e in s.links_dump(all_namespaces=True) if e["type"] == "knn"
+              and e["namespace"] not in ("proj-a", "proj-b")]
+    s.close()
+    assert not cruces, f"tejió fuera de contexto: {cruces}"
+
+
 if __name__ == "__main__":
     limpiar()
     codigo = ejecutar(dict(globals()))

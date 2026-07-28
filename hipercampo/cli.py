@@ -382,13 +382,28 @@ def cmd_budget(args) -> int:
 
 
 def cmd_reindex(args) -> int:
-    """Teje el grafo de vecinos sobre el contexto propio (mapa denso + mejor recall)."""
+    """Teje el grafo de vecinos (mapa denso + mejor recall). Con --all-namespaces teje
+    CADA contexto por dentro, sin cruzarlos (el aislamiento se respeta)."""
     from .config import db_path
     from .store import Store
+    M = max(2, int(args.neighbors))
+    if getattr(args, "all_namespaces", False):
+        base = Store(db_path(), namespace="default")
+        nss = sorted({m["namespace"] for m in base.dump(all_namespaces=True)})
+        base.close()
+        total = 0
+        for ns in nss:
+            s = Store(db_path(), namespace=ns)
+            try:
+                total += s.reindex_navgraph(M=M)
+            finally:
+                s.close()
+        print(json.dumps({"enlaces_tejidos": total, "contextos": nss}, ensure_ascii=False))
+        return 0
     ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
     s = Store(db_path(), namespace=ns)
     try:
-        n = s.reindex_navgraph(M=max(2, int(args.neighbors)))
+        n = s.reindex_navgraph(M=M)
     finally:
         s.close()
     print(json.dumps({"enlaces_tejidos": n, "namespace": ns}, ensure_ascii=False))
@@ -705,6 +720,8 @@ def main(argv=None) -> int:
     ri = sub.add_parser("reindex", help="tejer el grafo de vecinos (mapa denso, mejor recall)")
     ri.add_argument("--neighbors", type=int, default=12, help="vecinos por recuerdo")
     ri.add_argument("--namespace", help="contexto (por defecto el del entorno)")
+    ri.add_argument("--all-namespaces", action="store_true",
+                    help="tejer CADA contexto por dentro (sin cruzarlos)")
     rc = sub.add_parser("reclassify", help="mover recuerdos PROPIOS a otro contexto (curación)")
     rc.add_argument("--ids", required=True, help="ids separados por comas")
     rc.add_argument("--to", required=True, help="contexto destino")
