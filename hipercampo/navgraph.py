@@ -58,6 +58,32 @@ class NavGraph:
     def __len__(self) -> int:
         return len(self.code)
 
+    @classmethod
+    def desde_enlaces(cls, codes: dict, edges, shortcuts: int = 2, seed: int = 0,
+                      **kw) -> "NavGraph":
+        """Construye el índice a partir de enlaces YA existentes (los knn del mapa) +
+        atajos de largo alcance efímeros (del índice, no del mapa: no se guardan ni se
+        muestran, y no propagan activación — solo hacen navegable el grafo). `codes`
+        es {id: hipervector}; `edges` una lista de pares (a, b)."""
+        g = cls(shortcuts=shortcuts, seed=seed, **kw)
+        for mid, hv in codes.items():
+            g.code[mid] = hv
+            g.adj.setdefault(mid, [])
+        for a, b in edges:                       # enlaces reales (bidireccionales)
+            if a in g.code and b in g.code and b not in g.adj[a]:
+                g.adj[a].append(b)
+                g.adj.setdefault(b, []).append(a)
+        ids = list(g.code)
+        for mid in ids:                          # atajos small-world (índice interno)
+            for _ in range(shortcuts):
+                r = g._rnd.choice(ids)
+                if r != mid and r not in g.adj[mid]:
+                    g.adj[mid].append(r)
+                    g.adj[r].append(mid)
+        if ids:                                  # entrada = el nodo más conectado
+            g.entry = max(ids, key=lambda x: len(g.adj[x]))
+        return g
+
     # --- construcción ---------------------------------------------------------
     def add(self, mid: int, hv: np.ndarray) -> None:
         """Inserta un recuerdo NAVEGANDO el grafo para hallar sus vecinos (sin escaneo).

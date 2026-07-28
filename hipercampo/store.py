@@ -737,6 +737,18 @@ class Store:
                         break
         return tejidos
 
+    def navgraph(self, shortcuts: int = 2):
+        """Monta el índice de NAVEGACIÓN del propio contexto: nodos = recuerdos (con su
+        hipervector), aristas = los enlaces knn del mapa + atajos efímeros. Es el 'GPS'
+        para recordar navegando en vez de escanear. Se construye desde lo ya guardado;
+        los atajos viven solo aquí (no en el mapa ni en la activación)."""
+        from .navgraph import NavGraph
+        rows = self.all(only_active=False, own_only=True, include_dormant=True)
+        codes = {r["id"]: self.hv_of(r) for r in rows}
+        edges = [(e["src"], e["dst"]) for e in self.links_dump()
+                 if e["type"] == "knn" and e["src"] in codes and e["dst"] in codes]
+        return NavGraph.desde_enlaces(codes, edges, shortcuts=shortcuts)
+
     def reclassify(self, ids: list[int], to_namespace: str) -> int:
         """Mueve recuerdos PROPIOS a otro contexto: curación del dueño sobre su memoria.
         Solo toca lo del propio namespace (nunca lo enlazado, que es de solo lectura, ni
