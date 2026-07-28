@@ -461,8 +461,11 @@
       if (!s || !t) continue;
       let dx = t.x - s.x, dy = t.y - s.y;
       const d = Math.hypot(dx, dy) || 0.01;
-      const rest = 70;
-      const f = (d - rest) * 0.02 * (0.4 + (e.weight || 0.5));
+      // los knn son muchos: muelle más largo y flojo para que el clúster respire y no
+      // se colapse en una pelota; los enlaces con significado tiran más y juntan.
+      const knn = e.type === "knn";
+      const rest = knn ? 130 : 70;
+      const f = (d - rest) * (knn ? 0.006 : 0.02) * (0.4 + (e.weight || 0.5));
       const ux = dx / d, uy = dy / d;
       s.fx += ux * f; s.fy += uy * f; t.fx -= ux * f; t.fy -= uy * f;
     }
@@ -485,9 +488,11 @@
       if (!s || !t) continue;
       const a = toScreen(s), b = toScreen(t);
       const puente = e.status === "proposed" || e.type === "bridge" || e.type === "dream";
+      const knn = e.type === "knn";   // estructura de navegación: fina y tenue
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = puente ? getVar("--vscode-textLink-foreground") : "rgba(140,140,140,.35)";
-      ctx.lineWidth = puente ? 1.2 : Math.min(2.5, 0.5 + (e.weight || 0.5) * 1.5);
+      ctx.strokeStyle = puente ? getVar("--vscode-textLink-foreground")
+        : (knn ? "rgba(140,140,140,.13)" : "rgba(140,140,140,.45)");
+      ctx.lineWidth = puente ? 1.2 : (knn ? 0.5 : Math.min(2.5, 0.5 + (e.weight || 0.5) * 1.5));
       if (puente) ctx.setLineDash([4, 4]); else ctx.setLineDash([]);
       const resaltar = G.sel && (e.src === G.sel || e.dst === G.sel);
       ctx.globalAlpha = G.sel && !resaltar ? 0.15 : 1;

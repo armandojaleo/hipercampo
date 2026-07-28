@@ -323,17 +323,39 @@ def cmd_dream(args) -> int:
     """Propone PUENTES entre recuerdos que comparten un asociado común pero no están
     conectados: ideas —hipótesis— que la memoria sugiere. En DRY-RUN: solo las muestra,
     no las persiste ni contamina la evidencia (esa es la regla del sueño)."""
-    hc = _hc()
-    try:
-        d = hc.dream(max_bridges=max(1, int(getattr(args, "max", 8))), dry_run=True)
-    finally:
-        hc.close()
+    tope = max(1, int(getattr(args, "max", 8)))
+    if getattr(args, "all_namespaces", False):
+        from .config import db_path
+        from .memory import Hipercampo
+        from .store import Store
+        base = Store(db_path(), namespace="default")
+        nss = sorted({m["namespace"] for m in base.dump(all_namespaces=True)})
+        base.close()
+        puentes: list[dict] = []
+        for ns in nss:
+            hc = Hipercampo(db_path(), namespace=ns)
+            try:
+                bridges = hc.dream(max_bridges=tope, dry_run=True).get("bridges", [])
+                if isinstance(bridges, list):
+                    for b in bridges:
+                        puentes.append({**b, "context": ns})
+            finally:
+                hc.close()
+        puentes.sort(key=lambda b: b.get("similarity", 0), reverse=True)
+        d = {"bridges": puentes[:tope], "dry_run": True}
+    else:
+        hc = _hc()
+        try:
+            d = hc.dream(max_bridges=tope, dry_run=True)
+        finally:
+            hc.close()
     if getattr(args, "json", False):
         print(json.dumps(d, ensure_ascii=False, default=str))
     else:
-        for b in d.get("bridges", []):
+        bridges = d.get("bridges", [])
+        for b in bridges if isinstance(bridges, list) else []:
             print(f"· {b['hypothesis']}")
-        if not d.get("bridges"):
+        if not bridges:
             print("Sin ideas nuevas por ahora (nada que conectar).")
     return 0
 
@@ -729,6 +751,8 @@ def main(argv=None) -> int:
     dm2 = sub.add_parser("dream", help="proponer PUENTES entre recuerdos distantes (ideas)")
     dm2.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
     dm2.add_argument("--max", type=int, default=8, help="cuántas hipótesis como mucho")
+    dm2.add_argument("--all-namespaces", action="store_true",
+                     help="ideas de TODOS los contextos (cada uno por dentro)")
     bk = sub.add_parser("backup", help="copia de seguridad consistente")
     bk.add_argument("dest", nargs="?")
     ls = sub.add_parser("list", help="volcar las memorias (tabla o --json para la UI)")

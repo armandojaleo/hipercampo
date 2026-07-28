@@ -2,7 +2,7 @@
   "name": "hipercampo-viewer",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "publisher": "armandojaleo",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/armandojaleo/hipercampo" },

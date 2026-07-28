@@ -808,7 +808,15 @@ class Store:
             f"  AND status IN ({marks})",
             (mem_id, *self._ns_lectura, *estados, mem_id, *self._ns_lectura, *estados),
         ).fetchall()
-        return [(r[0], r[1]) for r in rows]
+        # Un vecino, UNA vez: si un par está unido por dos enlaces (uno en cada sentido,
+        # p.ej. un knn y un lexical con pesos distintos), el UNION lo devolvía DOS veces.
+        # Eso rompía el sueño (pares (x,x)) y doblaba la propagación. Nos quedamos con el
+        # mejor peso por vecino.
+        mejor: dict[int, float] = {}
+        for dst, w in rows:
+            if dst != mem_id and (dst not in mejor or w > mejor[dst]):
+                mejor[dst] = w
+        return list(mejor.items())
 
     def hv_of(self, row) -> np.ndarray:
         return from_blob(row["hv"])

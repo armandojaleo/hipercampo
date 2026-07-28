@@ -136,7 +136,7 @@ async function fetchTokens(): Promise<any> {
 // Ideas: PUENTES que el sueño propone entre recuerdos distantes con un asociado común
 // (hipótesis, no evidencia). dry-run por construcción: solo se muestran, no se graban.
 async function fetchIdeas(): Promise<any> {
-  const out = await run(["dream", "--json", "--max", "12"]);
+  const out = await run(["dream", "--json", "--max", "12", "--all-namespaces"]);
   return JSON.parse(out);
 }
 

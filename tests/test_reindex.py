@@ -101,6 +101,25 @@ def test_reindex_se_queda_en_su_contexto():
     otro.close(); hc.close()
 
 
+def test_densificar_no_rompe_el_sueno():
+    """REGRESIÓN: al densificar, un par podía quedar unido por DOS enlaces (uno en cada
+    sentido, p.ej. knn y lexical con pesos distintos). El UNION de neighbors() lo
+    devolvía duplicado, y dream reventaba (frozenset de tamaño 1). neighbors() ahora
+    deduplica por vecino."""
+    hc = memoria("reindex_dream", namespace="proj")
+    _sembrar(hc, n_temas=8, por=8, seed=9)
+    ids = [m["id"] for m in hc.store.all(only_active=False)][:2]
+    hc.store.link(ids[0], ids[1], weight=0.9, type="lexical")
+    hc.store.link(ids[1], ids[0], weight=0.4, type="knn")     # sentido opuesto, otro peso
+    hc.store.commit()
+    vecinos = [d for d, _ in hc.store.neighbors(ids[0])]
+    assert vecinos.count(ids[1]) == 1, "el vecino no debe salir duplicado"
+    hc.store.reindex_navgraph(M=6)
+    d = hc.dream(max_bridges=5)                               # antes reventaba aquí
+    assert isinstance(d.get("bridges"), list)
+    hc.close()
+
+
 def test_reindex_all_namespaces_teje_cada_contexto():
     """El visor muestra TODOS los contextos; tejer solo el 'default' (vacío) no hacía
     nada. --all-namespaces teje cada contexto por dentro, sin cruzarlos."""
