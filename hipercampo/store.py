@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from .vsa import from_blob, to_blob
+from .vsa import from_blob, similarity_batch, to_blob
 
 # Precedencia de un enlace cuando se vuelve a observar el mismo par. Manda el de
 # mayor rango; a igualdad, gana lo que ya había (la evidencia no se pisa a sí misma).
@@ -698,6 +698,44 @@ class Store:
             self.mark_dormant(ids)
         else:
             self.reactivate(ids)
+
+    def reindex_navgraph(self, M: int = 12) -> int:
+        """Teje el grafo de VECINOS sobre los recuerdos del propio contexto: enlaza cada
+        uno con sus M más parecidos (type='knn'). Es curación del dueño sobre su grafo:
+        el mapa pasa de disperso a conectado, y la propagación de activación gana las
+        asociaciones reales que faltaban. NO pisa enlaces existentes (INSERT OR IGNORE)
+        ni mete atajos aleatorios (esos son solo-navegación y llegan con recall navegable,
+        para no ensuciar la activación). Devuelve cuántos enlaces nuevos tejió.
+
+        O(N²) vectorizado: es mantenimiento (como backup/consolidate), no el camino
+        caliente. A gran escala, la construcción incremental por navegación (navgraph)
+        evita el escaneo; aquí, sobre el contexto propio, el barrido exacto es simple y
+        correcto."""
+        rows = self.all(only_active=False, own_only=True, include_dormant=True)
+        if len(rows) < 3:
+            return 0
+        ids = [r["id"] for r in rows]
+        mat = self.matrix(rows)
+        now = time.time()
+        tejidos = 0
+        with self.transaction():
+            for i in range(len(rows)):
+                sims = similarity_batch(mat[i], mat)
+                orden = np.argsort(sims)[::-1]
+                añadidos = 0
+                for j in orden:
+                    if j == i:
+                        continue
+                    a, b = sorted((ids[i], ids[int(j)]))
+                    cur = self.db.execute(
+                        "INSERT OR IGNORE INTO links(src,dst,weight,namespace,type,"
+                        "status,created_at) VALUES(?,?,?,?,?,?,?)",
+                        (a, b, float(sims[int(j)]), self.namespace, "knn", "confirmed", now))
+                    tejidos += cur.rowcount
+                    añadidos += 1
+                    if añadidos >= M:
+                        break
+        return tejidos
 
     def reclassify(self, ids: list[int], to_namespace: str) -> int:
         """Mueve recuerdos PROPIOS a otro contexto: curación del dueño sobre su memoria.

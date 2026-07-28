@@ -381,6 +381,20 @@ def cmd_budget(args) -> int:
     return 0
 
 
+def cmd_reindex(args) -> int:
+    """Teje el grafo de vecinos sobre el contexto propio (mapa denso + mejor recall)."""
+    from .config import db_path
+    from .store import Store
+    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+    s = Store(db_path(), namespace=ns)
+    try:
+        n = s.reindex_navgraph(M=max(2, int(args.neighbors)))
+    finally:
+        s.close()
+    print(json.dumps({"enlaces_tejidos": n, "namespace": ns}, ensure_ascii=False))
+    return 0
+
+
 def cmd_reclassify(args) -> int:
     """Mueve recuerdos PROPIOS a otro contexto (curación del dueño). Escritura: solo
     el contexto origen; no toca lo enlazado ni lo ajeno. Recoloca los enlaces."""
@@ -688,6 +702,9 @@ def main(argv=None) -> int:
         if nombre == "remember":
             sp.add_argument("--importance", type=float, default=0.5)
             sp.add_argument("--confidence", type=float, default=0.5)
+    ri = sub.add_parser("reindex", help="tejer el grafo de vecinos (mapa denso, mejor recall)")
+    ri.add_argument("--neighbors", type=int, default=12, help="vecinos por recuerdo")
+    ri.add_argument("--namespace", help="contexto (por defecto el del entorno)")
     rc = sub.add_parser("reclassify", help="mover recuerdos PROPIOS a otro contexto (curación)")
     rc.add_argument("--ids", required=True, help="ids separados por comas")
     rc.add_argument("--to", required=True, help="contexto destino")
@@ -764,6 +781,8 @@ def main(argv=None) -> int:
         return cmd_servers(args)
     if args.cmd == "restart":
         return cmd_restart(args)
+    if args.cmd == "reindex":
+        return cmd_reindex(args)
     if args.cmd == "budget":
         return cmd_budget(args)
     if args.cmd == "reclassify":
