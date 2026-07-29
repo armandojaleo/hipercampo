@@ -131,7 +131,7 @@ personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, n
 | Herramienta | Para qué |
 |-------------|----------|
 | `hc_remember(text, importance, confidence)` | Guarda algo (si es novedoso/sorprendente). `importance` = cuánto importa (≥0.8 protege del olvido); `confidence` = cuán fiable (pesa en el ranking). |
-| `hc_recall(query, k, include_history)` | Recupera por similitud + propagación. Puede **abstenerse** (devolver `[]`). |
+| `hc_recall(query, k, include_history, max_scan, nav, nav_auto)` | Recupera por similitud + propagación. Puede **abstenerse** (devolver `[]`). `max_scan` acota CPU/RAM para uso embebido/robots; `nav_auto` deja que el núcleo use navegación si es seguro. |
 | `hc_muse(query, k)` | **Recuerdo inspirador**: trae conexiones *indirectas* y recuerdos **latentes** que pueden resurgir y atar ideas. Para intuición/brainstorming. |
 | `hc_dream(max_bridges, dry_run)` | **Sueño creativo**: propone *puentes* entre recuerdos con un asociado común. Las hipótesis **no contaminan la memoria**: no propagan hasta confirmarse. |
 | `hc_accept_bridge / hc_reject_bridge` | Confirma una hipótesis del sueño (pasa a ser asociación real) o la descarta. |

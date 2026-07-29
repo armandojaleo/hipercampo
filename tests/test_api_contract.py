@@ -19,7 +19,8 @@ from helpers import ejecutar, limpiar, memoria      # noqa: E402
 # herramienta -> parámetros (nombre: ¿tiene valor por defecto?)
 HERRAMIENTAS = {
     "hc_remember":      {"text": False, "importance": True, "confidence": True},
-    "hc_recall":        {"query": False, "k": True, "include_history": True},
+    "hc_recall":        {"query": False, "k": True, "include_history": True,
+                         "max_scan": True, "nav": True, "nav_auto": True},
     "hc_update":        {"target": True, "new_text": True, "importance": True,
                          "memory_id": True, "confidence": True},
     "hc_remember_fact": {"subject": True, "predicate": True, "object": True,
@@ -79,6 +80,50 @@ def test_forma_de_remember():
     hc = memoria("api_rem")
     r = hc.remember("un dato totalmente nuevo para el contrato", 0.6)
     assert {"stored", "id", "novelty", "surprise", "importance"} <= set(r), r
+
+
+
+def test_hc_recall_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
+    import hipercampo.server as server
+
+    class FakeHC:
+        def __init__(self):
+            self.calls = []
+
+        def recall(self, query, k=5, include_history=False, max_scan=None, nav=False):
+            self.calls.append({
+                "query": query,
+                "k": k,
+                "include_history": include_history,
+                "max_scan": max_scan,
+                "nav": nav,
+            })
+            return [{"id": 1, "text": "ok"}]
+
+    viejo = server.hc
+    fake = FakeHC()
+    server.hc = fake
+    try:
+        r = server.hc_recall("consulta", k=99, include_history=True, max_scan=0,
+                             nav=True)
+    finally:
+        server.hc = viejo
+
+    assert r == [{"id": 1, "text": "ok"}]
+    assert fake.calls == [{
+        "query": "consulta",
+        "k": 50,
+        "include_history": True,
+        "max_scan": 1,
+        "nav": True,
+    }]
+    fake.calls.clear()
+    server.hc = fake
+    try:
+        server.hc_recall("consulta", nav=True, nav_auto=True)
+    finally:
+        server.hc = viejo
+    assert fake.calls[-1]["nav"] == "auto"
 
 
 def test_forma_de_recall():

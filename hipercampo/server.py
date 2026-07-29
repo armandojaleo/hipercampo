@@ -79,10 +79,17 @@ def hc_remember(text: str, importance: float = 0.5, confidence: float = 0.5) -> 
 
 
 @tool
-def hc_recall(query: str, k: int = 5, include_history: bool = False) -> list:
-    """Recupera lo relevante. Devuelve [] si no sabe nada (sabe abstenerse)."""
+def hc_recall(query: str, k: int = 5, include_history: bool = False,
+              max_scan: int | None = None, nav: bool = False,
+              nav_auto: bool = False) -> list:
+    """Recupera lo relevante. Devuelve [] si no sabe nada.
+    max_scan acota CPU/RAM; nav/nav_auto activan el grafo navegable."""
     k = min(50, max(1, int(k)))
-    return hc.recall(query, k, include_history=include_history)
+    if max_scan is not None:
+        max_scan = max(1, int(max_scan))
+    modo_nav = "auto" if nav_auto else bool(nav)
+    return hc.recall(query, k, include_history=include_history,
+                     max_scan=max_scan, nav=modo_nav)
 
 
 @tool

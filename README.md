@@ -131,7 +131,7 @@ thousands); at ~100k you'd want an index. A known limit, not hidden.
 | Tool | For |
 |------|-----|
 | `hc_remember(text, importance, confidence)` | Store something (if novel/surprising). `importance` = how much it matters (≥0.8 protects from forgetting); `confidence` = how reliable (weights ranking). |
-| `hc_recall(query, k, include_history)` | Retrieve by similarity + spreading activation. Can **abstain** (return `[]`). |
+| `hc_recall(query, k, include_history, max_scan, nav, nav_auto)` | Retrieve by similarity + spreading activation. Can **abstain** (return `[]`). `max_scan` bounds CPU/RAM for embedded/robot use; `nav_auto` lets the core choose graph navigation when safe. |
 | `hc_muse(query, k)` | **Creative recall**: surfaces *indirect* connections and **dormant** memories that can resurface and tie ideas together. For insight/brainstorming. |
 | `hc_dream(max_bridges, dry_run)` | **Creative sleep**: proposes *bridges* between memories sharing a common associate. Hypotheses **don't contaminate memory**: they never propagate until confirmed. |
 | `hc_accept_bridge / hc_reject_bridge` | Confirm a dream hypothesis (it becomes a real association) or discard it. |

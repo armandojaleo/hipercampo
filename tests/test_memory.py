@@ -23,8 +23,10 @@ _current: Hipercampo | None = None
 def fresh() -> Hipercampo:
     global _current
     if _current is not None:
-        _current.store.close()          # liberar el fichero (Windows lo bloquea)
-    Path(_DB).unlink(missing_ok=True)
+        _current.close()                # liberar todos los handles (Windows bloquea)
+        _current = None
+    for suf in ("", "-wal", "-shm"):
+        Path(_DB + suf).unlink(missing_ok=True)
     _current = Hipercampo(_DB)
     return _current
 

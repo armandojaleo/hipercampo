@@ -157,7 +157,7 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   cota p50 ~35 ms vs ~200 ms completo (5–6×) y PLANA con N**. La BD corrupta/bloqueada/
   llena ya estaba cubierta (`test_resilience`/`test_failures`). Tests en `test_bounded.py`;
   latencia p50/p95/p99 publicada en CI (`scripts/latency.py`) — cierra hueco de Fase 2.
-  Falta: exponer `max_scan` también por MCP (hoy en la API Python, la del embebido).
+  Cerrado en b6: `max_scan` también está expuesto por MCP (`hc_recall`) para que agentes/robots puedan acotar CPU/RAM sin depender de la API Python.
 - 🟡 **`0.1.0b6` — El núcleo recuerda como un cerebro: grafo navegable (BANDERA).**
   El límite real medido no era la velocidad del escaneo, sino *escanear*. A 100k:
   ~1,8 s y 542 MB — inviable para un robot. La idea (de Armando): no escanear, sino

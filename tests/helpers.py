@@ -34,6 +34,11 @@ def memoria(nombre: str, namespace: str = "test") -> Hipercampo:
     global _abierta, _ruta
     limpiar()
     _ruta = f"data/_t_{nombre}.db"
+    for suf in ("", "-wal", "-shm"):
+        try:
+            Path(_ruta + suf).unlink(missing_ok=True)
+        except PermissionError:
+            pass          # Windows: si sigue bloqueado, el test fallará de forma visible
     _abierta = Hipercampo(_ruta, namespace=namespace)
     return _abierta
 

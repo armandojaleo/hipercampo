@@ -8,6 +8,7 @@ All notable changes to this project are documented here. Format loosely based on
 - **Navigable recall, first safe cut.** `recall(nav=True)` can use the persisted navgraph as a candidate generator, reports `recall_mode`/`visited`, and keeps the classic scan path as fallback/default.
 - **Ideas now explain themselves.** `dream()` returns a compatible `diagnostic` payload, and `dream --all-namespaces` aggregates it per context so the viewer can explain why Ideas is empty.
 - **Viewer v0.9.3.** Added a database picker from the UI and made the weave button less aggressive on small memories (`--neighbors 4`).
+- **MCP recall catches up.** `hc_recall` now exposes `max_scan`, `nav`, and `nav_auto`, closing the embedded/robot budget and navigable-recall path for agents using the MCP surface.
 
 ### Added
 - **Curation & control — put memories where they belong, tame the servers and the
