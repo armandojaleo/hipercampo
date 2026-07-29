@@ -11,9 +11,9 @@
   const DICT = {
     es: {
       filtrar: "Filtrar por texto…", comoBuscar: "Cómo buscar",
-      optText: "texto", optRecall: "recall (agente)", optMuse: "muse (eureka)",
+      optText: "texto", optRecall: "recall (agente)", optRecallAuto: "recall auto", optRecallNav: "recall nav", optMuse: "muse (eureka)",
       pausar: "Pausar la memoria (modo 'no recordar')", reanudar: "Reanudar la memoria",
-      refrescar: "Refrescar", todosContextos: "todos los contextos",
+      refrescar: "Refrescar", cambiarBD: "Cambiar base de datos", todosContextos: "todos los contextos",
       banner: "⏸ Memoria <b>en pausa</b>: no se graban recuerdos nuevos ni se refuerzan (leer sí funciona).",
       tabs: { list: "Lista", graph: "Mapa", timeline: "Tiempo", axes: "Ejes",
         ideas: "Ideas", tokens: "Tokens", log: "Registro", status: "Estado" },
@@ -80,12 +80,14 @@
       ideasVia: "ambos evocan",
       ideasHipotesis: (a, b, via) => `«${a}» y «${b}» quizá se relacionan`,
       ideasSim: "afinidad",
+      ideasDiag: "Diagnóstico",
+      ideasRazones: { too_few_memories: "pocos recuerdos", no_links: "sin enlaces", graph_too_closed: "grafo demasiado cerrado", candidates_below_quality: "candidatos descartados por calidad", ok: "hay candidatos" },
     },
     en: {
       filtrar: "Filter by text…", comoBuscar: "How to search",
-      optText: "text", optRecall: "recall (agent)", optMuse: "muse (eureka)",
+      optText: "text", optRecall: "recall (agent)", optRecallAuto: "recall auto", optRecallNav: "recall nav", optMuse: "muse (eureka)",
       pausar: "Pause the memory ('don't remember' mode)", reanudar: "Resume the memory",
-      refrescar: "Refresh", todosContextos: "all contexts",
+      refrescar: "Refresh", cambiarBD: "Change database", todosContextos: "all contexts",
       banner: "⏸ Memory <b>paused</b>: no new memories are written or reinforced (reading still works).",
       tabs: { list: "List", graph: "Map", timeline: "Timeline", axes: "Axes",
         ideas: "Ideas", tokens: "Tokens", log: "Log", status: "Status" },
@@ -152,6 +154,8 @@
       ideasVia: "both evoke",
       ideasHipotesis: (a, b, via) => `“${a}” and “${b}” might be related`,
       ideasSim: "affinity",
+      ideasDiag: "Diagnostic",
+      ideasRazones: { too_few_memories: "too few memories", no_links: "no links", graph_too_closed: "graph too closed", candidates_below_quality: "candidates below quality", ok: "has candidates" },
     },
   };
   const L = DICT[lang];
@@ -219,8 +223,11 @@
     const opts = $("mode").options;
     opts[0].textContent = L.optText;
     opts[1].textContent = L.optRecall;
-    opts[2].textContent = L.optMuse;
+    opts[2].textContent = L.optRecallAuto;
+    opts[3].textContent = L.optRecallNav;
+    opts[4].textContent = L.optMuse;
     $("refresh").title = L.refrescar;
+    $("choose-db").title = L.cambiarBD;
     $("weave").title = L.tejer;
     $("issue").title = L.issueTitle;
     $("paused-banner").innerHTML = L.banner;
@@ -805,6 +812,22 @@
   // ==========================================================================
   // IDEAS (puentes que propone el sueño: hipótesis, no evidencia)
   // ==========================================================================
+  function renderIdeasDiagnostic(diag) {
+    if (!diag) return "";
+    const ctxs = diag.contexts || null;
+    if (ctxs) {
+      const rows = Object.entries(ctxs).map(([ns, x]) => {
+        const r = L.ideasRazones[x.reason] || x.reason || "-";
+        return `<div class="strow"><span class="slabel"><code>${esc(ns)}</code></span>`
+          + `<span class="sval">${esc(r)} · ${x.memories || 0} mem · ${x.links || 0} links · ${x.open_wedges || 0} wedges</span></div>`;
+      }).join("");
+      return `<div class="scard"><h3>${L.ideasDiag}</h3>${rows}</div>`;
+    }
+    const r = L.ideasRazones[diag.reason] || diag.reason || "-";
+    return `<div class="scard"><h3>${L.ideasDiag}</h3>`
+      + `<div class="strow"><span class="slabel">${esc(r)}</span>`
+      + `<span class="sval">${diag.memories || 0} mem · ${diag.links || 0} links · ${diag.open_wedges || 0} wedges · ${diag.scored || 0} scored</span></div></div>`;
+  }
   function renderIdeas(d) {
     const c = $("view-ideas");
     if (!d) { c.innerHTML = `<p class="hint">${L.ideasCargando}</p>`; return; }
@@ -848,6 +871,8 @@
   const PLACEHOLDER = {
     text: L.filtrar,
     recall: L.phRecall,
+    "recall-auto": L.phRecall,
+    "recall-nav": L.phRecall,
     muse: L.phMuse,
   };
 
@@ -905,6 +930,8 @@
     if ($("mode").value === "text") repintar(); else lanzarBusquedaAgente();
   });
   $("refresh").onclick = () => { $("q").value = ""; HITS = null; vscode.postMessage({ type: "refresh" }); };
+  $("choose-db").addEventListener("click", () =>
+    vscode.postMessage({ type: "choose-db" }));
   $("all").addEventListener("change", () => {
     const todos = [...new Set(MEM.map((m) => m.namespace))].sort();
     // Marcar = ver todos; desmarcar = aislar UNO (nunca dejar la pantalla vacía).

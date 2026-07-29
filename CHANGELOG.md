@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### b6 progress
+- **Navigable recall, first safe cut.** `recall(nav=True)` can use the persisted navgraph as a candidate generator, reports `recall_mode`/`visited`, and keeps the classic scan path as fallback/default.
+- **Ideas now explain themselves.** `dream()` returns a compatible `diagnostic` payload, and `dream --all-namespaces` aggregates it per context so the viewer can explain why Ideas is empty.
+- **Viewer v0.9.3.** Added a database picker from the UI and made the weave button less aggressive on small memories (`--neighbors 4`).
 
 ### Added
 - **Curation & control — put memories where they belong, tame the servers and the
@@ -368,7 +372,6 @@ predictable. Closes the four blockers raised in external review.
   code. No dependencies (psutil if present, system tools otherwise).
 
 ## [Unreleased]
-
 ### Added
 - **`hc_health`** — is the memory sound? Checks file integrity (`PRAGMA
   integrity_check`), schema, readability and write permission.

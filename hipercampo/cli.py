@@ -332,17 +332,20 @@ def cmd_dream(args) -> int:
         nss = sorted({m["namespace"] for m in base.dump(all_namespaces=True)})
         base.close()
         puentes: list[dict] = []
+        diagnostics: dict[str, dict] = {}
         for ns in nss:
             hc = Hipercampo(db_path(), namespace=ns)
             try:
-                bridges = hc.dream(max_bridges=tope, dry_run=True).get("bridges", [])
+                dream = hc.dream(max_bridges=tope, dry_run=True)
+                diagnostics[ns] = dream.get("diagnostic", {}) if isinstance(dream, dict) else {}
+                bridges = dream.get("bridges", []) if isinstance(dream, dict) else []
                 if isinstance(bridges, list):
                     for b in bridges:
                         puentes.append({**b, "context": ns})
             finally:
                 hc.close()
         puentes.sort(key=lambda b: b.get("similarity", 0), reverse=True)
-        d = {"bridges": puentes[:tope], "dry_run": True}
+        d = {"bridges": puentes[:tope], "dry_run": True, "diagnostic": {"contexts": diagnostics}}
     else:
         hc = _hc()
         try:
@@ -736,6 +739,11 @@ def main(argv=None) -> int:
         sp = sub.add_parser(nombre, help=ayuda)
         sp.add_argument("text", nargs="*", help="texto o consulta")
         sp.add_argument("--plain", action="store_true", help="salida legible, no JSON")
+        if nombre == "recall":
+            sp.add_argument("--nav", action="store_true",
+                            help="usar el grafo navegable como generador de candidatos")
+            sp.add_argument("--nav-auto", action="store_true",
+                            help="decidir automaticamente si navegar o escanear")
         if nombre == "remember":
             sp.add_argument("--importance", type=float, default=0.5)
             sp.add_argument("--confidence", type=float, default=0.5)
@@ -863,7 +871,8 @@ def main(argv=None) -> int:
             if args.cmd == "assist":
                 _print(hc.assist(texto), plain=args.plain)
             elif args.cmd == "recall":
-                _print(hc.recall(texto), plain=args.plain)
+                modo_nav = "auto" if getattr(args, "nav_auto", False) else getattr(args, "nav", False)
+                _print(hc.recall(texto, nav=modo_nav), plain=args.plain)
             elif args.cmd == "muse":
                 _print(hc.muse(texto), plain=args.plain)
             elif args.cmd == "remember":

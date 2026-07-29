@@ -108,8 +108,11 @@ async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: 
 
 // Búsqueda "como el agente": recall (directo, sabe abstenerse) o muse (creativo, trae
 // asociados y latentes — la vía «eureka»). Ambos van al namespace del entorno.
-async function agentSearch(query: string, mode: "recall" | "muse"): Promise<Memory[]> {
-  const out = await run([mode, query]);
+async function agentSearch(query: string, mode: "recall" | "recall-auto" | "recall-nav" | "muse"): Promise<Memory[]> {
+  const args = mode === "recall-nav" ? ["recall", "--nav", query]
+    : mode === "recall-auto" ? ["recall", "--nav-auto", query]
+    : [mode, query];
+  const out = await run(args);
   const hits = JSON.parse(out);
   return Array.isArray(hits) ? hits : [];
 }
@@ -140,6 +143,22 @@ async function fetchIdeas(): Promise<any> {
   return JSON.parse(out);
 }
 
+async function chooseDatabase(): Promise<boolean> {
+  const es = vscode.env.language.toLowerCase().startsWith("es");
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters: { "SQLite / hipercampo": ["db", "sqlite", "sqlite3"] },
+    title: es ? "Elegir base de datos de hipercampo" : "Choose hipercampo database",
+  });
+  const file = picked?.[0]?.fsPath;
+  if (!file) return false;
+  await cfg().update("dbPath", file, vscode.ConfigurationTarget.Global);
+  vscode.window.showInformationMessage(
+    es ? `Memoria activa: ${file}` : `Active memory: ${file}`);
+  return true;
+}
 /** Mueve un recuerdo a otro contexto (curación). Pregunta el destino: uno existente
  * o uno nuevo. Es reversible (se puede volver a mover), así que no pide modal. */
 async function reclassify(id: number, namespace: string | undefined): Promise<boolean> {
@@ -222,8 +241,13 @@ class Controller {
       } else if (msg.type === "setAllNamespaces") {
         await cfg().update("allNamespaces", !!msg.value, vscode.ConfigurationTarget.Global);
         await this.load();
+      } else if (msg.type === "choose-db") {
+        if (await chooseDatabase()) {
+          resolved = undefined;
+          await this.load();
+        }
       } else if (msg.type === "search") {
-        const hits = await agentSearch(msg.query, msg.mode === "muse" ? "muse" : "recall");
+        const hits = await agentSearch(msg.query, msg.mode === "muse" ? "muse" : msg.mode === "recall-nav" ? "recall-nav" : msg.mode === "recall-auto" ? "recall-auto" : "recall");
         this.post({ type: "search-result", memories: hits, query: msg.query, mode: msg.mode });
       } else if (msg.type === "mutate") {
         const changed = await mutate(msg.id, msg.namespace, msg.action);
@@ -263,7 +287,7 @@ class Controller {
         await run(msg.reset ? ["budget", "--reset"] : ["budget", "--set", String(msg.value)]);
         this.post({ type: "tokens", data: await fetchTokens() });
       } else if (msg.type === "reindex") {
-        const out = JSON.parse(await run(["reindex", "--all-namespaces"]));
+        const out = JSON.parse(await run(["reindex", "--neighbors", "4", "--all-namespaces"]));
         vscode.window.showInformationMessage(
           `Grafo tejido: ${out.enlaces_tejidos ?? 0} enlaces nuevos en el mapa.`);
         await this.load();                              // refresca el mapa, ya denso

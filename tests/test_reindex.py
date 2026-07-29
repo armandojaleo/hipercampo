@@ -157,6 +157,41 @@ def test_reindex_all_namespaces_teje_cada_contexto():
     assert not cruces, f"tejió fuera de contexto: {cruces}"
 
 
+def test_dream_all_namespaces_agrega_ideas_de_cada_contexto():
+    """La pestaña Ideas salía vacía porque dream corría sobre 'default'. --all-namespaces
+    agrega puentes de CADA contexto, etiquetados. Regresión de la UI (Ideas vacías)."""
+    import contextlib
+    import io
+    import json
+    import os
+    from hipercampo import cli
+    hc = memoria("dream_all", namespace="ctx-a")
+    _sembrar(hc, n_temas=6, por=8, seed=11)
+    db = hc.store.path
+    hc.store.reindex_navgraph(M=10)
+    hc.close()
+    otro = Store(db, namespace="ctx-b")
+    for i in range(30):
+        t = f"ctxb concepto{i % 6} concepto{(i + 1) % 6} nota{i}"
+        otro.add(t, encode_text(t), 1.0, 0.6, 0.6)
+    otro.commit()
+    otro.reindex_navgraph(M=10)
+    otro.close()
+
+    os.environ["HIPERCAMPO_DB"] = db
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = cli.main(["dream", "--json", "--max", "10", "--all-namespaces"])
+        assert code == 0
+        d = json.loads(buf.getvalue())
+        ctxs = {b.get("context") for b in d.get("bridges", [])}
+        assert d.get("bridges"), "debería proponer ideas de los contextos con datos"
+        assert ctxs & {"ctx-a", "ctx-b"}, f"ideas sin contexto reconocible: {ctxs}"
+    finally:
+        os.environ.pop("HIPERCAMPO_DB", None)
+
+
 if __name__ == "__main__":
     limpiar()
     codigo = ejecutar(dict(globals()))

@@ -94,7 +94,9 @@ def test_forma_de_stats_y_health():
     hc = memoria("api_st")
     s = hc.stats()
     assert {"episodicos_activos", "semanticos", "archivados", "latentes",
-            "total", "total_fisico", "db"} <= set(s), s
+            "total", "total_fisico", "db", "grafo", "identidad"} <= set(s), s
+    assert {"enlaces", "knn", "dream_pendientes", "cobertura_knn"} <= set(s["grafo"]), s
+    assert {"items", "activa"} <= set(s["identidad"]), s
     h = hc.health()
     assert {"db", "namespace", "integridad", "esquema", "lectura",
             "escribible", "sana"} <= set(h), h

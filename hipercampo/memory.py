@@ -100,6 +100,8 @@ GATE_ENABLED = True
 REINFORCE_MIN_SCORE = 0.10       # solo se refuerza lo claramente relevante (no roce)
 UPDATE_MIN_SIMILARITY = 0.60     # hc_update no reemplaza si no hay match así de bueno
 LINK_SIMILARITY = 0.58           # crear asociación entre recuerdos así de parecidos
+NAV_WRITE_NEIGHBORS = 4           # knn incremental por escritura (mapa, no evidencia)
+NAV_WRITE_MIN_MEMORIES = 6        # antes de esto, no cerrar cuñas creativas pequeñas
 CONSOLIDATE_SIMILARITY = 0.60    # fundir episodios así de parecidos
 DECAY_HALF_LIFE_DAYS = 14.0      # a qué ritmo se desvanece lo no reforzado
 FORGET_STRENGTH_FLOOR = 0.15     # por debajo de esto y sin uso -> candidato a poda
@@ -453,16 +455,33 @@ class Hipercampo:
                     self.store.link(mem_id, row["id"], weight=float(sims_act[i]),
                                     type="lexical")
                     n_enlaces += 1
+            n_knn = 0
+            if NAV_WRITE_NEIGHBORS and len(actives) >= NAV_WRITE_MIN_MEMORIES:
+                now = time.time()
+                for j in np.argsort(sims_act)[::-1]:
+                    row = actives[int(j)]
+                    if row["id"] == evictado:
+                        continue
+                    a, b = sorted((mem_id, row["id"]))
+                    cur = self.store.db.execute(
+                        "INSERT OR IGNORE INTO links(src,dst,weight,namespace,type,"
+                        "status,created_at) VALUES(?,?,?,?,?,?,?)",
+                        (a, b, float(sims_act[int(j)]), self.store.namespace,
+                         "knn", "confirmed", now))
+                    n_knn += cur.rowcount
+                    if n_knn >= NAV_WRITE_NEIGHBORS:
+                        break
         self.surprise.learn(text)                     # aprender tras confirmar
         audit.log("remember", f"guardado id={mem_id}", texto=text[:60],
                   novedad=round(novelty, 2), sorpresa=round(surprise, 2),
                   parecido_a=best_id, similitud=round(best_sim, 2) if best_id else None,
-                  enlaces=n_enlaces or None, evictado=evictado,
+                  enlaces=n_enlaces or None, knn=n_knn or None, evictado=evictado,
                   ms=round((time.time() - t0) * 1000))
         mantenimiento = self._autosleep()             # ¿le toca dormir sola?
 
         result = {"stored": True, "id": mem_id, "novelty": round(novelty, 3),
-                  "surprise": round(surprise, 3), "importance": importance}
+                  "surprise": round(surprise, 3), "importance": importance,
+                  "knn": n_knn}
         if secretos:
             result["secret_warning"] = secretos
             result["redacted" if redactado else "hint_secret"] = (
@@ -546,7 +565,8 @@ class Hipercampo:
     # 2 -------------------------------------------------------------------
     @resiliente
     def recall(self, query: str, k: int = 5, hops: int = 1,
-               include_history: bool = False, max_scan: int | None = None) -> list[dict]:
+               include_history: bool = False, max_scan: int | None = None,
+               nav: bool | str = False) -> list[dict]:
         """
         Recupera por similitud (semillas) + propagación de activación (asociados).
         Puede devolver LISTA VACÍA si nada supera el umbral mínimo de relevancia
@@ -568,7 +588,43 @@ class Hipercampo:
         if max_scan is not None:
             max_scan = max(1, int(max_scan))
         qhv = encode_text(query)
-        rows = self.store.all(only_active=False, limit=max_scan)
+        recall_mode = "scan"
+        nav_visits = None
+        rows = []
+        nav_mode = str(nav).lower() if isinstance(nav, str) else ("on" if nav else "off")
+        use_nav = nav_mode == "on"
+        if nav_mode == "auto" and max_scan is None and not self.store.linked:
+            propias = [r for r in self.store.all(only_active=False, own_only=True,
+                                                include_dormant=True)
+                       if not r["superseded"]]
+            n_propias = len(propias)
+            knn = [e for e in self.store.links_dump(include_proposed=False)
+                   if e["type"] == "knn"]
+            cubiertos = {i for e in knn for i in (e["src"], e["dst"])}
+            cobertura = len(cubiertos) / n_propias if n_propias else 0.0
+            densidad = ((2 * len(knn)) / (n_propias * (n_propias - 1))
+                        if n_propias > 1 else 0.0)
+            use_nav = bool(n_propias >= 32 and cobertura >= 0.60 and densidad < 0.75)
+            audit.log("recall", "nav auto", n=n_propias,
+                      cobertura=round(cobertura, 3), densidad=round(densidad, 3),
+                      elegido="nav" if use_nav else "scan")
+        if use_nav and max_scan is None and not self.store.linked:
+            try:
+                g = self.store.navgraph(shortcuts=2)
+                nav_visits = g.visitados_en(qhv) if len(g) else 0
+                candidatos = max(k * 8, 32)
+                ids = [mid for mid, _ in g.search(qhv, k=candidatos)]
+                rows = [self.store.get(mid) for mid in ids]
+                rows = [r for r in rows if r is not None]
+                if len(rows) >= k:
+                    recall_mode = "nav"
+                else:
+                    rows = []
+            except Exception as e:
+                audit.log("recall", f"nav fallback ({e})")
+                rows = []
+        if not rows:
+            rows = self.store.all(only_active=False, limit=max_scan)
         acotado = max_scan is not None and len(rows) >= max_scan
         if not include_history:                      # nada de archivados ni superados
             rows = [r for r in rows if not r["consolidated"] and not r["superseded"]]
@@ -641,7 +697,8 @@ class Hipercampo:
         top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
         if top:
             responder, diag = abstention_gate(directa, len(top), semantic_active())
-            self.ultima_decision = dict(diag, consulta=query[:60], n=len(scored))
+            self.ultima_decision = dict(diag, consulta=query[:60], n=len(scored),
+                                         modo=recall_mode, visitas=nav_visits)
             if not responder and GATE_ENABLED:
                 if diag["motivo"] == "nada relevante":
                     audit.log("recall", "abstención: nada relevante",
@@ -667,6 +724,7 @@ class Hipercampo:
 
         audit.log("recall", f"{len(top)} resultado(s)", consulta=query[:60],
                   mirados=len(rows), tope=max_scan if acotado else None,
+                  modo=recall_mode, visitas=nav_visits,
                   mejor=round(top[0][0], 3) if top else None,
                   ids=",".join(str(r["id"]) for _, _, r in top[:5]) or None,
                   enlazados=",".join(self.store.linked) or None,
@@ -679,6 +737,9 @@ class Hipercampo:
                     "strength": round(r["strength"], 2),
                     "confidence": round(r["confidence"], 2),
                     "utility": round(self.utility(r), 2)}
+            if recall_mode != "scan":
+                item["recall_mode"] = recall_mode
+                item["visited"] = nav_visits
             if r["namespace"] != self.store.namespace:
                 item["project"] = r["namespace"]      # viene de un proyecto enlazado
             # Salvaguarda: si el recuerdo parece contener instrucciones, se marca
@@ -929,12 +990,18 @@ class Hipercampo:
         rows = [r for r in self.store.all(only_active=False, include_dormant=True)
                 if not r["superseded"]]
         by_id = {r["id"]: r for r in rows}
-        neigh = {r["id"]: [d for d, _ in self.store.neighbors(r["id"]) if d in by_id]
-                 for r in rows}
+        diagnostic = {"memories": len(rows)}
+        neigh_w = {r["id"]: {d: w for d, w in self.store.neighbors(r["id"]) if d in by_id}
+                   for r in rows}
+        neigh = {mid: list(ns.keys()) for mid, ns in neigh_w.items()}
         linked = set()
         for x, ns in neigh.items():
             for d in ns:
                 linked.add(frozenset((x, d)))
+        diagnostic["links"] = len(linked)
+        diagnostic["linked_memories"] = len({i for pair in linked for i in pair})
+        diagnostic["graph_density"] = (round((2 * len(linked)) / (len(rows) * (len(rows) - 1)), 3)
+                                       if len(rows) > 1 else 0.0)
 
         # pares (a,b) con un vecino común x, aún no enlazados entre sí
         puentes: dict[frozenset, int] = {}
@@ -945,29 +1012,58 @@ class Hipercampo:
                     if pair not in linked and pair not in puentes:
                         puentes[pair] = x
 
-        scored = []
+        diagnostic["open_wedges"] = len(puentes)
+
+        candidates = []
         for pair, x in puentes.items():
             a, b = tuple(pair)
             s_ab = similarity(self.store.hv_of(by_id[a]), self.store.hv_of(by_id[b]))
-            # ZONA CREATIVA (máximo en DREAM_IDEAL, cero fuera de la banda): ni
-            # redundante (demasiado parecido) ni absurdo (demasiado ajeno).
-            fit = creative_fit(s_ab)
-            if fit <= 0.0:
-                continue
-            # calidad = ajuste creativo × fuerza del camino común × fiabilidad × latencia
-            wax = dict(self.store.neighbors(x, include_proposed=False))
+            wax = neigh_w.get(x, {})
             camino = min(wax.get(a, 0.5), wax.get(b, 0.5))
             conf = (by_id[a]["confidence"] + by_id[b]["confidence"]) / 2.0
             latente = by_id[a]["dormant"] or by_id[b]["dormant"]
+            candidates.append((s_ab, camino, conf, latente, a, b, x))
+
+        sims = sorted(c[0] for c in candidates)
+        local_cal = bool(len(sims) >= 5 and sims[len(sims) // 2] > DREAM_HIGH)
+        gaps = sorted((camino - s_ab) for s_ab, camino, *_ in candidates
+                      if camino >= LINK_SIMILARITY and camino > s_ab)
+        ideal_gap = gaps[max(0, int(len(gaps) * 0.9) - 1)] if gaps else 0.0
+
+        scored = []
+        for s_ab, camino, conf, latente, a, b, x in candidates:
+            fit = creative_fit(s_ab)
+            calibration = "absolute"
+            if fit <= 0.0 and local_cal and ideal_gap > 0.0 and camino > s_ab:
+                fit = min(1.0, (camino - s_ab) / ideal_gap)
+                calibration = "local"
+            if fit <= 0.0:
+                continue
+            # calidad = ajuste creativo × fuerza del camino común × fiabilidad × latencia
             scored.append((fit * (0.5 + camino) * (0.5 + conf) * (1.15 if latente else 1.0),
-                           s_ab, a, b, x))
+                           s_ab, camino, calibration, a, b, x))
         scored.sort(key=lambda t: t[0], reverse=True)
+        diagnostic["candidates"] = len(candidates)
+        diagnostic["scored"] = len(scored)
+        diagnostic["calibration"] = "local" if local_cal else "absolute"
+        if len(rows) < 6:
+            reason = "too_few_memories"
+        elif not linked:
+            reason = "no_links"
+        elif not puentes:
+            reason = "graph_too_closed"
+        elif not scored:
+            reason = "candidates_below_quality"
+        else:
+            reason = "ok"
+        diagnostic["reason"] = reason
 
         bridges = []
-        for _, s_ab, a, b, x in scored[:max_bridges]:
+        for _, s_ab, camino, calibration, a, b, x in scored[:max_bridges]:
             bridges.append({
                 "a": by_id[a]["text"], "b": by_id[b]["text"], "via": by_id[x]["text"],
                 "a_id": a, "b_id": b, "similarity": round(s_ab, 3),
+                "path_strength": round(camino, 3), "calibration": calibration,
                 "hypothesis": f"«{by_id[a]['text'][:60]}» y «{by_id[b]['text'][:60]}» "
                               f"quizá se relacionan (ambos evocan «{by_id[x]['text'][:50]}»)"})
 
@@ -979,7 +1075,7 @@ class Hipercampo:
                     self.store.link(br["a_id"], br["b_id"], weight=0.5,
                                     type="dream", status="proposed")
         audit.log("dream", f"{len(bridges)} hipótesis", solo_propuesta=dry_run or None)
-        return {"bridges": bridges, "dry_run": dry_run,
+        return {"bridges": bridges, "dry_run": dry_run, "diagnostic": diagnostic,
                 "nota": ("solo propuestas; usa dry_run=False para registrarlas como "
                          "hipótesis y hc_accept_bridge para confirmarlas")}
 
@@ -1063,11 +1159,24 @@ class Hipercampo:
         sem = [r for r in rows if r["kind"] == "semantic"]
         arch = [r for r in rows if r["consolidated"]]
         coste = audit.coste_tokens()
+        enlaces = self.store.links_dump(include_proposed=True)
+        enlaces_confirmados = [e for e in enlaces if e["status"] == "confirmed"]
+        knn = [e for e in enlaces_confirmados if e["type"] == "knn"]
+        dream_pending = [e for e in enlaces if e["type"] == "dream" and e["status"] == "proposed"]
+        nodos_con_knn = {i for e in knn for i in (e["src"], e["dst"])}
+        propios = [r for r in dormidos if r["namespace"] == self.store.namespace]
+        identidad = self.identity(k=1)
         return {"episodicos_activos": len(ep), "semanticos": len(sem),
                 "archivados": len(arch), "latentes": len(dormidos) - len(rows),
                 "total": len(rows),                  # vigentes (sin latentes)
                 "total_fisico": len(dormidos),       # filas reales en disco
                 "db": os.path.abspath(self.store.path),
+                "grafo": {"enlaces": len(enlaces_confirmados), "knn": len(knn),
+                          "dream_pendientes": len(dream_pending),
+                          "cobertura_knn": (round(len(nodos_con_knn) / len(propios), 3)
+                                             if propios else 0.0)},
+                "identidad": {"items": identidad.get("n", 0),
+                              "activa": bool(identidad.get("n", 0))},
                 # La factura: cuánta ventana de contexto ha consumido esta memoria.
                 # Siempre aproximada: `metodo` dice con qué se ha contado y por qué
                 # ni siquiera con tiktoken es exacta (ver budget.es_estimacion).

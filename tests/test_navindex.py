@@ -7,8 +7,8 @@ de verdad (recuerdos guardados + sus enlaces knn):
   - tocando solo una FRACCIÓN de la memoria (la semilla de la sublinealidad),
   - se monta desde lo ya guardado (los knn del mapa) + atajos internos del índice.
 
-No toca `recall()` todavía (esa cirugía, con su reajuste de abstención, es el paso
-siguiente): esto demuestra que el camino de navegación funciona end-to-end.
+Tambien fija el primer corte de b6 en el camino caliente: `recall(nav=True)`
+usa el indice como generador de candidatos, con fallback al escaneo actual.
 
 Ejecuta:  python tests/test_navindex.py
 """
@@ -91,3 +91,111 @@ if __name__ == "__main__":
     codigo = ejecutar(dict(globals()))
     limpiar()
     sys.exit(codigo)
+
+def test_recall_opcional_puede_navegar_el_grafo_del_store():
+    """b6: recall(nav=True) usa el grafo persistido como candidato medido,
+    manteniendo el recall normal intacto como fallback."""
+    hc = memoria("nav_recall", namespace="proj")
+    textos, _ = _sembrar(hc, n_temas=12, por=10, seed=41)
+    objetivo = textos[37]
+    consulta = " ".join(objetivo.split()[:4])
+    hc.store.reindex_navgraph(M=10)
+
+    normal = hc.recall(consulta, k=5)
+    nav = hc.recall(consulta, k=5, nav=True)
+
+    assert normal, "el recall base debe seguir encontrando senal"
+    assert nav, "el recall navegable debe devolver resultados"
+    assert any(h["text"] == objetivo for h in nav) or {h["id"] for h in nav} & {h["id"] for h in normal}
+    assert nav[0].get("recall_mode") == "nav", nav[0]
+    assert isinstance(nav[0].get("visited"), int) and nav[0]["visited"] > 0
+
+def test_cli_recall_expone_modo_nav():
+    import contextlib
+    import io
+    import json
+    import os
+    from hipercampo import cli
+
+    hc = memoria("nav_cli", namespace="proj")
+    textos, _ = _sembrar(hc, n_temas=12, por=10, seed=42)
+    consulta = " ".join(textos[31].split()[:4])
+    db = hc.store.path
+    hc.store.reindex_navgraph(M=10)
+    hc.close()
+
+    os.environ["HIPERCAMPO_DB"] = db
+    os.environ["HIPERCAMPO_NAMESPACE"] = "proj"
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = cli.main(["recall", "--nav", consulta])
+        assert code == 0
+        hits = json.loads(buf.getvalue())
+        assert hits and hits[0].get("recall_mode") == "nav", hits
+        assert isinstance(hits[0].get("visited"), int)
+    finally:
+        os.environ.pop("HIPERCAMPO_DB", None)
+        os.environ.pop("HIPERCAMPO_NAMESPACE", None)
+
+def test_recall_auto_navega_si_el_grafo_es_adecuado():
+    hc = memoria("nav_auto", namespace="proj")
+    textos, _ = _sembrar(hc, n_temas=12, por=10, seed=43)
+    consulta = " ".join(textos[44].split()[:4])
+    hc.store.reindex_navgraph(M=6)
+
+    hits = hc.recall(consulta, k=5, nav="auto")
+
+    assert hits, "nav auto debe seguir recordando"
+    assert hits[0].get("recall_mode") == "nav", hits[0]
+    assert isinstance(hits[0].get("visited"), int)
+
+def test_cli_recall_expone_modo_nav_auto():
+    import contextlib
+    import io
+    import json
+    import os
+    from hipercampo import cli
+
+    hc = memoria("nav_cli_auto", namespace="proj")
+    textos, _ = _sembrar(hc, n_temas=12, por=10, seed=44)
+    consulta = " ".join(textos[52].split()[:4])
+    db = hc.store.path
+    hc.store.reindex_navgraph(M=6)
+    hc.close()
+
+    os.environ["HIPERCAMPO_DB"] = db
+    os.environ["HIPERCAMPO_NAMESPACE"] = "proj"
+    try:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = cli.main(["recall", "--nav-auto", consulta])
+        assert code == 0
+        hits = json.loads(buf.getvalue())
+        assert hits and hits[0].get("recall_mode") == "nav", hits
+    finally:
+        os.environ.pop("HIPERCAMPO_DB", None)
+        os.environ.pop("HIPERCAMPO_NAMESPACE", None)
+
+def test_remember_teje_knn_incremental_sin_reindex():
+    """b6 escritura: recordar tambien alimenta el mapa navegable sin esperar
+    mantenimiento O(N^2). Los enlaces knn no sustituyen evidencia lexical."""
+    hc = memoria("nav_write", namespace="proj")
+    textos = [
+        "sensor solar plaza norte sombra ruta fresca",
+        "riego humedad suelo lluvia ahorro agua",
+        "farola paso peatones intensidad noche",
+        "mercado excedentes comida comedor barrio",
+        "nevera comunitaria caducidad temperatura alimento",
+        "bicicleta carga ruta corta baja emision",
+        "salud soledad actividad voluntaria cuidado",
+        "semaforo bus emergencia peatones reglas",
+    ]
+    for txt in textos:
+        r = hc.remember(txt, 0.8, 0.8)
+        assert r.get("stored") is True, r
+
+    knn = [e for e in hc.store.links_dump() if e["type"] == "knn"]
+    assert knn, "remember debe dejar mapa knn incremental"
+    assert len({i for e in knn for i in (e["src"], e["dst"])}) >= 5
+    hc.close()

@@ -26,7 +26,8 @@ from .vsa import from_blob, similarity_batch, to_blob
 #   2  hipótesis de sueño ya CONFIRMADA
 #   1  hipótesis de sueño solo PROPUESTA (no propaga)
 def _rank(t: str, s: str) -> str:
-    return (f"CASE WHEN {t}<>'dream' THEN 4 "
+    return (f"CASE WHEN {t}='knn' THEN 0 "
+            f"WHEN {t}<>'dream' THEN 4 "
             f"WHEN {s}='rejected' THEN 3 "
             f"WHEN {s}='proposed' THEN 1 ELSE 2 END")
 
@@ -58,7 +59,7 @@ CREATE TABLE IF NOT EXISTS links (
     dst       INTEGER NOT NULL,
     weight    REAL    NOT NULL DEFAULT 1.0,
     namespace TEXT    NOT NULL DEFAULT 'default',
-    type      TEXT    NOT NULL DEFAULT 'lexical',    -- lexical|update|consolidation|dream
+    type      TEXT    NOT NULL DEFAULT 'lexical',    -- lexical|update|consolidation|dream|knn
     status    TEXT    NOT NULL DEFAULT 'confirmed',  -- confirmed|proposed|rejected
     created_at REAL,
     PRIMARY KEY (src, dst)
