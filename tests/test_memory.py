@@ -60,6 +60,11 @@ def test_recall_prioriza_lo_relevante():
     hits = hc.recall("¿cuál es la clave de la API de pagos?", k=3)
     assert hits, "recall no devolvió nada"
     assert "api" in hits[0]["text"].lower() and "pagos" in hits[0]["text"].lower()
+    componentes = hits[0]["score_components"]
+    assert set(componentes) == {
+        "activation", "strength_factor", "confidence_factor", "superseded_factor"
+    }
+    assert all(isinstance(v, float) for v in componentes.values())
 
 
 # --- Afirmación: "propagación de activación trae asociados, no solo top-k" -
