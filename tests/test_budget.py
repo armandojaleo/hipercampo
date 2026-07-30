@@ -216,7 +216,8 @@ def test_una_variable_de_entorno_ilegible_no_tumba_el_arranque():
     # Windows el hijo lo escribiría en cp1252 (byte 0xFA) y el padre, que lee utf-8,
     # reventaría al decodificar. En Linux ya es utf-8; esto solo iguala Windows.
     env = dict(os.environ, HIPERCAMPO_HOOK_BUDGET="abc",
-               HIPERCAMPO_IDENTITY_BUDGET="-", PYTHONIOENCODING="utf-8")
+               HIPERCAMPO_IDENTITY_BUDGET="-", HIPERCAMPO_DB="data/_t_budget_env.db",
+               PYTHONIOENCODING="utf-8")
     r = subprocess.run(
         [sys.executable, "-c",
          "import hipercampo.budget as b; print(b.HOOK_BUDGET, b.IDENTITY_BUDGET)"],
