@@ -9,9 +9,9 @@ preguntado y no tiene nada claramente relevante que decir.
 
 import json
 import os
+import pytest
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -20,8 +20,27 @@ from hipercampo import budget  # noqa: E402
 from hipercampo.memory import Hipercampo  # noqa: E402
 from hipercampo.policy import VOLUNTEER_MIN_SIM, _decide  # noqa: E402
 
-_TMP = Path(tempfile.mkdtemp(prefix="hc_budget_"))
+_TMP = Path("data/_t_budget_dir")
+_TMP.mkdir(parents=True, exist_ok=True)
 _DB = str(_TMP / "presupuesto.db")
+
+def _clean_db() -> None:
+    _TMP.mkdir(parents=True, exist_ok=True)
+    for suffix in ("", "-wal", "-shm"):
+        p = Path(_DB + suffix)
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
+        except PermissionError:
+            pass
+
+
+@pytest.fixture(autouse=True)
+def _aislar_db():
+    _clean_db()
+    yield
+    _clean_db()
 
 
 def _memoria():
@@ -343,7 +362,7 @@ def _tools(env: dict) -> list[str]:
                     "params": {"protocolVersion": "2024-11-05", "capabilities": {},
                                "clientInfo": {"name": "t", "version": "0"}}}),
         json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
-        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})])
+        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})]) + "\n"
     r = subprocess.run([sys.executable, "-m", "hipercampo.server"], input=msgs,
                        capture_output=True, text=True, encoding="utf-8", env=env)
     for linea in r.stdout.splitlines():
@@ -353,7 +372,7 @@ def _tools(env: dict) -> list[str]:
             continue
         if d.get("id") == 2:
             return [t["name"] for t in d.get("result", {}).get("tools", [])]
-    return []
+    raise AssertionError(f"tools/list no respondió; stdout={r.stdout!r} stderr={r.stderr!r}")
 
 
 def test_por_defecto_solo_se_anuncia_el_nucleo():
@@ -433,7 +452,9 @@ if __name__ == "__main__":
     for nombre, fn in sorted(globals().items()):
         if nombre.startswith("test_") and callable(fn):
             try:
+                _clean_db()
                 fn()
+                _clean_db()
                 print(f"  ok  {nombre}")
             except AssertionError as e:
                 fallos += 1
