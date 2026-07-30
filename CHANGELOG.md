@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### b10 progress
+- **MCP dependency capped before 2.0.** Release now installs `mcp>=1.28.1,<2`, because `mcp 2.0.0` removed the `mcp.server.fastmcp` import path used by the current server.
+
 ### b9 progress
 - **CI/release dependency alignment.** Mypy now targets Python 3.12, matching CI, and the MCP dependency minimum is pinned to a version that provides `mcp.server.fastmcp` for the release smoke.
 

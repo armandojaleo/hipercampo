@@ -1,6 +1,6 @@
 [project]
 name = "hipercampo"
-version = "0.1.0b9"
+version = "0.1.0b10"
 description = "Living, local-first memory for Claude built on hypervectors (VSA): surprise-gated writing, sleep consolidation, active forgetting, and compositional role queries. MCP server, CPU-only, no embeddings required."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.26",
-    "mcp>=1.28.1",
+    "mcp>=1.28.1,<2",
 ]
 
 [project.urls]
