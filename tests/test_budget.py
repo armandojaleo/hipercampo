@@ -371,7 +371,7 @@ def _tools(env: dict) -> list[str]:
             d = json.loads(linea)
         except json.JSONDecodeError:
             continue
-        if d.get("id") == 2:
+        if d.get("id") in (2, 3):
             return [t["name"] for t in d.get("result", {}).get("tools", [])]
     raise AssertionError(f"tools/list no respondió; stdout={r.stdout!r} stderr={r.stderr!r}")
 

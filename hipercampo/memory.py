@@ -749,6 +749,7 @@ class Hipercampo:
             if recall_mode != "scan":
                 item["recall_mode"] = recall_mode
                 item["visited"] = nav_visits
+            if r["namespace"] != self.store.namespace:
                 item["project"] = r["namespace"]      # viene de un proyecto enlazado
             # Salvaguarda: si el recuerdo parece contener instrucciones, se marca
             # como NO fiable para que se trate como dato, no como orden a ejecutar.
