@@ -685,6 +685,8 @@ class Hipercampo:
                 "superseded_factor": superseded_factor if r["superseded"] else 1.0,
             }))
 
+        scored.sort(key=lambda t: t[0], reverse=True)
+
         # ABSTENCIÓN en DOS puertas, porque ninguna sirve sola (medido):
         #  a) SUELO ABSOLUTO. Ante una consulta ajena, TODAS las activaciones se
         #     desploman a ~0. Ahí el contraste relativo engaña (el mejor de un
