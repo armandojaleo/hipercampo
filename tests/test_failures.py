@@ -14,6 +14,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -22,12 +23,23 @@ from helpers import ejecutar, limpiar, memoria      # noqa: E402
 from hipercampo.memory import Hipercampo            # noqa: E402
 
 
+
+def _unlink_db(db: str) -> None:
+    for suf in ("", "-wal", "-shm"):
+        path = Path(db + suf)
+        for _ in range(20):
+            try:
+                path.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                time.sleep(0.05)
+
 # --- base de datos de SOLO LECTURA ------------------------------------------
 
 def test_bd_de_solo_lectura_avisa_sin_reintentar():
     hc = memoria("fail_ro")
     hc.remember("un recuerdo previo al bloqueo de escritura", 0.6)
-    hc.store.close()
+    hc.close()
     ruta = hc.store.path
     os.chmod(ruta, stat.S_IREAD)                    # el fichero pasa a solo lectura
     try:
@@ -93,8 +105,7 @@ def _matar_a_mitad(guion: str) -> None:
 def test_proceso_matado_escribiendo_no_corrompe():
     limpiar()
     db = "data/_t_fail_kill.db"
-    for suf in ("", "-wal", "-shm"):
-        Path(db + suf).unlink(missing_ok=True)
+    _unlink_db(db)
     raiz = str(Path(__file__).resolve().parent.parent)
     _matar_a_mitad(_GUION_ESCRITOR.format(raiz=raiz, db=db))
 
@@ -105,9 +116,8 @@ def test_proceso_matado_escribiendo_no_corrompe():
     assert total >= 5, f"se perdieron escrituras confirmadas: {total}"
     r = hc.remember("la vida sigue despues del proceso muerto", 0.6)
     assert r.get("stored") is True
-    hc.store.close()
-    for suf in ("", "-wal", "-shm"):
-        Path(db + suf).unlink(missing_ok=True)
+    hc.close()
+    _unlink_db(db)
 
 
 # --- proceso MATADO a mitad de un sueño -------------------------------------
@@ -135,8 +145,7 @@ hc.sleep()
 def test_proceso_matado_durmiendo_no_corrompe_y_reintenta():
     limpiar()
     db = "data/_t_fail_sleep.db"
-    for suf in ("", "-wal", "-shm"):
-        Path(db + suf).unlink(missing_ok=True)
+    _unlink_db(db)
     raiz = str(Path(__file__).resolve().parent.parent)
     p = subprocess.Popen([sys.executable, "-c",
                           _GUION_DURMIENTE.format(raiz=raiz, db=db)],
@@ -155,9 +164,8 @@ def test_proceso_matado_durmiendo_no_corrompe_y_reintenta():
         "afirma haber dormido un sueño que fue interrumpido")
     r = hc.sleep()                                  # reintentar el sueño, ya en paz
     assert "error" not in r, f"el sueño debe poder completarse después: {r}"
-    hc.store.close()
-    for suf in ("", "-wal", "-shm"):
-        Path(db + suf).unlink(missing_ok=True)
+    hc.close()
+    _unlink_db(db)
 
 
 if __name__ == "__main__":
