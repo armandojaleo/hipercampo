@@ -1,6 +1,6 @@
 [project]
 name = "hipercampo"
-version = "0.1.0b8"
+version = "0.1.0b9"
 description = "Living, local-first memory for Claude built on hypervectors (VSA): surprise-gated writing, sleep consolidation, active forgetting, and compositional role queries. MCP server, CPU-only, no embeddings required."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.26",
-    "mcp>=1.2.0",
+    "mcp>=1.28.1",
 ]
 
 [project.urls]
@@ -52,7 +52,7 @@ packages = ["hipercampo"]
 # Puerta de tipos sobre el núcleo. No es --strict (el código usa numpy y dicts
 # JSON heterogéneos donde el tipado total estorba más que ayuda); es el nivel que
 # caza bugs reales —Nones sin comprobar, asignaciones incompatibles— sin ahogar.
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true
 
 [tool.ruff]

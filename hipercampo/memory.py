@@ -991,7 +991,7 @@ class Hipercampo:
         rows = [r for r in self.store.all(only_active=False, include_dormant=True)
                 if not r["superseded"]]
         by_id = {r["id"]: r for r in rows}
-        diagnostic = {"memories": len(rows)}
+        diagnostic: dict[str, object] = {"memories": len(rows)}
         neigh_w = {r["id"]: {d: w for d, w in self.store.neighbors(r["id"]) if d in by_id}
                    for r in rows}
         neigh = {mid: list(ns.keys()) for mid, ns in neigh_w.items()}

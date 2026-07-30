@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### b9 progress
+- **CI/release dependency alignment.** Mypy now targets Python 3.12, matching CI, and the MCP dependency minimum is pinned to a version that provides `mcp.server.fastmcp` for the release smoke.
+
 ### b8 progress
 - **Release lint fix.** CLI/nav tests and MCP smoke now pass the release ruff gate.
 
