@@ -285,6 +285,9 @@ def test_carga_del_gps_no_materializa_volcados_completos():
     graph = hc.store.navgraph(shortcuts=1)
     assert len(graph) == 8
     assert graph.is_compact
+    assert graph.code == {}
+    assert graph._code_matrix is not None and graph._code_matrix.shape == (8, 1250)
+    assert graph._code_positions is not None and len(graph._code_positions) == 8
 
 if __name__ == "__main__":
     limpiar()

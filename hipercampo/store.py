@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from .vsa import from_blob, similarity_batch, to_blob
+from .vsa import D, from_blob, similarity_batch, to_blob
 
 # Precedencia de un enlace cuando se vuelve a observar el mismo par. Manda el de
 # mayor rango; a igualdad, gana lo que ya había (la evidencia no se pisa a sí misma).
@@ -761,21 +761,25 @@ class Store:
             return cached[1]
         # Camino estrecho: el GPS no necesita texto ni metadatos. Iterar cursores con
         # solo las columnas útiles evita materializar dos volcados completos a 100k+.
+        count = int(self.db.execute(
+            "SELECT COUNT(*) FROM memories WHERE namespace=?", (self.namespace,)
+        ).fetchone()[0])
+        code_matrix = np.empty((count, D // 8), dtype=np.uint8)
+        code_ids: list[int] = []
         code_rows = self.db.execute(
             "SELECT id, hv FROM memories WHERE namespace=?", (self.namespace,)
         )
-        codes = {int(mid): from_blob(hv) for mid, hv in code_rows}
+        for pos, (mid, hv) in enumerate(code_rows):
+            code_ids.append(int(mid))
+            code_matrix[pos] = np.frombuffer(hv, dtype=np.uint8)
         edge_rows = self.db.execute(
             "SELECT src, dst FROM links WHERE namespace=? AND type='knn'",
             (self.namespace,),
         )
-        edges = (
-            (int(src), int(dst))
-            for src, dst in edge_rows
-            if src in codes and dst in codes
-        )
+        edges = ((int(src), int(dst)) for src, dst in edge_rows)
         graph = NavGraph.desde_enlaces(
-            codes, edges, shortcuts=shortcuts, compact=True
+            {}, edges, shortcuts=shortcuts, compact=True,
+            code_ids=code_ids, code_matrix=code_matrix,
         )
         self._nav_cache[shortcuts] = (data_version, graph)
         return graph

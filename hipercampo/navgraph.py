@@ -52,6 +52,8 @@ class NavGraph:
         self.max_degree = max_degree
         self.adj: dict[int, list[int]] = {}
         self.code: dict[int, np.ndarray] = {}
+        self._code_positions: dict[int, int] | None = None
+        self._code_matrix: np.ndarray | None = None
         self.entry: int | None = None          # hub de entrada (nodo muy conectado)
         self.entries: list[int] = []           # representantes de islas semánticas
         self._entry_matrix: np.ndarray | None = None
@@ -61,24 +63,50 @@ class NavGraph:
         self._rnd = random.Random(seed)
 
     def __len__(self) -> int:
-        return len(self.code)
+        return len(self._code_positions) if self._code_positions is not None else len(self.code)
+
+    def _ids(self) -> list[int]:
+        if self._code_positions is not None:
+            return list(self._code_positions)
+        return list(self.code)
+
+    def _has_code(self, mid: int) -> bool:
+        if self._code_positions is not None:
+            return mid in self._code_positions
+        return mid in self.code
+
+    def _code_of(self, mid: int) -> np.ndarray:
+        if self._code_positions is None or self._code_matrix is None:
+            return self.code[mid]
+        return self._code_matrix[self._code_positions[mid]]
 
     @classmethod
     def desde_enlaces(cls, codes: dict, edges, shortcuts: int = 2, seed: int = 0,
-                      compact: bool = False, **kw) -> "NavGraph":
+                      compact: bool = False, code_ids: list[int] | None = None,
+                      code_matrix: np.ndarray | None = None, **kw) -> "NavGraph":
         """Construye el índice a partir de enlaces YA existentes (los knn del mapa) +
         atajos de largo alcance efímeros (del índice, no del mapa: no se guardan ni se
         muestran, y no propagan activación — solo hacen navegable el grafo). `codes`
         es {id: hipervector}; `edges` una lista de pares (a, b)."""
         g = cls(shortcuts=shortcuts, seed=seed, **kw)
-        for mid, hv in codes.items():
-            g.code[mid] = hv
-            g.adj.setdefault(mid, [])
+        if code_matrix is not None:
+            ids = list(code_ids or [])
+            if code_matrix.shape[0] != len(ids):
+                raise ValueError("code_ids y code_matrix no tienen la misma longitud")
+            g._code_positions = {mid: pos for pos, mid in enumerate(ids)}
+            g._code_matrix = code_matrix
+            for mid in ids:
+                g.adj[mid] = []
+        else:
+            for mid, hv in codes.items():
+                g.code[mid] = hv
+                g.adj.setdefault(mid, [])
+            ids = g._ids()
         for a, b in edges:                       # enlaces reales (bidireccionales)
-            if a in g.code and b in g.code and b not in g.adj[a]:
+            if g._has_code(a) and g._has_code(b) and b not in g.adj[a]:
                 g.adj[a].append(b)
                 g.adj.setdefault(b, []).append(a)
-        ids = list(g.code)
+        ids = g._ids()
         # Los enlaces reales pueden formar islas semánticas desconectadas. Elegimos
         # un landmark por isla ANTES de añadir atajos efímeros, para seleccionar
         # primero el concepto correcto y navegar después solo su vecindario.
@@ -114,6 +142,8 @@ class NavGraph:
     def add(self, mid: int, hv: np.ndarray) -> None:
         """Inserta un recuerdo NAVEGANDO el grafo para hallar sus vecinos (sin escaneo).
         Enlaza con sus M más cercanos + `shortcuts` atajos aleatorios de largo alcance."""
+        if self._code_positions is not None:
+            raise RuntimeError("un índice residente compacto no admite inserción directa")
         if mid in self.code:
             return
         self.code[mid] = hv
@@ -141,7 +171,7 @@ class NavGraph:
         if len(self.entries) < 8:
             self._entry_matrix = None
             return
-        self._entry_matrix = np.stack([self.code[mid] for mid in self.entries])
+        self._entry_matrix = np.stack([self._code_of(mid) for mid in self.entries])
 
     @property
     def is_compact(self) -> bool:
@@ -157,7 +187,7 @@ class NavGraph:
 
     def _compact(self) -> None:
         """Convierte la adyacencia estática a CSR para reducir la RAM residente."""
-        ids = list(self.code)
+        ids = self._ids()
         if not ids:
             return
         offsets = np.empty(len(ids) + 1, dtype=np.uint64)
@@ -174,7 +204,9 @@ class NavGraph:
             siguiente = cursor + len(actuales)
             neighbors[cursor:siguiente] = actuales
             cursor = siguiente
-        self._node_positions = {mid: pos for pos, mid in enumerate(ids)}
+        self._node_positions = self._code_positions or {
+            mid: pos for pos, mid in enumerate(ids)
+        }
         self._neighbor_offsets = offsets
         self._neighbor_ids = neighbors
 
@@ -195,8 +227,8 @@ class NavGraph:
         self.adj.setdefault(b, []).append(a)
         for n in (a, b):                        # poda de grado
             if len(self.adj[n]) > self.max_degree:
-                base = self.code[n]
-                ord_ = sorted(self.adj[n], key=lambda x: _hamming(base, self.code[x]))
+                base = self._code_of(n)
+                ord_ = sorted(self.adj[n], key=lambda x: _hamming(base, self._code_of(x)))
                 self.adj[n] = ord_[:self.max_degree]
 
     # --- búsqueda -------------------------------------------------------------
@@ -222,19 +254,19 @@ class NavGraph:
                         vis.add(e)
             else:
                 for e in landmarks:
-                    if e == excluir or e not in self.code:
+                    if e == excluir or not self._has_code(e):
                         continue
-                    distancias[e] = _hamming(qhv, self.code[e])
+                    distancias[e] = _hamming(qhv, self._code_of(e))
                     vis.add(e)
             entradas = [
                 e for e, _ in sorted(distancias.items(), key=lambda item: item[1])[:4]
             ]
         for e in entradas:
-            if e is None or e == excluir or e not in self.code:
+            if e is None or e == excluir or not self._has_code(e):
                 continue
             d = distancias.get(e)
             if d is None:
-                d = _hamming(qhv, self.code[e])
+                d = _hamming(qhv, self._code_of(e))
             vis.add(e)
             heapq.heappush(cand, (d, e))
             heapq.heappush(res, (-d, e))
@@ -247,7 +279,7 @@ class NavGraph:
                 if nb in vis or nb == excluir:
                     continue
                 vis.add(nb)
-                dn = _hamming(qhv, self.code[nb])
+                dn = _hamming(qhv, self._code_of(nb))
                 if len(res) < ef or dn < -res[0][0]:
                     heapq.heappush(cand, (dn, nb))
                     heapq.heappush(res, (-dn, nb))
@@ -268,7 +300,7 @@ class NavGraph:
         visitados, ordenados = self._buscar(qhv, width, entradas=entradas)
         salida = []
         for mid in ordenados[:k]:
-            salida.append((mid, 1.0 - _hamming(qhv, self.code[mid]) / D))
+            salida.append((mid, 1.0 - _hamming(qhv, self._code_of(mid)) / D))
         return salida, visitados
 
     def search(self, qhv: np.ndarray, k: int = 5,
