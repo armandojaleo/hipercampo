@@ -239,6 +239,36 @@ def test_grafo_incremental_no_cruza_namespaces():
     hc_b.close()
 
 
+def test_grafo_residente_se_reutiliza_e_invalida_con_cambios_reales():
+    """Recall repetido no reconstruye O(N); cambios locales/externos sí invalidan."""
+    hc = memoria("nav_cache", namespace="proj")
+    _sembrar(hc, n_temas=8, por=8, seed=9)
+    hc.store.reindex_navgraph(M=6)
+
+    g1 = hc.store.navgraph(shortcuts=2)
+    g2 = hc.store.navgraph(shortcuts=2)
+    assert g2 is g1
+
+    primero = hc.store.all(own_only=True)[0]["id"]
+    hc.store.touch([primero])
+    assert hc.store.navgraph(shortcuts=2) is g2, "reforzar no cambia la topología"
+
+    antes = len(g2)
+    texto = "nuevo nodo estructural para invalidar la cache local"
+    hc.store.add(texto, encode_text(texto), 1.0, 0.7, 0.8)
+    g3 = hc.store.navgraph(shortcuts=2)
+    assert g3 is not g2 and len(g3) == antes + 1
+
+    from hipercampo.store import Store
+
+    otro = Store(hc.store.path, namespace="proj")
+    externo = "nodo escrito desde otra conexion sqlite"
+    otro.add(externo, encode_text(externo), 1.0, 0.7, 0.8)
+    otro.close()
+    g4 = hc.store.navgraph(shortcuts=2)
+    assert g4 is not g3 and len(g4) == len(g3) + 1
+    hc.close()
+
 if __name__ == "__main__":
     limpiar()
     codigo = ejecutar(dict(globals()))

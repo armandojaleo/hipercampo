@@ -28,7 +28,8 @@ La línea de estabilidad de la beta está cerrada y publicada en PyPI.
    extensión; contrato protegido por tests.
 2. ✅ Grafo navegable persistente e incremental, aislado por namespace y probado tras
    reiniciar. Búsqueda de una sola pasada: en 800 recuerdos mantiene recall@5=1,00 y
-   baja 392,6→180,9 visitas; el caso público de 120 baja 120→89. Falta medir a 100k+.
+   baja 392,6→180,9 visitas; el caso público de 120 baja 120→89. El grafo reside
+   en memoria: a 800 nodos, reconstruir 35,2 ms → reutilizar 0,054 ms. Falta 100k+.
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
 4. Ablaciones y corpus externos para validar que la mejora no depende del banco sintético.
@@ -201,8 +202,10 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   `test_navindex.py`. La UI hace visible el modo y coste de cada recall. La búsqueda ya
   devuelve resultados+visitas en una sola pasada y ajusta el haz al número de candidatos:
   en 800 recuerdos conserva recall@5=1,00 con 180,9 visitas medias (antes 392,6), y el
-  caso público de 120 baja 120→89. Siguiente reto: validar recall@5 ≥0,9 a 100k+ con
-  datos externos, sin esconder el fallback ni proclamar sublinealidad donde no se mida.
+  caso público de 120 baja 120→89. El índice queda residente entre recalls y se
+  invalida ante cambios locales/externos: a 800 nodos pasa de 35,2 ms de construcción
+  a 0,054 ms de reutilización. Siguiente reto: validar recall@5 ≥0,9 a 100k+ con datos
+  externos, sin esconder el fallback ni proclamar sublinealidad donde no se mida.
 - ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
   i18n dentro, y UX que salga de usarlo de verdad.
 - ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos

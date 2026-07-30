@@ -104,6 +104,7 @@ class Store:
         self._ns_lectura = (namespace, *self.linked)
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._txn_depth = 0
+        self._nav_cache: dict[int, tuple[int, object]] = {}
         self._connect()
 
     def _connect(self) -> None:
@@ -122,6 +123,7 @@ class Store:
             pass
         self.db.execute("PRAGMA synchronous=NORMAL")
         self._txn_depth = 0
+        self._nav_cache.clear()
         try:
             self.db.executescript(_SCHEMA)     # 1) tablas (IF NOT EXISTS)
             self._migrate()                    # 2) columnas nuevas en BDs antiguas
@@ -148,6 +150,10 @@ class Store:
         una vez con similarity_batch. Evita repetir el mismo apilado por todo el código."""
         from .vsa import stack_hvs
         return stack_hvs([r["hv"] for r in rows])
+
+    def _invalidate_nav(self) -> None:
+        """Descarta índices residentes tras un cambio de nodos o aristas."""
+        self._nav_cache.clear()
 
     # --- salud y recuperación --------------------------------------------
     def health(self, full: bool = False) -> dict:
@@ -410,6 +416,7 @@ class Store:
              self.namespace, fact_id),
         )
         self._commit()
+        self._invalidate_nav()
         assert cur.lastrowid is not None                   # tras un INSERT de una fila
         return cur.lastrowid
 
@@ -429,6 +436,7 @@ class Store:
              valid_from if valid_from is not None else time.time(), supersedes, source),
         )
         self._commit()
+        self._invalidate_nav()
         assert cur.lastrowid is not None                   # tras un INSERT de una fila
         return cur.lastrowid
 
@@ -497,6 +505,7 @@ class Store:
             (src, dst, w, self.namespace, type, status, time.time()),
         )
         self._commit()
+        self._invalidate_nav()
 
     def set_link_status(self, a: int, b: int, status: str) -> int:
         """Resuelve una hipótesis del sueño: proposed → confirmed | rejected.
@@ -576,6 +585,7 @@ class Store:
                 "DELETE FROM links WHERE (src=? OR dst=?) AND namespace = ?",
                 [(i, i, self.namespace) for i in ids])
             self._commit()
+            self._invalidate_nav()
         finally:
             if secure:
                 self.db.execute("PRAGMA secure_delete = OFF")
@@ -736,6 +746,7 @@ class Store:
                     añadidos += 1
                     if añadidos >= M:
                         break
+        self._invalidate_nav()
         return tejidos
 
     def navgraph(self, shortcuts: int = 2):
@@ -744,11 +755,17 @@ class Store:
         para recordar navegando en vez de escanear. Se construye desde lo ya guardado;
         los atajos viven solo aquí (no en el mapa ni en la activación)."""
         from .navgraph import NavGraph
+        data_version = int(self.db.execute("PRAGMA data_version").fetchone()[0])
+        cached = self._nav_cache.get(shortcuts)
+        if cached is not None and cached[0] == data_version:
+            return cached[1]
         rows = self.all(only_active=False, own_only=True, include_dormant=True)
         codes = {r["id"]: self.hv_of(r) for r in rows}
         edges = [(e["src"], e["dst"]) for e in self.links_dump()
                  if e["type"] == "knn" and e["src"] in codes and e["dst"] in codes]
-        return NavGraph.desde_enlaces(codes, edges, shortcuts=shortcuts)
+        graph = NavGraph.desde_enlaces(codes, edges, shortcuts=shortcuts)
+        self._nav_cache[shortcuts] = (data_version, graph)
+        return graph
 
     def reclassify(self, ids: list[int], to_namespace: str) -> int:
         """Mueve recuerdos PROPIOS a otro contexto: curación del dueño sobre su memoria.
@@ -784,6 +801,7 @@ class Store:
                                     (destino, src, dst))
                 else:                                      # cruzaría contextos: se corta
                     self.db.execute("DELETE FROM links WHERE src=? AND dst=?", (src, dst))
+        self._invalidate_nav()
         return len(propios)
 
     def get(self, mem_id: int):
@@ -824,6 +842,7 @@ class Store:
 
     def commit(self):
         self.db.commit()
+        self._invalidate_nav()
 
     def close(self):
         # Checkpoint + truncado del WAL: deja el fichero consistente y elimina los
