@@ -871,11 +871,17 @@ def main(argv=None) -> int:
             if not texto:
                 print("Falta el texto.", file=sys.stderr); return 2
             if args.cmd == "assist":
-                modo_nav = "auto" if getattr(args, "nav_auto", False) else getattr(args, "nav", False)
+                modo_nav = (
+                    "auto" if getattr(args, "nav_auto", False)
+                    else getattr(args, "nav", False)
+                )
                 _print(hc.assist(texto, max_scan=getattr(args, "max_scan", None),
                                  nav=modo_nav), plain=args.plain)
             elif args.cmd == "recall":
-                modo_nav = "auto" if getattr(args, "nav_auto", False) else getattr(args, "nav", False)
+                modo_nav = (
+                    "auto" if getattr(args, "nav_auto", False)
+                    else getattr(args, "nav", False)
+                )
                 _print(hc.recall(texto, max_scan=getattr(args, "max_scan", None),
                                  nav=modo_nav), plain=args.plain)
             elif args.cmd == "muse":

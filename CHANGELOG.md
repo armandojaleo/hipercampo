@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### b8 progress
+- **Release lint fix.** CLI/nav tests and MCP smoke now pass the release ruff gate.
+
 ### b7 progress
 - **PyPI release smoke fixed.** The MCP smoke test now runs against an isolated `data/_mcp_smoke.db` and preserves server stderr, so clean release environments fail with actionable diagnostics instead of `el servidor cerró sin responder`.
 

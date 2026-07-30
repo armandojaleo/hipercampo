@@ -106,7 +106,10 @@ def test_recall_opcional_puede_navegar_el_grafo_del_store():
 
     assert normal, "el recall base debe seguir encontrando senal"
     assert nav, "el recall navegable debe devolver resultados"
-    assert any(h["text"] == objetivo for h in nav) or {h["id"] for h in nav} & {h["id"] for h in normal}
+    assert (
+        any(h["text"] == objetivo for h in nav)
+        or {h["id"] for h in nav} & {h["id"] for h in normal}
+    )
     assert nav[0].get("recall_mode") == "nav", nav[0]
     assert isinstance(nav[0].get("visited"), int) and nav[0]["visited"] > 0
 
