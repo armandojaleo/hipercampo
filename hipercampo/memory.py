@@ -671,12 +671,19 @@ class Hipercampo:
         scored = []
         for mid, act in activation.items():
             r = by_id[mid]
-            score = act * (0.7 + 0.3 * min(r["strength"], 3.0) / 3.0)
-            score *= (0.6 + 0.4 * r["confidence"])    # la FIABILIDAD pesa en el ranking
+            strength_factor = 0.7 + 0.3 * min(r["strength"], 3.0) / 3.0
+            score = act * strength_factor
+            confidence_factor = 0.6 + 0.4 * r["confidence"]
+            score *= confidence_factor    # la FIABILIDAD pesa en el ranking
             if r["superseded"]:                       # lo reemplazado no debe dominar
-                score *= SUPERSEDED_RECALL_PENALTY
-            scored.append((score, act, r))
-        scored.sort(key=lambda t: t[0], reverse=True)
+                superseded_factor = SUPERSEDED_RECALL_PENALTY
+                score *= superseded_factor
+            scored.append((score, act, r, {
+                "activation": act,
+                "strength_factor": strength_factor,
+                "confidence_factor": confidence_factor,
+                "superseded_factor": superseded_factor if r["superseded"] else 1.0,
+            }))
 
         # ABSTENCIÓN en DOS puertas, porque ninguna sirve sola (medido):
         #  a) SUELO ABSOLUTO. Ante una consulta ajena, TODAS las activaciones se
@@ -695,7 +702,7 @@ class Hipercampo:
         #     cola: con la memoria muy pequeña no hay estadística y manda solo el suelo.
         # Superada la puerta se devuelven también los asociados legítimos, que pueden
         # ir por debajo de ANSWER_MIN_SCORE: solo el MEJOR tiene que justificar respuesta.
-        top = [(s, a, r) for s, a, r in scored[:k] if a >= MIN_RECALL_SCORE]
+        top = [(s, a, r, c) for s, a, r, c in scored[:k] if a >= MIN_RECALL_SCORE]
         if top:
             responder, diag = abstention_gate(directa, len(top), semantic_active())
             self.ultima_decision = dict(diag, consulta=query[:60], n=len(scored),
@@ -717,7 +724,7 @@ class Hipercampo:
         # En PAUSA no se refuerza: reforzar también modifica la memoria (fuerza y uso).
         try:
             if not config.paused():
-                self.store.touch([r["id"] for s, _, r in top if s >= REINFORCE_MIN_SCORE])
+                self.store.touch([r["id"] for s, _, r, _ in top if s >= REINFORCE_MIN_SCORE])
         except sqlite3.Error as e:
             # El refuerzo es deseable, no imprescindible: en una BD de solo lectura
             # (o llena) LEER debe seguir funcionando aunque no se pueda reforzar.
@@ -727,21 +734,21 @@ class Hipercampo:
                   mirados=len(rows), tope=max_scan if acotado else None,
                   modo=recall_mode, visitas=nav_visits,
                   mejor=round(top[0][0], 3) if top else None,
-                  ids=",".join(str(r["id"]) for _, _, r in top[:5]) or None,
+                  ids=",".join(str(r["id"]) for _, _, r, _ in top[:5]) or None,
                   enlazados=",".join(self.store.linked) or None,
                   ms=round((time.time() - t0) * 1000))
         salida = []
-        for score, act, r in top:
+        for score, act, r, components in top:
             item = {"id": r["id"], "text": r["text"], "kind": r["kind"],
                     "score": round(score, 3), "activation": round(act, 3),
                     "sim": round(directa_por_id.get(r["id"], 0.0), 3),
                     "strength": round(r["strength"], 2),
                     "confidence": round(r["confidence"], 2),
-                    "utility": round(self.utility(r), 2)}
+                    "utility": round(self.utility(r), 2),
+                    "score_components": {k: round(v, 3) for k, v in components.items()}}
             if recall_mode != "scan":
                 item["recall_mode"] = recall_mode
                 item["visited"] = nav_visits
-            if r["namespace"] != self.store.namespace:
                 item["project"] = r["namespace"]      # viene de un proyecto enlazado
             # Salvaguarda: si el recuerdo parece contener instrucciones, se marca
             # como NO fiable para que se trate como dato, no como orden a ejecutar.
