@@ -27,7 +27,8 @@ La línea de estabilidad de la beta está cerrada y publicada en PyPI.
 1. ✅ Recuperación explicable (`score_components`) en core/MCP y tooltip visible en la
    extensión; contrato protegido por tests.
 2. ✅ Grafo navegable persistente e incremental, aislado por namespace y probado tras
-   reiniciar. Falta optimizar las visitas en colecciones medianas y medir a 100k+.
+   reiniciar. Búsqueda de una sola pasada: en 800 recuerdos mantiene recall@5=1,00 y
+   baja 392,6→180,9 visitas; el caso público de 120 baja 120→89. Falta medir a 100k+.
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
 4. Ablaciones y corpus externos para validar que la mejora no depende del banco sintético.
@@ -197,9 +198,11 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   Ya está integrado: `remember` mantiene vecinos KNN sin reindexado global y `recall`
   navega con beam, expone `visited`/`recall_mode` y conserva el escaneo como fallback.
   El grafo sobrevive al reinicio y no cruza namespaces; lo prueban `test_navgraph.py` y
-  `test_navindex.py`. La UI hace visible el modo y coste de cada recall. Siguiente reto:
-  reducir las visitas en colecciones medianas y validar recall@5 ≥0,9 a 100k+ con datos
-  externos, sin esconder el fallback ni proclamar sublinealidad donde aún no se mida.
+  `test_navindex.py`. La UI hace visible el modo y coste de cada recall. La búsqueda ya
+  devuelve resultados+visitas en una sola pasada y ajusta el haz al número de candidatos:
+  en 800 recuerdos conserva recall@5=1,00 con 180,9 visitas medias (antes 392,6), y el
+  caso público de 120 baja 120→89. Siguiente reto: validar recall@5 ≥0,9 a 100k+ con
+  datos externos, sin esconder el fallback ni proclamar sublinealidad donde no se mida.
 - ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
   i18n dentro, y UX que salga de usarlo de verdad.
 - ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos

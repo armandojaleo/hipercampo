@@ -61,14 +61,15 @@ def test_navegar_recupera_como_escanear():
         q = encode_text(" ".join(base[:4]))
         sims = similarity_batch(q, mat)             # VERDAD por escaneo completo
         verdad = set(int(ids[i]) for i in np.argsort(sims)[::-1][:5])
-        nav = set(mid for mid, _ in g.search(q, k=5))
+        encontrados, visitados = g.search_with_stats(q, k=16, ef=16)
+        nav = set(mid for mid, _ in encontrados[:5])
         recall += len(nav & verdad) / 5.0
-        visitas += g.visitados_en(q)
+        visitas += visitados
         n_q += 1
     recall /= n_q
     visitas /= n_q
-    assert recall >= 0.80, f"navegar el store recupera mal: recall@5={recall:.3f}"
-    assert visitas < 0.8 * len(ids), \
+    assert recall >= 0.90, f"navegar el store recupera mal: recall@5={recall:.3f}"
+    assert visitas < 0.4 * len(ids), \
         f"navegar visita casi todo ({visitas:.0f}/{len(ids)}): no ahorra"
     hc.close()
 
@@ -146,6 +147,7 @@ def test_recall_auto_navega_si_el_grafo_es_adecuado():
     assert hits, "nav auto debe seguir recordando"
     assert hits[0].get("recall_mode") == "nav", hits[0]
     assert isinstance(hits[0].get("visited"), int)
+    assert hits[0]["visited"] < 0.8 * len(textos), hits[0]
 
 def test_cli_recall_expone_modo_nav_auto():
     import contextlib

@@ -612,9 +612,13 @@ class Hipercampo:
         if use_nav and max_scan is None and not self.store.linked:
             try:
                 g = self.store.navgraph(shortcuts=2)
-                nav_visits = g.visitados_en(qhv) if len(g) else 0
-                candidatos = max(k * 8, 32)
-                ids = [mid for mid, _ in g.search(qhv, k=candidatos)]
+                # Medido en 120/800 recuerdos: 16 candidatos conserva recall@5=1.0
+                # y reduce ~26-54% las visitas. La búsqueda devuelve su coste para no
+                # recorrer el grafo otra vez solo por observabilidad.
+                candidatos = max(k * 3, 16)
+                encontrados, nav_visits = g.search_with_stats(
+                    qhv, k=candidatos, ef=candidatos)
+                ids = [mid for mid, _ in encontrados]
                 rows = [self.store.get(mid) for mid in ids]
                 rows = [r for r in rows if r is not None]
                 if len(rows) >= k:

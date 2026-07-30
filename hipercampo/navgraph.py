@@ -151,14 +151,25 @@ class NavGraph:
         ordenados = [mid for _, mid in sorted((-x[0], x[1]) for x in res)]
         return len(vis), ordenados
 
-    def search(self, qhv: np.ndarray, k: int = 5,
-               entradas: list[int] | None = None) -> list[tuple[int, float]]:
-        """Los k recuerdos más parecidos a q, NAVEGANDO el grafo. Devuelve (id, similitud)."""
-        _, ordenados = self._buscar(qhv, max(self.ef, k), entradas=entradas)
+    def search_with_stats(self, qhv: np.ndarray, k: int = 5,
+                          entradas: list[int] | None = None,
+                          ef: int | None = None) -> tuple[list[tuple[int, float]], int]:
+        """Busca una sola vez y devuelve (resultados, nodos_visitados).
+
+        ``ef`` permite al consumidor ajustar calidad/coste para su número de
+        candidatos sin repetir el recorrido solo para medirlo.
+        """
+        width = max(k, self.ef if ef is None else max(1, int(ef)))
+        visitados, ordenados = self._buscar(qhv, width, entradas=entradas)
         salida = []
         for mid in ordenados[:k]:
             salida.append((mid, 1.0 - _hamming(qhv, self.code[mid]) / D))
-        return salida
+        return salida, visitados
+
+    def search(self, qhv: np.ndarray, k: int = 5,
+               entradas: list[int] | None = None) -> list[tuple[int, float]]:
+        """Los k recuerdos más parecidos a q, NAVEGANDO el grafo."""
+        return self.search_with_stats(qhv, k=k, entradas=entradas)[0]
 
     def visitados_en(self, qhv: np.ndarray) -> int:
         """Cuántos nodos toca una búsqueda (para medir la sublinealidad)."""

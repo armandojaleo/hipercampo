@@ -120,6 +120,26 @@ def test_memoria_pequena_no_revienta():
     assert len(g.search(encode_text("recuerdo"), k=5)) >= 1
 
 
+def test_busqueda_con_metricas_hace_un_solo_recorrido():
+    """Observar el coste no debe duplicar el coste que intenta medir."""
+    g = NavGraph(seed=0)
+    for i in range(20):
+        g.add(i, encode_text(f"recuerdo navegable numero {i}"))
+    original = g._buscar
+    llamadas = 0
+
+    def contar(*args, **kwargs):
+        nonlocal llamadas
+        llamadas += 1
+        return original(*args, **kwargs)
+
+    g._buscar = contar
+    resultados, visitados = g.search_with_stats(encode_text("recuerdo numero 7"), k=5,
+                                                 ef=8)
+    assert resultados and visitados > 0
+    assert llamadas == 1
+
+
 if __name__ == "__main__":
     limpiar()
     sys.exit(ejecutar(dict(globals())))
