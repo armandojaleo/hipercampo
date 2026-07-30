@@ -4,6 +4,34 @@ All notable changes to this project are documented here. Format loosely based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.1.0b12] — 2026-07-30
+
+### Added
+- **Hierarchical GPS recall at 100k.** Navigable recall selects semantic islands through
+  vectorized VSA landmarks before traversing the local graph. In the reproducible
+  structured benchmark (30 queries, 100,000 memories), group precision@5 is **1.000**,
+  p50 **6.07 ms**, p95 **6.94 ms**, visiting **1.094%** of memory.
+- **Shared Claude/Codex memory contract.** Repository configuration and agent guidance
+  use the same MCP namespace, with tested safe write boundaries and neutral instructions.
+- **Explainable navigation in the viewer.** Recall mode, visited-node cost and score
+  components are visible in the VS Code UI. Viewer version is now **0.9.5**.
+
+### Changed
+- **Resident index compressed for robots.** Narrow streaming SQL loads, CSR adjacency,
+  and one positional VSA matrix reduce the 100k cold-build peak from **558.8 MB to
+  189.7 MB** and resident index size to **141.5 MB**, close to the vectors' 119 MB
+  physical floor. Cold construction is **7.46 s** and warm reuse **0.073 ms**.
+- Navigable search returns results and visit statistics in one traversal and keeps the
+  graph resident until local or external structural changes invalidate it.
+
+### Fixed
+- The viewer package now includes its MIT license.
+- Navigable persistence, namespace isolation, restart behavior and external SQLite
+  invalidation have dedicated regression coverage.
+
+## [0.1.0b11] — 2026-07-30
+
 ### b10 progress
 - **MCP dependency capped before 2.0.** Release now installs `mcp>=1.28.1,<2`, because `mcp 2.0.0` removed the `mcp.server.fastmcp` import path used by the current server.
 
@@ -385,7 +413,7 @@ predictable. Closes the four blockers raised in external review.
   time and terminate them; the MCP client relaunches them on next use, with the new
   code. No dependencies (psutil if present, system tools otherwise).
 
-## [Unreleased]
+
 ### Added
 - **`hc_health`** — is the memory sound? Checks file integrity (`PRAGMA
   integrity_check`), schema, readability and write permission.
