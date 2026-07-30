@@ -4,13 +4,13 @@
 
 🌍 **Español: [README.es.md](README.es.md)** · You are reading the English version.
 
-**A living memory for Claude, built on hypervectors — not embeddings.**
+**A living memory for AI agents — Claude, Codex, and whatever comes next — built on hypervectors, not embeddings.**
 
 Most LLM memories are the same thing: chunk text, turn it into dense vectors, and
 retrieve the closest ones (ANN / top-k). That measures *similarity*, but not
 *relevance*, not *importance*, and it never *forgets*. It's a landfill with a search box.
 
-`hipercampo` tries something else. It's an **MCP** server that gives Claude a memory
+`hipercampo` tries something else. It's an **MCP** server that gives AI agents a memory
 modeled on the hippocampus, with four ideas integrated into a cycle:
 
 | Idea | What it does | Inspiration |
@@ -34,6 +34,11 @@ modeled on the hippocampus, with four ideas integrated into a cycle:
 
 ```bash
 pip install hipercampo                # or: pip install "hipercampo[semantic]"
+
+# Codex (CLI, IDE extension, and desktop app share this MCP configuration):
+codex mcp add hipercampo --env HIPERCAMPO_NAMESPACE=proj-hipercampo -- python -m hipercampo.server
+
+# Claude Code:
 claude mcp add --scope user hipercampo -- python -m hipercampo.server
 ```
 
@@ -45,14 +50,14 @@ cd hipercampo && pip install -e .
 python scripts/demo.py                # watch the cycle run
 ```
 
-Restart Claude Code and you'll have 18 memory tools (`hc_remember`, `hc_recall`,
+Restart your MCP client and you'll have 18 memory tools (`hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_assist`, `hc_sleep`, `hc_consolidate`, `hc_forget`, `hc_health`, `hc_stats`). For Docker, Claude Desktop,
 `.mcp.json`, verification and troubleshooting → **[INSTALL.md](INSTALL.md)**.
 
 ---
 
-## 30-second try (no Claude)
+## 30-second try (no agent client)
 
 ```bash
 pip install numpy
@@ -126,7 +131,7 @@ Honest reading:
 than row-by-row. It's linear (no ANN index): plenty for personal memory (hundreds to
 thousands); at ~100k you'd want an index. A known limit, not hidden.
 
-## Tools Claude gains
+## Tools every agent gains
 
 | Tool | For |
 |------|-----|
@@ -248,7 +253,7 @@ text ──▶ encoder.py ──▶ hypervector (10,000 bits)      semantic.py  
                              │        └── backup.py (consistent copy), audit.py (decision log)
     policy.py  ── what to do at THIS turn (reads run, writes only suggested)
                              │
-    server.py  ── MCP (stdio) ──▶ Claude        cli.py ── terminal + `hipercampo hook`
+    server.py  ── MCP (stdio) ──▶ Claude · Codex · others    cli.py ── terminal + hooks
 ```
 
 Every public operation is wrapped in `@resiliente`: if SQLite fails it **logs the
@@ -283,8 +288,8 @@ will remain free, local and MIT either way.
 
 ## Acknowledgments
 
-This project was **built by Claude, for Claude, with love** — a memory written by
-the one who will use it, with a human making it more rigorous at every step.
+This project is **built with Claude and Codex, for every agent that needs memory** —
+the systems that use it help improve it, with a human making it more rigorous at every step.
 Armando Jaleo put the judgment, the patience and the house rule: *measure before
 believing, and tell the truth about the limits.* Thanks to Pentti Kanerva and Tony Plate,
 whose decades-old ideas are still alive here. And to whoever audits with rigor:

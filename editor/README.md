@@ -42,6 +42,9 @@ recordando y decidiendo, las pestañas se actualizan en vivo sin cerrar y abrir.
 
 - **Modo texto**: filtro instantáneo en cliente (sin acentos). Un visor debe *encontrar*,
   no abstenerse.
+- **Recall explicable**: las tarjetas muestran el score y, al pasar el ratón, sus
+  componentes (`activation`, fuerza, confianza y penalización por superado). También
+  enseñan si se usó navegación y cuántos nodos visitó (`nav · N`).
 - **Modo recall / muse**: busca «como el agente». `recall` es el directo (sabe abstenerse);
   **muse** es la vía *eureka*: trae conexiones indirectas y recuerdos latentes. Escribe y
   pulsa Enter. El 💡 de cada tarjeta lanza `muse` desde ese recuerdo.

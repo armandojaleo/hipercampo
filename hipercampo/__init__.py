@@ -1,4 +1,4 @@
-"""hipercampo — memoria viva para Claude basada en hipervectores (VSA).
+"""hipercampo — memoria viva para agentes basada en hipervectores (VSA).
 
 NÚCLEO EMBEBIBLE
 ----------------

@@ -24,10 +24,14 @@ La línea de estabilidad de la beta está cerrada y publicada en PyPI.
 
 ### Siguiente tramo
 
-1. Recuperación explicable (`score_components`) y métricas de abstención visibles en CLI/MCP/UI.
-2. Persistencia y mantenimiento incremental del grafo navegable a gran escala.
-3. Ablaciones y corpus externos para validar que la mejora no depende del banco sintético.
-4. Selección de namespace y UX estable de la extensión; la extensión no se etiqueta como producto estable todavía.
+1. ✅ Recuperación explicable (`score_components`) en core/MCP y tooltip visible en la
+   extensión; contrato protegido por tests.
+2. ✅ Grafo navegable persistente e incremental, aislado por namespace y probado tras
+   reiniciar. Falta optimizar las visitas en colecciones medianas y medir a 100k+.
+3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
+   proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
+4. Ablaciones y corpus externos para validar que la mejora no depende del banco sintético.
+5. Selección de namespace y UX estable de la extensión; la extensión no se etiqueta como producto estable todavía.
 
 ## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
 
@@ -134,8 +138,9 @@ separar contextos *dentro de una misma máquina*:
 
 ## Fase 6 — Release y operación
 - 🟢 CI (GitHub Actions) con las suites + benchmarks en 3.11–3.13.
-- ⚪ Linting + type-check (ruff/mypy) + cobertura en CI.
-- ⚪ Recuperación **explicable**: `score_components` (similitud directa, boost por
+- ✅ Linting + type-check (ruff/mypy) + cobertura en CI; compilación y smoke sintáctico
+  del webview añadidos como puerta independiente.
+- ✅ Recuperación **explicable**: `score_components` (similitud directa, boost por
   asociación, factor de confianza, penalización por superado).
 - 🟢 Release v0.1.0-alpha publicada en **PyPI** (trusted publishing + attestations).
 - ⚪ Observabilidad: logging estructurado, métricas.
@@ -176,7 +181,7 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   llena ya estaba cubierta (`test_resilience`/`test_failures`). Tests en `test_bounded.py`;
   latencia p50/p95/p99 publicada en CI (`scripts/latency.py`) — cierra hueco de Fase 2.
   Cerrado en b6: `max_scan` también está expuesto por MCP (`hc_recall`) para que agentes/robots puedan acotar CPU/RAM sin depender de la API Python.
-- 🟡 **`0.1.0b6` — El núcleo recuerda como un cerebro: grafo navegable (BANDERA).**
+- 🟢 **`0.1.0b6` — El núcleo recuerda como un cerebro: grafo navegable (BANDERA).**
   El límite real medido no era la velocidad del escaneo, sino *escanear*. A 100k:
   ~1,8 s y 542 MB — inviable para un robot. La idea (de Armando): no escanear, sino
   **navegar un grafo de vecinos**, como un GPS; se recuerda por conexiones, no mirándolo
@@ -189,11 +194,12 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
     a 16k; ~log N). Extrapolado, 1M de recuerdos ≈ ~1000 nodos visitados (~0,1%).
   - **insertar tampoco escanea**: se navega el grafo para colocar cada recuerdo
     (~293 visitas, constante), estilo HNSW. recall del grafo así construido: 1,0.
-  Primera pieza landed: `hipercampo/navgraph.py` (algoritmo puro, sin tocar el camino
-  caliente) + `tests/test_navgraph.py`. Siguientes fases: persistir el grafo en la tabla
-  `links` (knn + atajos) al recordar, y que `recall` navegue (beam) desde un hub o el
-  contexto actual, con respaldo a escaneo en memorias pequeñas. Promesa: *recall y
-  escritura sublineales; recall@5 ≥0,9; medido en datos reales, no solo sintéticos.*
+  Ya está integrado: `remember` mantiene vecinos KNN sin reindexado global y `recall`
+  navega con beam, expone `visited`/`recall_mode` y conserva el escaneo como fallback.
+  El grafo sobrevive al reinicio y no cruza namespaces; lo prueban `test_navgraph.py` y
+  `test_navindex.py`. La UI hace visible el modo y coste de cada recall. Siguiente reto:
+  reducir las visitas en colecciones medianas y validar recall@5 ≥0,9 a 100k+ con datos
+  externos, sin esconder el fallback ni proclamar sublinealidad donde aún no se mida.
 - ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
   i18n dentro, y UX que salga de usarlo de verdad.
 - ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos

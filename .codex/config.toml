@@ -1,0 +1,7 @@
+[mcp_servers.hipercampo]
+command = "python"
+args = ["-m", "hipercampo.server"]
+cwd = "."
+env = { HIPERCAMPO_NAMESPACE = "proj-hipercampo" }
+startup_timeout_sec = 20
+default_tools_approval_mode = "writes"

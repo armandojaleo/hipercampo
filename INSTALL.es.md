@@ -2,7 +2,7 @@
 
 🌍 **English: [INSTALL.md](INSTALL.md)** · Estás leyendo la versión en español.
 
-De cero a "Claude tiene memoria" en unos minutos. Elige **una** de las dos vías
+De cero a "tu agente tiene memoria local duradera" en unos minutos. Elige **una** de las dos vías
 (A: Python local — la más simple para empezar; B: Docker — más portable).
 
 Requisitos: **Python 3.11+** (vía A) o **Docker** (vía B). Windows, macOS o Linux.
@@ -116,7 +116,21 @@ docker compose run --rm hipercampo   # arranca el server (stdio); Ctrl+C para sa
 
 ---
 
-## Paso final · Conectar con Claude
+## Paso final · Conectar tu agente
+
+### Codex (CLI / extensión IDE / aplicación de escritorio)
+
+Codex admite servidores MCP locales por STDIO y sus clientes locales comparten la
+configuración MCP:
+
+```bash
+codex mcp add hipercampo --env HIPERCAMPO_NAMESPACE=proj-NOMBRE -- python -m hipercampo.server
+codex mcp list
+```
+
+Este repositorio incluye además `.codex/config.toml`, limitado al proyecto y con el
+namespace `proj-hipercampo`. Reinicia Codex después de añadir o cambiar un servidor.
+Consulta la [documentación oficial de MCP en Codex](https://learn.chatgpt.com/docs/extend/mcp).
 
 ### Claude Code (CLI / extensión de VSCode)
 

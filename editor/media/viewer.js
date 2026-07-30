@@ -28,6 +28,7 @@
       nadaMostrar: "Nada que mostrar. Prueba a limpiar el buscador o activa «todos los contextos».",
       mImp: "imp", mFiab: "fiab", mFuerza: "fuerza", mUsos: "usos", mVisto: "visto",
       relevancia: "relevancia", flagsTitle: "latente/consolidado/reemplazado/pronto-latente",
+      nodosVisitados: (n) => `${n} nodos visitados`,
       actMuse: "Conexiones (muse)", actWake: "Despertar", actMove: "Mover a otro contexto",
       actForget: "Olvidar (reversible)", actPurge: "Borrar del todo (irreversible)",
       leyAsociacion: "asociación", leyPuente: "puente onírico",
@@ -102,6 +103,7 @@
       nadaMostrar: "Nothing to show. Try clearing the search or turn on “all contexts”.",
       mImp: "imp", mFiab: "conf", mFuerza: "strength", mUsos: "uses", mVisto: "seen",
       relevancia: "relevance", flagsTitle: "dormant/consolidated/superseded/soon-dormant",
+      nodosVisitados: (n) => `${n} nodes visited`,
       actMuse: "Connections (muse)", actWake: "Wake", actMove: "Move to another context",
       actForget: "Forget (reversible)", actPurge: "Delete for good (irreversible)",
       leyAsociacion: "association", leyPuente: "dream bridge",
@@ -321,8 +323,16 @@
     const flags = [m.dormant ? "💤" : "", m.consolidated ? "📦" : "",
       m.superseded ? "↩" : "", prontoLatente(m) ? "⚠️" : ""].join("");
     const ns = m.namespace ? `<span class="ns" style="color:${nsColor(m.namespace)}">⟨${esc(m.namespace)}⟩</span>` : "";
+    const comp = m.score_components || {};
+    const compTitle = Object.keys(comp).length
+      ? Object.entries(comp).map(([k, v]) => `${k}: ${(+v).toFixed(2)}`).join(" · ")
+      : L.relevancia;
     const score = (m.score != null)
-      ? `<span class="badge" title="${L.relevancia}">score ${(+m.score).toFixed(2)}</span>` : "";
+      ? `<span class="badge" title="${esc(compTitle)}">score ${(+m.score).toFixed(2)}</span>` : "";
+    const route = (m.recall_mode && Number.isInteger(m.visited))
+      ? `<span class="badge" title="${esc(L.nodosVisitados(m.visited))}">`
+        + `${esc(m.recall_mode)} · ${m.visited}</span>`
+      : "";
     const metrics = [metric(L.mImp, m.importance), metric(L.mFiab, m.confidence),
       metric(L.mFuerza, m.strength),
       (m.access_count != null ? `<span>${L.mUsos} <b>${m.access_count}</b></span>` : ""),
@@ -330,7 +340,7 @@
       .filter(Boolean).join("");
     el.innerHTML =
       `<div class="head"><span class="id">#${m.id}</span>`
-      + `<span class="badge">${esc(m.kind || "?")}</span>${ns}${score}`
+      + `<span class="badge">${esc(m.kind || "?")}</span>${ns}${score}${route}`
       + `<span class="flags" title="${L.flagsTitle}">${flags}</span>`
       + `<span class="actions">`
       + `<button data-act="muse" title="${L.actMuse}">💡</button>`
@@ -964,4 +974,4 @@
   aplicarIdioma();
   $("all").checked = true;
   vscode.postMessage({ type: "ready" });
-}());
+})();

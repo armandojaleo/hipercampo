@@ -8,13 +8,31 @@ una decisión consciente (y una entrada en el CHANGELOG), no un despiste.
 Ejecuta:  python tests/test_api_contract.py
 """
 
+import atexit
 import inspect
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from helpers import ejecutar, limpiar, memoria      # noqa: E402
+
+# El contrato del servidor nunca debe abrir la memoria real del desarrollador.
+_SERVER_DB = Path("data/_t_api_server.db")
+os.environ["HIPERCAMPO_DB"] = str(_SERVER_DB)
+os.environ["HIPERCAMPO_NAMESPACE"] = "test-api-contract"
+
+
+def _cerrar_server_de_prueba():
+    server = sys.modules.get("hipercampo.server")
+    if server is not None:
+        server.hc.close()
+    for suffix in ("", "-wal", "-shm"):
+        Path(str(_SERVER_DB) + suffix).unlink(missing_ok=True)
+
+
+atexit.register(_cerrar_server_de_prueba)
 
 # herramienta -> parámetros (nombre: ¿tiene valor por defecto?)
 HERRAMIENTAS = {

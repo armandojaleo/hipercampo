@@ -7,6 +7,25 @@ on:
     branches: [main]
 
 jobs:
+  viewer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Comprobar JavaScript del webview
+        run: node --check media/viewer.js
+      - name: Compilar extensión
+        run: npm run compile
+
   test:
     # hipercampo es una app LOCAL: Windows y macOS no son opcionales.
     # La matriz completa solo en la versión estable; los extremos, en Linux.

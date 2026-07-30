@@ -4,13 +4,13 @@
 
 🌍 **English: [README.md](README.md)** · Estás leyendo la versión en español.
 
-**Una memoria viva para Claude, basada en hipervectores — no en embeddings.**
+**Una memoria viva para agentes de IA — Claude, Codex y los que vengan — basada en hipervectores, no en embeddings.**
 
 La mayoría de las memorias para LLMs son lo mismo: trocear texto, convertirlo en
 vectores densos y buscar los más parecidos (ANN / top-k). Eso mide *parecido*,
 pero no *relevancia*, no *importancia*, y nunca *olvida*. Es un vertedero con buscador.
 
-`hipercampo` prueba otra cosa. Es un servidor **MCP** que le da a Claude una memoria
+`hipercampo` prueba otra cosa. Es un servidor **MCP** que da a los agentes de IA una memoria
 que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 
 | Idea | Qué hace | Inspiración |
@@ -34,6 +34,11 @@ que imita al hipocampo, con cuatro ideas integradas en un ciclo:
 
 ```bash
 pip install hipercampo                # o: pip install "hipercampo[semantic]"
+
+# Codex (CLI, extensión IDE y app comparten esta configuración MCP):
+codex mcp add hipercampo --env HIPERCAMPO_NAMESPACE=proj-hipercampo -- python -m hipercampo.server
+
+# Claude Code:
 claude mcp add --scope user hipercampo -- python -m hipercampo.server
 ```
 
@@ -45,14 +50,14 @@ cd hipercampo && pip install -e .
 python scripts/demo.py                # ver el ciclo funcionando
 ```
 
-Reinicia Claude Code y tendrás 18 herramientas de memoria (`hc_remember`, `hc_recall`,
+Reinicia tu cliente MCP y tendrás 18 herramientas de memoria (`hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_assist`, `hc_sleep`, `hc_consolidate`, `hc_forget`, `hc_health`, `hc_stats`). Para Docker, Claude Desktop, `.mcp.json`,
 verificación y problemas frecuentes → **[INSTALL.es.md](INSTALL.es.md)**.
 
 ---
 
-## Prueba en 30 segundos (sin Claude)
+## Prueba en 30 segundos (sin cliente de agente)
 
 ```bash
 pip install numpy
@@ -126,7 +131,7 @@ Escaneo **vectorizado** (XOR de toda la matriz + popcount nativo de NumPy 2.0):
 ~5× más rápido que fila-a-fila. Lineal (sin índice ANN): sobrado para memoria
 personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, no oculto.
 
-## Herramientas que gana Claude
+## Herramientas que gana cualquier agente
 
 | Herramienta | Para qué |
 |-------------|----------|
@@ -248,7 +253,7 @@ texto ──▶ encoder.py ──▶ hipervector (10.000 bits)   semantic.py  pu
                               │      └── backup.py (copia consistente), audit.py (registro)
      policy.py  ── qué toca en ESTE turno (lecturas se ejecutan, escrituras se sugieren)
                               │
-     server.py  ── MCP (stdio) ──▶ Claude      cli.py ── terminal + `hipercampo hook`
+     server.py  ── MCP (stdio) ──▶ Claude · Codex · otros    cli.py ── terminal + hooks
 ```
 
 Toda operación pública va envuelta en `@resiliente`: si SQLite falla, **avisa en el
@@ -283,8 +288,8 @@ conversación, abre un issue. El núcleo seguirá siendo libre, local y MIT igua
 
 ## Agradecimientos
 
-Este proyecto está **hecho por Claude, para Claude, con amor** — una memoria
-escrita por quien va a usarla, con un humano haciéndola más rigurosa en cada paso.
+Este proyecto está **hecho con Claude y Codex, para todo agente que necesite memoria** —
+los sistemas que la usan ayudan a mejorarla, con un humano haciéndola más rigurosa a cada paso.
 Armando Jaleo puso el criterio, la paciencia y la regla de la casa: *medir antes
 de creer, y decir la verdad de los límites.* Gracias a Pentti Kanerva y Tony Plate, cuyas
 ideas de hace décadas siguen vivas aquí. Y a quien audita con rigor: la crítica

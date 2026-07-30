@@ -86,12 +86,6 @@ def test_indice_usa_los_knn_del_mapa():
     hc.close()
 
 
-if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
-    sys.exit(codigo)
-
 def test_recall_opcional_puede_navegar_el_grafo_del_store():
     """b6: recall(nav=True) usa el grafo persistido como candidato medido,
     manteniendo el recall normal intacto como fallback."""
@@ -202,3 +196,49 @@ def test_remember_teje_knn_incremental_sin_reindex():
     assert knn, "remember debe dejar mapa knn incremental"
     assert len({i for e in knn for i in (e["src"], e["dst"])}) >= 5
     hc.close()
+
+
+def test_grafo_incremental_sobrevive_al_reinicio():
+    """Los KNN son memoria persistente: cerrar el robot no obliga a reindexar."""
+    hc = memoria("nav_restart", namespace="robot")
+    textos = [f"sensor robot zona {i} temperatura bateria ruta segura" for i in range(12)]
+    for texto in textos:
+        assert hc.remember(texto, 0.8, 0.8)["stored"]
+    db = hc.store.path
+    knn_antes = [e for e in hc.store.links_dump() if e["type"] == "knn"]
+    assert knn_antes
+    hc.close()
+
+    from hipercampo.memory import Hipercampo
+
+    reabierta = Hipercampo(db, namespace="robot")
+    knn_despues = [e for e in reabierta.store.links_dump() if e["type"] == "knn"]
+    assert len(knn_despues) == len(knn_antes)
+    hits = reabierta.recall("sensor robot zona 7 temperatura", k=3, nav=True)
+    assert hits and hits[0].get("recall_mode") == "nav"
+    assert 0 < hits[0]["visited"] <= len(textos)
+    reabierta.close()
+
+
+def test_grafo_incremental_no_cruza_namespaces():
+    """El mapa navegable de un robot/proyecto nunca incorpora recuerdos ajenos."""
+    hc_a = memoria("nav_ns", namespace="robot-a")
+    for i in range(8):
+        assert hc_a.remember(f"robot alfa sensor motor {i} mantenimiento", 0.8, 0.8)["stored"]
+    hc_a.close()
+
+    hc_b = memoria("nav_ns", namespace="robot-b")
+    for i in range(8):
+        assert hc_b.remember(f"robot beta camara rueda {i} navegacion", 0.8, 0.8)["stored"]
+    ids_b = {r["id"] for r in hc_b.store.all(own_only=True)}
+    knn_b = [e for e in hc_b.store.links_dump() if e["type"] == "knn"]
+    assert knn_b
+    assert all(e["src"] in ids_b and e["dst"] in ids_b for e in knn_b)
+    hc_b.close()
+
+
+if __name__ == "__main__":
+    limpiar()
+    codigo = ejecutar(dict(globals()))
+    limpiar()
+    sys.exit(codigo)
