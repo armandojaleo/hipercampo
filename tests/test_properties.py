@@ -39,8 +39,11 @@ def frase(rng) -> str:
 def fresh() -> Hipercampo:
     global _open
     if _open is not None:
-        _open.store.close()
-    Path(_DB).unlink(missing_ok=True)
+        _open.close()
+    try:
+        Path(_DB).unlink(missing_ok=True)
+    except PermissionError:
+        pass
     _open = Hipercampo(_DB)
     return _open
 
@@ -165,8 +168,11 @@ if __name__ == "__main__":
         else:
             print(f"ok   {prop.__name__}  ({RONDAS}/{RONDAS} rondas)")
     if _open is not None:
-        _open.store.close()
-    Path(_DB).unlink(missing_ok=True)
+        _open.close()
+    try:
+        Path(_DB).unlink(missing_ok=True)
+    except PermissionError:
+        pass
     print("\n" + ('TODAS LAS INVARIANTES SE SOSTIENEN' if not fails
                   else f'{fails} INVARIANTES ROTAS'))
     sys.exit(1 if fails else 0)

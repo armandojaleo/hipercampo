@@ -17,8 +17,11 @@ _cur = None
 def fresh():
     global _cur
     if _cur is not None:
-        _cur.store.close()
-    Path(_DB).unlink(missing_ok=True)
+        _cur.close()
+    try:
+        Path(_DB).unlink(missing_ok=True)
+    except PermissionError:
+        pass
     _cur = Hipercampo(_DB)
     return _cur
 
@@ -125,7 +128,10 @@ if __name__ == "__main__":
             except AssertionError as e:
                 fails += 1; print(f"FAIL {name}: {e}")
     if _cur is not None:
-        _cur.store.close()
-    Path(_DB).unlink(missing_ok=True)
+        _cur.close()
+    try:
+        Path(_DB).unlink(missing_ok=True)
+    except PermissionError:
+        pass
     print(f"\n{'OK' if not fails else f'{fails} FALLARON'}")
     sys.exit(1 if fails else 0)

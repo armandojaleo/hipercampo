@@ -18,7 +18,7 @@ _cur = None
 def _open(ns="m"):
     global _cur
     if _cur is not None:
-        _cur.store.close()
+        _cur.close()
     _clean()
     _cur = Hipercampo(_DB, namespace=ns)
     return _cur
@@ -27,9 +27,12 @@ def _open(ns="m"):
 def _clean():
     global _cur
     if _cur is not None:
-        _cur.store.close(); _cur = None
+        _cur.close(); _cur = None
     for suf in ("", "-wal", "-shm"):
-        Path(_DB + suf).unlink(missing_ok=True)
+        try:
+            Path(_DB + suf).unlink(missing_ok=True)
+        except PermissionError:
+            pass
 
 
 def _envejecer(hc, dias):
