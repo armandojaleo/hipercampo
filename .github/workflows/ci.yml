@@ -30,7 +30,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: pip install -e . ruff coverage mypy
+        run: pip install -e . ruff coverage mypy pytest
 
       - name: Lint (ruff)
         run: python -m ruff check hipercampo/ tests/ scripts/ examples/
