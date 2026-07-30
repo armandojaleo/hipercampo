@@ -23,7 +23,7 @@ _current: Hipercampo | None = None
 def fresh() -> Hipercampo:
     global _current
     if _current is not None:
-        _current.close()                # liberar todos los handles (Windows bloquea)
+        _current.close()
         _current = None
     for suf in ("", "-wal", "-shm"):
         Path(_DB + suf).unlink(missing_ok=True)
@@ -164,7 +164,8 @@ if __name__ == "__main__":
                 fails += 1
                 print(f"FAIL {name}: {e}")
     if _current is not None:
-        _current.store.close()
+        _current.close()
+        _current = None
     Path(_DB).unlink(missing_ok=True)
     print(f"\n{'TODOS PASARON' if not fails else f'{fails} FALLARON'}")
     sys.exit(1 if fails else 0)
