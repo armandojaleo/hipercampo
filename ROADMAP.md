@@ -12,14 +12,14 @@ SaaS encima, sería otro proyecto; el núcleo se mantiene local y simple.
 Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
 ## Estado actual — v0.1.0b12 (30 jul 2026)
 
-La candidata b12 está cerrada localmente; publicación pendiente de CI multiplataforma.
+La beta b12 está cerrada y publicada en PyPI tras CI multiplataforma verde.
 
 - ✅ **CI multiplataforma:** suites completas en Windows, macOS y Ubuntu con Python 3.11–3.13.
 - ✅ **Puertas de calidad:** Ruff, Mypy y cobertura ejecutados en CI; benchmarks bloquean regresiones.
 - ✅ **MCP operativo:** dependencia compatible, smoke de release y herramientas acotables por presupuesto.
 - ✅ **Memoria navegable:** índice/grafo con navegación y fallback seguro a escaneo; `nav=auto` y `max_scan` expuestos por MCP.
 - ✅ **Fiabilidad Windows:** cierres SQLite, migraciones y procesos auxiliares cubiertos en CI.
-- ✅ **Publicación:** `v0.1.0b11` publicada; `v0.1.0b12` preparada para CI y Trusted Publishing.
+- ✅ **Publicación:** `v0.1.0b12` publicada mediante Trusted Publishing y attestations.
 - 🟡 **Calidad semántica:** el banco sintético marca el siguiente cuello de botella: sinónimos (global ~0.742 en modo léxico).
 
 ### Siguiente tramo
