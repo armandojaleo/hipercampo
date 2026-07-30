@@ -739,11 +739,13 @@ def main(argv=None) -> int:
         sp = sub.add_parser(nombre, help=ayuda)
         sp.add_argument("text", nargs="*", help="texto o consulta")
         sp.add_argument("--plain", action="store_true", help="salida legible, no JSON")
-        if nombre == "recall":
+        if nombre in ("assist", "recall"):
             sp.add_argument("--nav", action="store_true",
                             help="usar el grafo navegable como generador de candidatos")
             sp.add_argument("--nav-auto", action="store_true",
                             help="decidir automaticamente si navegar o escanear")
+            sp.add_argument("--max-scan", type=int,
+                            help="acotar cuántos recuerdos escanear como máximo")
         if nombre == "remember":
             sp.add_argument("--importance", type=float, default=0.5)
             sp.add_argument("--confidence", type=float, default=0.5)
@@ -869,10 +871,13 @@ def main(argv=None) -> int:
             if not texto:
                 print("Falta el texto.", file=sys.stderr); return 2
             if args.cmd == "assist":
-                _print(hc.assist(texto), plain=args.plain)
+                modo_nav = "auto" if getattr(args, "nav_auto", False) else getattr(args, "nav", False)
+                _print(hc.assist(texto, max_scan=getattr(args, "max_scan", None),
+                                 nav=modo_nav), plain=args.plain)
             elif args.cmd == "recall":
                 modo_nav = "auto" if getattr(args, "nav_auto", False) else getattr(args, "nav", False)
-                _print(hc.recall(texto, nav=modo_nav), plain=args.plain)
+                _print(hc.recall(texto, max_scan=getattr(args, "max_scan", None),
+                                 nav=modo_nav), plain=args.plain)
             elif args.cmd == "muse":
                 _print(hc.muse(texto), plain=args.plain)
             elif args.cmd == "remember":
