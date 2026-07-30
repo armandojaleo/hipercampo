@@ -27,8 +27,8 @@ La línea de estabilidad de la beta está cerrada y publicada en PyPI.
 1. ✅ Recuperación explicable (`score_components`) en core/MCP y tooltip visible en la
    extensión; contrato protegido por tests.
 2. ✅ Grafo navegable persistente, incremental y jerárquico, aislado por namespace.
-   En 100.000 recuerdos estructurados: precisión de grupo@5=1,000, p50=6,71 ms,
-   p95=7,44 ms y 1,094% visitado; reutilizar el índice residente cuesta 0,073 ms.
+   En 100.000 recuerdos estructurados: precisión de grupo@5=1,000, p50=5,99 ms,
+   p95=6,97 ms y 1,094% visitado; índice residente 157,2 MB y reutilización 0,071 ms.
    La prueba reproducible vive en `scripts/nav_scale.py`. Falta corpus externo.
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
@@ -118,9 +118,10 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
   tabla de respaldo. ~5× más rápido (10k: 224→47 ms). recall() 2k ~40ms, 10k ~164ms.
 - 🟢 **Índice navegable jerárquico a 100k**: landmarks por isla semántica + selección
   VSA vectorizada + beam local. En el banco estructurado reproducible (30 consultas),
-  precisión de grupo@5 **1,000**, p50 **6,71 ms**, p95 **7,44 ms**, **1,094%** visitado.
-  Construcción fría 14,6 s / pico 558,8 MB; reutilización residente 0,073 ms. El pico
-  de construcción es el siguiente objetivo embebido; la validación externa sigue abierta.
+  precisión de grupo@5 **1,000**, p50 **5,99 ms**, p95 **6,97 ms**, **1,094%** visitado.
+  La carga SQL estrecha/streaming y la adyacencia CSR bajan la construcción fría de
+  14,6→**6,63 s**, el pico de 558,8→**202,0 MB** y dejan **157,2 MB residentes**;
+  reutilización 0,071 ms. La validación externa sigue abierta.
 
 ## Fase 4 — Aislamiento local de contextos (NO servidor multiusuario)
 Fuera de alcance auth/cifrado/Postgres/red: cada usuario es local. Lo útil aquí es
@@ -208,10 +209,12 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   ante cambios locales/externos. El salto de escala añade una capa jerárquica: detecta
   islas semánticas, compara sus landmarks con popcount VSA vectorizado y navega localmente
   desde las cuatro más cercanas. En 100.000 recuerdos estructurados (30 consultas):
-  precisión de grupo@5 **1,000** (antes **0,400** con una entrada), p50 **6,71 ms**,
-  p95 **7,44 ms** y **1,094%** visitado. Construcción fría 14,6 s, pico 558,8 MB;
-  reutilización residente 0,073 ms. `scripts/nav_scale.py` lo reproduce. Siguiente reto:
-  bajar RAM/arranque y validar recall@5 ≥0,9 en corpus externo, sin esconder el fallback.
+  precisión de grupo@5 **1,000** (antes **0,400** con una entrada), p50 **5,99 ms**,
+  p95 **6,97 ms** y **1,094%** visitado. Después, carga SQL estrecha y streaming evita
+  materializar recuerdos/enlaces completos, y CSR compacta las calles del GPS: construcción
+  fría **14,6→6,63 s**, pico **558,8→202,0 MB**, residente **157,2 MB** y reutilización
+  0,071 ms. `scripts/nav_scale.py` lo reproduce. Siguiente reto: matriz VSA contigua y
+  validar recall@5 ≥0,9 en corpus externo, sin esconder el fallback.
 - ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
   i18n dentro, y UX que salga de usarlo de verdad.
 - ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos

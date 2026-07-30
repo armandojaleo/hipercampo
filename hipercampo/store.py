@@ -759,11 +759,24 @@ class Store:
         cached = self._nav_cache.get(shortcuts)
         if cached is not None and cached[0] == data_version:
             return cached[1]
-        rows = self.all(only_active=False, own_only=True, include_dormant=True)
-        codes = {r["id"]: self.hv_of(r) for r in rows}
-        edges = [(e["src"], e["dst"]) for e in self.links_dump()
-                 if e["type"] == "knn" and e["src"] in codes and e["dst"] in codes]
-        graph = NavGraph.desde_enlaces(codes, edges, shortcuts=shortcuts)
+        # Camino estrecho: el GPS no necesita texto ni metadatos. Iterar cursores con
+        # solo las columnas útiles evita materializar dos volcados completos a 100k+.
+        code_rows = self.db.execute(
+            "SELECT id, hv FROM memories WHERE namespace=?", (self.namespace,)
+        )
+        codes = {int(mid): from_blob(hv) for mid, hv in code_rows}
+        edge_rows = self.db.execute(
+            "SELECT src, dst FROM links WHERE namespace=? AND type='knn'",
+            (self.namespace,),
+        )
+        edges = (
+            (int(src), int(dst))
+            for src, dst in edge_rows
+            if src in codes and dst in codes
+        )
+        graph = NavGraph.desde_enlaces(
+            codes, edges, shortcuts=shortcuts, compact=True
+        )
         self._nav_cache[shortcuts] = (data_version, graph)
         return graph
 

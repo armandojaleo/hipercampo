@@ -73,7 +73,7 @@ def benchmark(n: int) -> None:
     started = time.perf_counter()
     graph = store.navgraph(shortcuts=2)
     cold_ms = (time.perf_counter() - started) * 1000
-    _, peak = tracemalloc.get_traced_memory()
+    resident, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
     started = time.perf_counter()
@@ -83,9 +83,10 @@ def benchmark(n: int) -> None:
     rng = np.random.default_rng(7)
     sample = rng.choice(len(bases), size=min(QUERIES, len(bases)), replace=False)
     print(
-        f"N={n:,} · seed={seed_ms / 1000:.2f}s · "
-        f"index cold={cold_ms:.1f}ms warm={warm_ms:.3f}ms · "
-        f"index peak={peak / 1024 / 1024:.1f}MB · same={same is graph}"
+        f"N={n:,} | seed={seed_ms / 1000:.2f}s | "
+        f"index cold={cold_ms:.1f}ms warm={warm_ms:.3f}ms | "
+        f"index resident={resident / 1024 / 1024:.1f}MB "
+        f"peak={peak / 1024 / 1024:.1f}MB | same={same is graph}"
     )
     for ef, entry_count in ((16, 0), (32, 0), (48, 0), (48, 1)):
         entries = None
@@ -107,11 +108,11 @@ def benchmark(n: int) -> None:
                 / len(top)
             )
         print(
-            f"  ef={ef:>2} entries={'auto' if entries is None else entry_count} · "
+            f"  ef={ef:>2} entries={'auto' if entries is None else entry_count} | "
             f"p50={statistics.median(latencies):.3f}ms "
-            f"p95={percentile(latencies, 0.95):.3f}ms · "
+            f"p95={percentile(latencies, 0.95):.3f}ms | "
             f"visited={statistics.mean(visits):.1f} "
-            f"({100 * statistics.mean(visits) / n:.3f}%) · "
+            f"({100 * statistics.mean(visits) / n:.3f}%) | "
             f"cluster precision@5={statistics.mean(precision):.3f}"
         )
     store.close()

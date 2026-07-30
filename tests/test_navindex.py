@@ -79,10 +79,10 @@ def test_indice_usa_los_knn_del_mapa():
     hc = memoria("navidx2", namespace="proj")
     _sembrar(hc, n_temas=8, por=8, seed=5)
     g0 = hc.store.navgraph(shortcuts=0)             # sin knn aún: solo nodos, sin aristas
-    aristas0 = sum(len(v) for v in g0.adj.values())
+    aristas0 = g0.edge_count
     hc.store.reindex_navgraph(M=10)
     g1 = hc.store.navgraph(shortcuts=0)             # ya con knn
-    aristas1 = sum(len(v) for v in g1.adj.values())
+    aristas1 = g1.edge_count
     assert aristas1 > aristas0, "el índice debe heredar los knn tejidos"
     hc.close()
 
@@ -268,6 +268,23 @@ def test_grafo_residente_se_reutiliza_e_invalida_con_cambios_reales():
     g4 = hc.store.navgraph(shortcuts=2)
     assert g4 is not g3 and len(g4) == len(g3) + 1
     hc.close()
+
+def test_carga_del_gps_no_materializa_volcados_completos():
+    """Construir el índice solo lee ids, vectores y extremos KNN por SQL estrecho."""
+    hc = memoria("nav_lean_load", namespace="robot")
+    for i in range(8):
+        text = f"sensor robot {i}"
+        hc.store.add(text, encode_text(text), 1.0, 0.8, 0.8)
+    hc.store.reindex_navgraph(M=4)
+
+    def prohibido(*args, **kwargs):
+        raise AssertionError("el GPS no debe usar volcados completos")
+
+    hc.store.all = prohibido
+    hc.store.links_dump = prohibido
+    graph = hc.store.navgraph(shortcuts=1)
+    assert len(graph) == 8
+    assert graph.is_compact
 
 if __name__ == "__main__":
     limpiar()

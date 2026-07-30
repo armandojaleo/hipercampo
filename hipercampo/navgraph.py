@@ -55,6 +55,9 @@ class NavGraph:
         self.entry: int | None = None          # hub de entrada (nodo muy conectado)
         self.entries: list[int] = []           # representantes de islas semánticas
         self._entry_matrix: np.ndarray | None = None
+        self._node_positions: dict[int, int] | None = None
+        self._neighbor_offsets: np.ndarray | None = None
+        self._neighbor_ids: np.ndarray | None = None
         self._rnd = random.Random(seed)
 
     def __len__(self) -> int:
@@ -62,7 +65,7 @@ class NavGraph:
 
     @classmethod
     def desde_enlaces(cls, codes: dict, edges, shortcuts: int = 2, seed: int = 0,
-                      **kw) -> "NavGraph":
+                      compact: bool = False, **kw) -> "NavGraph":
         """Construye el índice a partir de enlaces YA existentes (los knn del mapa) +
         atajos de largo alcance efímeros (del índice, no del mapa: no se guardan ni se
         muestran, y no propagan activación — solo hacen navegable el grafo). `codes`
@@ -103,6 +106,8 @@ class NavGraph:
         if ids:                                  # entrada = el nodo más conectado
             g.entry = max(ids, key=lambda x: len(g.adj[x]))
         g._refresh_entry_matrix()
+        if compact:
+            g._compact()
         return g
 
     # --- construcción ---------------------------------------------------------
@@ -138,6 +143,51 @@ class NavGraph:
             return
         self._entry_matrix = np.stack([self.code[mid] for mid in self.entries])
 
+    @property
+    def is_compact(self) -> bool:
+        """El mapa terminado usa arrays contiguos en vez de objetos por arista."""
+        return self._neighbor_offsets is not None
+
+    @property
+    def edge_count(self) -> int:
+        """Número de aristas dirigidas del mapa, sea dinámico o compacto."""
+        if self._neighbor_offsets is not None:
+            return int(self._neighbor_offsets[-1])
+        return sum(len(neighbors) for neighbors in self.adj.values())
+
+    def _compact(self) -> None:
+        """Convierte la adyacencia estática a CSR para reducir la RAM residente."""
+        ids = list(self.code)
+        if not ids:
+            return
+        offsets = np.empty(len(ids) + 1, dtype=np.uint64)
+        offsets[0] = 0
+        total = 0
+        for pos, mid in enumerate(ids, start=1):
+            total += len(self.adj.get(mid, ()))
+            offsets[pos] = total
+        id_dtype = np.uint32 if max(ids) <= np.iinfo(np.uint32).max else np.uint64
+        neighbors = np.empty(total, dtype=id_dtype)
+        cursor = 0
+        for mid in ids:
+            actuales = self.adj.pop(mid, ())
+            siguiente = cursor + len(actuales)
+            neighbors[cursor:siguiente] = actuales
+            cursor = siguiente
+        self._node_positions = {mid: pos for pos, mid in enumerate(ids)}
+        self._neighbor_offsets = offsets
+        self._neighbor_ids = neighbors
+
+    def _neighbors_of(self, mid: int):
+        if self._neighbor_offsets is None or self._neighbor_ids is None:
+            return self.adj.get(mid, ())
+        assert self._node_positions is not None
+        pos = self._node_positions.get(mid)
+        if pos is None:
+            return ()
+        start = int(self._neighbor_offsets[pos])
+        end = int(self._neighbor_offsets[pos + 1])
+        return self._neighbor_ids[start:end]
     def _conectar(self, a: int, b: int) -> None:
         if a == b or b in self.adj[a]:
             return
@@ -192,7 +242,8 @@ class NavGraph:
             d, c = heapq.heappop(cand)
             if res and d > -res[0][0] and len(res) >= ef:
                 break                           # nada por explorar mejora a los mejores
-            for nb in self.adj.get(c, ()):
+            for raw_nb in self._neighbors_of(c):
+                nb = int(raw_nb)
                 if nb in vis or nb == excluir:
                     continue
                 vis.add(nb)
