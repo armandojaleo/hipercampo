@@ -32,7 +32,8 @@ HERRAMIENTAS = {
     "hc_dream":         {"max_bridges": True, "dry_run": True},
     "hc_accept_bridge": {"a_id": False, "b_id": False},
     "hc_reject_bridge": {"a_id": False, "b_id": False},
-    "hc_assist":        {"message": False, "k": True},
+    "hc_assist":        {"message": False, "k": True, "max_scan": True,
+                         "nav": True, "nav_auto": True},
     "hc_sleep":         {},
     "hc_consolidate":   {},
     "hc_forget":        {"dry_run": True},
@@ -135,6 +136,38 @@ def test_forma_de_recall():
             "strength", "confidence", "utility"} <= set(hits[0]), hits[0]
 
 
+
+def test_hc_assist_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
+    import hipercampo.server as server
+
+    class FakeHC:
+        def __init__(self):
+            self.calls = []
+
+        def assist(self, message, k=3, max_scan=None, nav=False):
+            self.calls.append({
+                "message": message,
+                "k": k,
+                "max_scan": max_scan,
+                "nav": nav,
+            })
+            return {"action": "nothing"}
+
+    viejo = server.hc
+    fake = FakeHC()
+    server.hc = fake
+    try:
+        r = server.hc_assist("turno", k=99, max_scan=0, nav_auto=True)
+    finally:
+        server.hc = viejo
+
+    assert r == {"action": "nothing"}
+    assert fake.calls == [{
+        "message": "turno",
+        "k": 50,
+        "max_scan": 1,
+        "nav": "auto",
+    }]
 def test_forma_de_stats_y_health():
     hc = memoria("api_st")
     s = hc.stats()

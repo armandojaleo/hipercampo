@@ -354,11 +354,12 @@ class Hipercampo:
                     pass
         self._ss = None
 
-    def assist(self, message: str, k: int = 3) -> dict:
+    def assist(self, message: str, k: int = 3, max_scan: int | None = None,
+               nav: bool | str = False) -> dict:
         """¿Qué toca hacer en ESTE momento de la conversación? Decide la operación
         de memoria adecuada, ejecuta las lecturas y recomienda las escrituras."""
         from .policy import decide
-        return decide(self, message, k=k)
+        return decide(self, message, k=k, max_scan=max_scan, nav=nav)
 
     # --- los cuatro ejes, separados ------------------------------------
     @staticmethod

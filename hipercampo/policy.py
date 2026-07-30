@@ -89,14 +89,16 @@ _AFIRMACION = re.compile(
     r"my name is|remember that|note that)\b")
 
 
-def decide(hc, message: str, k: int = 3) -> dict:
+def decide(hc, message: str, k: int = 3, max_scan: int | None = None,
+           nav: bool | str = False) -> dict:
     """Decide y ejecuta lo seguro. Devuelve la acción, el porqué y el resultado."""
-    r = _decide(hc, message, k)
+    r = _decide(hc, message, k, max_scan=max_scan, nav=nav)
     audit.log("assist", f"{r['action']}: {r.get('why','')}")
     return r
 
 
-def _decide(hc, message: str, k: int = 3) -> dict:
+def _decide(hc, message: str, k: int = 3, max_scan: int | None = None,
+            nav: bool | str = False) -> dict:
     if not isinstance(message, str) or not message.strip():
         return {"action": "nothing", "why": "mensaje vacío"}
     msg = message.strip()
@@ -112,7 +114,7 @@ def _decide(hc, message: str, k: int = 3) -> dict:
     # 2) ¿pregunta por algo? -> recordar
     certeza = _es_pregunta(msg)
     if certeza:
-        hits = hc.recall(msg, k=k)
+        hits = hc.recall(msg, k=k, max_scan=max_scan, nav=nav)
         if certeza == "dudosa":                   # puede que no sea una pregunta:
             hits = [h for h in hits              # se le exige el listón de hablar
                     if h.get("sim", 0.0) >= VOLUNTEER_MIN_SIM]   # sin que pregunten
@@ -128,7 +130,7 @@ def _decide(hc, message: str, k: int = 3) -> dict:
 
     # 3) ¿afirma algo sobre el usuario o el proyecto? -> ¿guardar o actualizar?
     if _AFIRMACION.search(msg):
-        prev = hc.recall(msg, k=1)
+        prev = hc.recall(msg, k=1, max_scan=max_scan, nav=nav)
         sorpresa = hc.surprise.surprise(msg)
         if prev:
             p = prev[0]
@@ -147,7 +149,7 @@ def _decide(hc, message: str, k: int = 3) -> dict:
     # 4) por defecto (nadie ha preguntado): solo hablar si es CLARAMENTE relevante
     # Y encima va del mismo tema. Interrumpir con una asociación fantasma no solo
     # es ruido: son cientos de tokens de la ventana del usuario, gastados en nada.
-    hits = [h for h in hc.recall(msg, k=k)
+    hits = [h for h in hc.recall(msg, k=k, max_scan=max_scan, nav=nav)
             if h["score"] >= VOLUNTEER_MIN_SCORE
             and h.get("sim", 0.0) >= VOLUNTEER_MIN_SIM]
     if hits:

@@ -16,8 +16,6 @@ _cur = None
 
 def _open(ns="p"):
     global _cur
-    if _cur is not None:
-        _cur.store.close()
     _clean()
     _cur = Hipercampo(_DB, namespace=ns)
     return _cur
@@ -26,7 +24,8 @@ def _open(ns="p"):
 def _clean():
     global _cur
     if _cur is not None:
-        _cur.store.close(); _cur = None
+        _cur.close()
+        _cur = None
     for suf in ("", "-wal", "-shm"):
         Path(_DB + suf).unlink(missing_ok=True)
 

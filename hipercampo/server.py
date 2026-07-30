@@ -153,10 +153,15 @@ def hc_reject_bridge(a_id: int, b_id: int) -> dict:
 
 
 @tool
-def hc_assist(message: str, k: int = 3) -> dict:
+def hc_assist(message: str, k: int = 3, max_scan: int | None = None,
+              nav: bool = False, nav_auto: bool = False) -> dict:
     """¿Qué toca en este turno? Decide solo: recordar, inspirar, sugerir guardar o
-    callarse. Solo lee; escribir lo recomienda."""
-    return hc.assist(message, k)
+    callarse. max_scan/nav/nav_auto acotan y aceleran sus lecturas."""
+    k = min(50, max(1, int(k)))
+    if max_scan is not None:
+        max_scan = max(1, int(max_scan))
+    modo_nav = "auto" if nav_auto else bool(nav)
+    return hc.assist(message, k, max_scan=max_scan, nav=modo_nav)
 
 
 @tool
