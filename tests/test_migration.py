@@ -47,7 +47,7 @@ def test_abre_una_bd_antigua_sin_romper():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="proyecto")      # antes: OperationalError
     assert hc.stats()["total"] >= 0
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def test_migra_y_conserva_los_datos_viejos():
@@ -55,7 +55,7 @@ def test_migra_y_conserva_los_datos_viejos():
     hc = Hipercampo(_DB, namespace="default")       # los viejos quedan en 'default'
     textos = [r["text"] for r in hc.store.all(only_active=False)]
     assert any("version antigua" in t for t in textos), "no debe perder lo ya guardado"
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def test_migra_sin_perder_enlaces():
@@ -71,7 +71,7 @@ def test_migra_sin_perder_enlaces():
     hc = Hipercampo(_DB, namespace="default")
     vecinos = [d for d, _ in hc.store.neighbors(1)]
     assert 2 in vecinos, "el enlace anterior debe sobrevivir a la migración"
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def test_registra_la_version_del_esquema():
@@ -82,26 +82,26 @@ def test_registra_la_version_del_esquema():
     hc = Hipercampo(_DB, namespace="default")
     v = hc.store.db.execute("PRAGMA user_version").fetchone()[0]
     assert v == Store.SCHEMA_VERSION, f"esquema sin versionar: {v}"
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def test_migrar_dos_veces_no_hace_nada_la_segunda():
     """Idempotencia: reabrir una BD ya migrada no vuelve a tocar el esquema."""
     _crear_bd_v0()
-    hc = Hipercampo(_DB, namespace="default"); hc.store.close()
+    hc = Hipercampo(_DB, namespace="default"); hc.close()
     hc = Hipercampo(_DB, namespace="default")     # segunda apertura
     textos = [r["text"] for r in hc.store.all(only_active=False)]
     assert any("version antigua" in t for t in textos), f"se perdieron datos: {textos}"
     salud = hc.health()
     assert salud["sana"] is True, salud
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def test_deja_copia_de_seguridad_antes_de_migrar():
     """Si la migración destruyera algo, los recuerdos siguen en la copia."""
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")
-    hc.store.close()
+    hc.close()
     copia = Path(_DB + ".bak-v0")
     assert copia.exists(), "migró una BD con datos sin respaldarla"
     db = sqlite3.connect(str(copia))
@@ -123,7 +123,7 @@ def test_normaliza_estados_de_enlace_invalidos():
     hc = Hipercampo(_DB, namespace="default")
     estados = {r[0] for r in hc.store.db.execute("SELECT status FROM links")}
     assert estados <= {"proposed", "confirmed", "rejected"}, estados
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def test_la_bd_migrada_pasa_integrity_check():
@@ -134,7 +134,7 @@ def test_la_bd_migrada_pasa_integrity_check():
     hc = Hipercampo(_DB, namespace="default")
     assert hc.store.db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert hc.health(full=True)["sana"] is True
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def test_varios_procesos_abren_una_bd_nueva_a_la_vez():
@@ -148,7 +148,7 @@ def test_varios_procesos_abren_una_bd_nueva_a_la_vez():
         try:
             hc = Hipercampo(_DB, namespace=f"n{i}")
             hc.remember(f"recuerdo del hilo numero {i} para probar concurrencia", 0.5)
-            hc.store.close()
+            hc.close()
         except Exception as e:                       # noqa: BLE001
             errores.append(f"hilo {i}: {e}")
 
@@ -160,7 +160,7 @@ def test_varios_procesos_abren_una_bd_nueva_a_la_vez():
     assert not errores, errores
     hc = Hipercampo(_DB, namespace="n0")
     assert hc.store.db.execute("PRAGMA user_version").fetchone()[0] == Store_version()
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 def Store_version():
@@ -173,7 +173,7 @@ def test_puede_escribir_tras_migrar():
     hc = Hipercampo(_DB, namespace="default")
     r = hc.remember("algo nuevo despues de migrar el esquema viejo", 0.6)
     assert r["stored"] is True
-    hc.store.close(); _clean()
+    hc.close(); _clean()
 
 
 if __name__ == "__main__":

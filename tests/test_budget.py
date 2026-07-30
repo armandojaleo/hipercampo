@@ -362,6 +362,7 @@ def _tools(env: dict) -> list[str]:
                     "params": {"protocolVersion": "2024-11-05", "capabilities": {},
                                "clientInfo": {"name": "t", "version": "0"}}}),
         json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
         json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})]) + "\n"
     r = subprocess.run([sys.executable, "-m", "hipercampo.server"], input=msgs,
                        capture_output=True, text=True, encoding="utf-8", env=env)
