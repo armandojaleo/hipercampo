@@ -140,6 +140,26 @@ def test_busqueda_con_metricas_hace_un_solo_recorrido():
     assert llamadas == 1
 
 
+def test_landmarks_eligen_la_isla_semantica_correcta():
+    """Un representante por componente evita depender de atajos aleatorios."""
+    bases = [encode_text(f"concepto totalmente distinto {i}") for i in range(10)]
+    codes = {}
+    edges = []
+    for cluster, base in enumerate(bases):
+        ids = []
+        for item in range(5):
+            mid = cluster * 10 + item
+            codes[mid] = base.copy()
+            ids.append(mid)
+        edges.extend((ids[i], ids[i + 1]) for i in range(len(ids) - 1))
+
+    g = NavGraph.desde_enlaces(codes, edges, shortcuts=0)
+    found, visited = g.search_with_stats(bases[8], k=5, ef=8)
+
+    assert len(g.entries) == len(bases)
+    assert {mid // 10 for mid, _ in found} == {8}
+    assert visited >= len(g.entries)
+
 if __name__ == "__main__":
     limpiar()
     sys.exit(ejecutar(dict(globals())))

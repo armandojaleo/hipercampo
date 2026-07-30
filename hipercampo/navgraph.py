@@ -53,6 +53,8 @@ class NavGraph:
         self.adj: dict[int, list[int]] = {}
         self.code: dict[int, np.ndarray] = {}
         self.entry: int | None = None          # hub de entrada (nodo muy conectado)
+        self.entries: list[int] = []           # representantes de islas semánticas
+        self._entry_matrix: np.ndarray | None = None
         self._rnd = random.Random(seed)
 
     def __len__(self) -> int:
@@ -74,6 +76,24 @@ class NavGraph:
                 g.adj[a].append(b)
                 g.adj.setdefault(b, []).append(a)
         ids = list(g.code)
+        # Los enlaces reales pueden formar islas semánticas desconectadas. Elegimos
+        # un landmark por isla ANTES de añadir atajos efímeros, para seleccionar
+        # primero el concepto correcto y navegar después solo su vecindario.
+        vistos: set[int] = set()
+        for start in ids:
+            if start in vistos:
+                continue
+            componente: list[int] = []
+            pila = [start]
+            vistos.add(start)
+            while pila:
+                actual = pila.pop()
+                componente.append(actual)
+                for vecino in g.adj.get(actual, ()):
+                    if vecino not in vistos:
+                        vistos.add(vecino)
+                        pila.append(vecino)
+            g.entries.append(max(componente, key=lambda x: len(g.adj[x])))
         for mid in ids:                          # atajos small-world (índice interno)
             for _ in range(shortcuts):
                 r = g._rnd.choice(ids)
@@ -82,6 +102,7 @@ class NavGraph:
                     g.adj[r].append(mid)
         if ids:                                  # entrada = el nodo más conectado
             g.entry = max(ids, key=lambda x: len(g.adj[x]))
+        g._refresh_entry_matrix()
         return g
 
     # --- construcción ---------------------------------------------------------
@@ -94,6 +115,8 @@ class NavGraph:
         if not self.adj:                        # primer nodo
             self.adj[mid] = []
             self.entry = mid
+            self.entries = [mid]
+            self._refresh_entry_matrix()
             return
         self.adj[mid] = []
         _, cercanos = self._buscar(hv, self.ef, excluir=mid)
@@ -105,6 +128,15 @@ class NavGraph:
         # entrada = el nodo más conectado (una autopista por la que entrar barato)
         if self.entry is None or len(self.adj[mid]) > len(self.adj.get(self.entry, [])):
             self.entry = mid
+        self.entries = [self.entry] if self.entry is not None else []
+        self._refresh_entry_matrix()
+
+    def _refresh_entry_matrix(self) -> None:
+        """Precalcula landmarks contiguos para comparar conceptos en NumPy."""
+        if len(self.entries) < 8:
+            self._entry_matrix = None
+            return
+        self._entry_matrix = np.stack([self.code[mid] for mid in self.entries])
 
     def _conectar(self, a: int, b: int) -> None:
         if a == b or b in self.adj[a]:
@@ -122,15 +154,37 @@ class NavGraph:
                 entradas: list[int] | None = None) -> tuple[int, list[int]]:
         """Beam search: parte de las entradas y salta a vecinos más cercanos a q hasta
         que no mejora. Devuelve (nodos_visitados, ids ordenados por cercanía)."""
-        if entradas is None:
-            entradas = [self.entry] if self.entry is not None else []
         vis: set[int] = set()
         cand: list[tuple[int, int]] = []        # min-heap por distancia (frontera)
         res: list[tuple[int, int]] = []         # max-heap (negado) con los ef mejores
+        distancias: dict[int, int] = {}
+        if entradas is None:
+            landmarks = self.entries or (
+                [self.entry] if self.entry is not None else []
+            )
+            # Comparar un representante por componente cuesta C (conceptos), no N
+            # (recuerdos). Entramos por las cuatro islas semánticamente más cercanas.
+            if self._entry_matrix is not None and len(landmarks) == len(self.entries):
+                lote = _popcount_rows(np.bitwise_xor(self._entry_matrix, qhv))
+                for e, distancia in zip(self.entries, lote, strict=True):
+                    if e != excluir:
+                        distancias[e] = int(distancia)
+                        vis.add(e)
+            else:
+                for e in landmarks:
+                    if e == excluir or e not in self.code:
+                        continue
+                    distancias[e] = _hamming(qhv, self.code[e])
+                    vis.add(e)
+            entradas = [
+                e for e, _ in sorted(distancias.items(), key=lambda item: item[1])[:4]
+            ]
         for e in entradas:
             if e is None or e == excluir or e not in self.code:
                 continue
-            d = _hamming(qhv, self.code[e])
+            d = distancias.get(e)
+            if d is None:
+                d = _hamming(qhv, self.code[e])
             vis.add(e)
             heapq.heappush(cand, (d, e))
             heapq.heappush(res, (-d, e))

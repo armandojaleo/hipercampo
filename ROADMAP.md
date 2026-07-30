@@ -26,10 +26,10 @@ La línea de estabilidad de la beta está cerrada y publicada en PyPI.
 
 1. ✅ Recuperación explicable (`score_components`) en core/MCP y tooltip visible en la
    extensión; contrato protegido por tests.
-2. ✅ Grafo navegable persistente e incremental, aislado por namespace y probado tras
-   reiniciar. Búsqueda de una sola pasada: en 800 recuerdos mantiene recall@5=1,00 y
-   baja 392,6→180,9 visitas; el caso público de 120 baja 120→89. El grafo reside
-   en memoria: a 800 nodos, reconstruir 35,2 ms → reutilizar 0,054 ms. Falta 100k+.
+2. ✅ Grafo navegable persistente, incremental y jerárquico, aislado por namespace.
+   En 100.000 recuerdos estructurados: precisión de grupo@5=1,000, p50=6,71 ms,
+   p95=7,44 ms y 1,094% visitado; reutilizar el índice residente cuesta 0,073 ms.
+   La prueba reproducible vive en `scripts/nav_scale.py`. Falta corpus externo.
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
 4. Ablaciones y corpus externos para validar que la mejora no depende del banco sintético.
@@ -116,7 +116,11 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
 ## Fase 3 — Rendimiento a escala
 - 🟢 **Escaneo vectorizado**: XOR de toda la matriz + popcount nativo (NumPy 2.0) con
   tabla de respaldo. ~5× más rápido (10k: 224→47 ms). recall() 2k ~40ms, 10k ~164ms.
-- ⚪ Índice LSH sobre los binarios para sublineal a 100k+; carga perezosa de la matriz.
+- 🟢 **Índice navegable jerárquico a 100k**: landmarks por isla semántica + selección
+  VSA vectorizada + beam local. En el banco estructurado reproducible (30 consultas),
+  precisión de grupo@5 **1,000**, p50 **6,71 ms**, p95 **7,44 ms**, **1,094%** visitado.
+  Construcción fría 14,6 s / pico 558,8 MB; reutilización residente 0,073 ms. El pico
+  de construcción es el siguiente objetivo embebido; la validación externa sigue abierta.
 
 ## Fase 4 — Aislamiento local de contextos (NO servidor multiusuario)
 Fuera de alcance auth/cifrado/Postgres/red: cada usuario es local. Lo útil aquí es
@@ -200,12 +204,14 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
   navega con beam, expone `visited`/`recall_mode` y conserva el escaneo como fallback.
   El grafo sobrevive al reinicio y no cruza namespaces; lo prueban `test_navgraph.py` y
   `test_navindex.py`. La UI hace visible el modo y coste de cada recall. La búsqueda ya
-  devuelve resultados+visitas en una sola pasada y ajusta el haz al número de candidatos:
-  en 800 recuerdos conserva recall@5=1,00 con 180,9 visitas medias (antes 392,6), y el
-  caso público de 120 baja 120→89. El índice queda residente entre recalls y se
-  invalida ante cambios locales/externos: a 800 nodos pasa de 35,2 ms de construcción
-  a 0,054 ms de reutilización. Siguiente reto: validar recall@5 ≥0,9 a 100k+ con datos
-  externos, sin esconder el fallback ni proclamar sublinealidad donde no se mida.
+  devuelve resultados+visitas en una sola pasada y el índice queda residente e invalidado
+  ante cambios locales/externos. El salto de escala añade una capa jerárquica: detecta
+  islas semánticas, compara sus landmarks con popcount VSA vectorizado y navega localmente
+  desde las cuatro más cercanas. En 100.000 recuerdos estructurados (30 consultas):
+  precisión de grupo@5 **1,000** (antes **0,400** con una entrada), p50 **6,71 ms**,
+  p95 **7,44 ms** y **1,094%** visitado. Construcción fría 14,6 s, pico 558,8 MB;
+  reutilización residente 0,073 ms. `scripts/nav_scale.py` lo reproduce. Siguiente reto:
+  bajar RAM/arranque y validar recall@5 ≥0,9 en corpus externo, sin esconder el fallback.
 - ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
   i18n dentro, y UX que salga de usarlo de verdad.
 - ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos
