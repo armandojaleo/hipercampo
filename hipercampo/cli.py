@@ -406,6 +406,36 @@ def cmd_budget(args) -> int:
     return 0
 
 
+def cmd_facts(args) -> int:
+    """Vuelca los hechos estructurados (SUJETO/PREDICADO/OBJETO/TIEMPO/FUENTE) del
+    contexto — el diferenciador VSA, hasta ahora invisible. Sin el blob hv."""
+    import json as _json
+    from .config import db_path
+    from .store import Store
+    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+    s = Store(db_path(), namespace=ns)
+    try:
+        filas = s.all_facts(only_current=getattr(args, "current", False))
+        hechos = []
+        for r in filas:
+            hechos.append({"id": r["id"], "fields": _json.loads(r["fields"]),
+                           "source": r["source"], "valid_from": r["valid_from"],
+                           "valid_to": r["valid_to"], "vigente": r["valid_to"] is None})
+    finally:
+        s.close()
+    if getattr(args, "json", False):
+        print(_json.dumps({"count": len(hechos), "namespace": ns, "facts": hechos},
+                          ensure_ascii=False, default=str))
+    else:
+        for h in hechos:
+            marca = "" if h["vigente"] else " (cerrado)"
+            campos = " · ".join(f"{k}={v}" for k, v in h["fields"].items())
+            print(f"#{h['id']}{marca}  {campos}")
+        if not hechos:
+            print("Sin hechos estructurados en este contexto (usa hc_remember_fact).")
+    return 0
+
+
 def cmd_reindex(args) -> int:
     """Teje el grafo de vecinos (mapa denso + mejor recall). Con --all-namespaces teje
     CADA contexto por dentro, sin cruzarlos (el aislamiento se respeta)."""
@@ -749,6 +779,10 @@ def main(argv=None) -> int:
         if nombre == "remember":
             sp.add_argument("--importance", type=float, default=0.5)
             sp.add_argument("--confidence", type=float, default=0.5)
+    ft = sub.add_parser("facts", help="ver los HECHOS estructurados (roles) del contexto")
+    ft.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
+    ft.add_argument("--current", action="store_true", help="solo los vigentes (no cerrados)")
+    ft.add_argument("--namespace", help="contexto (por defecto el del entorno)")
     ri = sub.add_parser("reindex", help="tejer el grafo de vecinos (mapa denso, mejor recall)")
     ri.add_argument("--neighbors", type=int, default=12, help="vecinos por recuerdo")
     ri.add_argument("--namespace", help="contexto (por defecto el del entorno)")
@@ -832,6 +866,8 @@ def main(argv=None) -> int:
         return cmd_servers(args)
     if args.cmd == "restart":
         return cmd_restart(args)
+    if args.cmd == "facts":
+        return cmd_facts(args)
     if args.cmd == "reindex":
         return cmd_reindex(args)
     if args.cmd == "budget":
