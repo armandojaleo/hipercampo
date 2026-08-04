@@ -150,8 +150,16 @@ separar contextos *dentro de una misma máquina*:
   ("¿quién mordió a quién?"). Medido: recupera el valor correcto por rol con margen
   claro (0.74 vs 0.54) y capacidad hasta 5 roles; distingue el hecho de su inverso.
   Tests en `tests/test_roles.py`, demo en `scripts/roles_demo.py`.
-- ⚪ Integrar los role-records en el ciclo de memoria (guardar/consultar hechos
-  estructurados vía MCP: `hc_remember_fact` / `hc_ask_role`) y persistir la item memory.
+- 🟢 **Role-records integrados en el ciclo** (`RoleMemory` en `roles.py`): `remember_fact`/
+  `ask_role` en el core y por MCP (`hc_remember_fact`/`hc_ask_role`), persistidos en la
+  tabla `facts` y **aislados por namespace**. La item memory (cleanup) se **reconstruye
+  al abrir** desde los hechos guardados, así que persiste sin estado extra. Cada hecho
+  guarda su **sombra textual** (entra en recall/muse/consolidación/olvido) y lleva
+  **validez temporal**: un hecho nuevo con mismo sujeto+predicado y otro objeto CIERRA
+  al anterior (no lo borra) — historia, no sobrescritura. Tests en `test_roles.py`.
+- ⚪ **Hacer VISIBLES los hechos** (hueco real): hoy los hechos estructurados no se
+  ven ni por CLI ni en el visor. Un `hipercampo facts --json` + una pestaña/vista en la
+  extensión mostrarían el diferenciador VSA (que ningún vector-DB tiene) al usuario.
 - ⚪ Consolidación con **resumen real** (summarizer LLM — el gancho ya existe),
   detección de conflictos, procedencia y validez temporal (`valid_from`/`valid_to`).
 - ⚪ Relaciones tipadas y dirigidas (`supports`, `contradicts`, `updates`, `caused_by`).
