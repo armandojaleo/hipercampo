@@ -51,9 +51,15 @@ Revisiones externas (jul 2026) proponen cinco saltos. No todos valen lo mismo:
    genérico: para Hamming binario basta un índice **multi-index hashing** (trocear
    el hipervector en bandas y precribar por banda exacta), que es simple, exacto
    en el re-rank y sin dependencias. ⚪ Fase 4.
-2. **Sinónimos nativos sin embeddings (random indexing léxico)** — SÍ, y es la
-   mejora más alineada con la filosofía del proyecto: co-ocurrencia acumulada en
-   los propios hipervectores, aprendida del corpus del usuario. ⚪ Explorar.
+2. **Sinónimos nativos sin embeddings (random indexing léxico)** — MEDIDO Y
+   DESCARTADO. Se prototipó random indexing (co-ocurrencia por ventana) sobre un
+   corpus REAL de 354k palabras: la señal es marginal —media coseno sinónimos 0.095
+   vs azar 0.052, y solo **1 de 8** pares supera el p95 del ruido—. Aprender sinónimos
+   de la co-ocurrencia necesita escala tipo word2vec (millones-miles de millones de
+   palabras); una memoria personal no la tiene, y ni un corpus técnico de 350k separó.
+   Conclusión honesta: **la vía de sinónimos es el hook semántico OPCIONAL** (`[semantic]`),
+   no reimplementar word2vec a medias en el core. El léxico da typo/morfología gratis
+   (trigramas, hit@1=1.0); el sinónimo puro es lo que resuelve un modelo semántico.
 3. **Aprender los pesos de retención (RL ligero)** — A MEDIAS. Aprender de la
    utilidad real observada sí (ya se registra `access_count`); una red que decida
    qué olvidar sin explicación, no: la retención transparente y auditable es una
