@@ -263,6 +263,34 @@ que evoluciona. Cuando una madura, sube a una fase con su medición.
 - **Consolidación con resumen real** (summarizer), relaciones tipadas
   (`supports`/`contradicts`/`updates`), datasets externos estándar (LongMemEval…).
 
+### Dirección de largo plazo (backlog técnico)
+
+Ideas de más calado, filtradas con la regla de la casa (local-first, CPU, medir antes
+de creer). Cada una entra en una fase solo con su medición delante:
+
+1. **Atomización + encoding multicanal** — *la de mayor retorno.* Ataca el límite YA
+   MEDIDO (dilución 1/√T en textos largos): trocear la entrada en eventos/hechos
+   atómicos y guardar un hipervector POR CANAL (léxico/temporal/espacial/rol), fusionando
+   en la recuperación en vez de un bundle único. Promesa medible: +Recall@5 en textos largos.
+2. **Benchmarks externos multilingües** (LongMemEval, LoCoMo, MuSiQue, BEIR) — convertir
+   los claims en evidencia fuera del banco propio. Cierra el hueco "datasets estándar".
+3. **Meta-memoria: admisión por UTILIDAD+sorpresa** (no solo sorpresa, que no equivale a
+   utilidad y ni persiste hoy): features explícitas + regresión online / bandit
+   contextual **conservador y auditable** (nunca caja negra; los límites duros —secretos,
+   protegidos— siguen siendo política, no aprendizaje).
+4. **Abstención CALIBRADA** (conformal/isotónica sobre un conjunto de calibración
+   independiente): garantía de riesgo selectivo, no umbrales a ojo.
+5. **Consolidación con procedencia + contradicciones por afirmación** (no dar por cierto
+   un resumen de LLM) y **microclustering incremental** para quitar el O(N²).
+6. **Dimensionalidad configurable por perfil** (menos bits = menos RAM en edge) + MIH como
+   índice alternativo al grafo para el perfil micro.
+7. **Refactor a interfaces `Protocol`** (Encoder/Index/Store/AdmissionPolicy/…) para
+   experimentar sin romper; kernels en Rust vía PyO3 **solo tras perfilar**.
+
+La visión que orienta esto: no "otra vector-DB", sino **memoria temporal, explicable y
+frugal que sigue funcionando sin cloud**. Un SaaS multi-tenant o robótica a escala serían
+un **spin-off con financiación** (otro proyecto); el núcleo se queda **MIT y local-first**.
+
 ---
 
 **Regla de la casa**: cada fase se cierra con *medición*, no con opinión. Nada de

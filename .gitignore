@@ -29,3 +29,6 @@ editor/*.vsix
 
 # Volcados de bash al petar en comandos pesados (Windows)
 *.stackdump
+
+# Informe de investigación/estrategia — PRIVADO, no se publica
+informe-recerca-profunditat.md
