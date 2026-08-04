@@ -29,7 +29,14 @@ La beta b12 está cerrada y publicada en PyPI tras CI multiplataforma verde.
 2. ✅ Grafo navegable persistente, incremental y jerárquico, aislado por namespace.
    En 100.000 recuerdos estructurados: precisión de grupo@5=1,000, p50=6,07 ms,
    p95=6,94 ms y 1,094% visitado; índice residente 141,5 MB y reutilización 0,073 ms.
-   La prueba reproducible vive en `scripts/nav_scale.py`. Falta corpus externo.
+   La prueba reproducible vive en `scripts/nav_scale.py`.
+   **Validado también en corpus REAL** (`scripts/nav_real.py`: docstrings de la stdlib,
+   texto inglés difuso, offline): la **fidelidad navegar-vs-escaneo es 1.000** —navegar
+   recupera exactamente el mismo top-5 que escanear también en texto real, no solo en el
+   banco sintético—. Límite honesto: a ese N (~650) el %visitado aún no baja (la
+   sublinealidad solo se ve a escala, medida en el banco sintético). Y la **precisión de
+   grupo léxica es ~0.50** (igual navegando que escaneando): la navegación no degrada la
+   calidad; ese techo es del *encoding* léxico → cuello de los sinónimos (abajo 🟡).
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
 4. Ablaciones y corpus externos para validar que la mejora no depende del banco sintético.
