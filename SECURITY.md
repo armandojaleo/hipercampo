@@ -105,6 +105,80 @@ Precauciones sensatas:
   contenido acabará en el contexto del modelo al recuperarse (ver inyección arriba).
 - Instala desde el repositorio oficial y revisa el código; es pequeño a propósito.
 
+## Cadena de suministro (supply chain)
+
+Instalar un paquete es ejecutar el código de sus dependencias —y las de sus
+dependencias—. hipercampo lo trata como un riesgo de primera clase y lo minimiza por
+diseño. Este es el modelo de amenaza y las defensas, con honestidad sobre lo que
+falta.
+
+### Superficie real de dependencias
+
+- **Núcleo (`pip install hipercampo`): `numpy` + `mcp`.** El núcleo VSA/almacén solo
+  necesita `numpy`; `import hipercampo` **no** arrastra `mcp` (garantizado por
+  `tests/test_core_embebible.py`). Un embebido puede usar el core sin el servidor.
+- **`mcp` arrastra su árbol** (~14 transitivas: `anyio`, `httpx`, `pydantic`,
+  `starlette`, `uvicorn`, `sse-starlette`, `pyjwt`, `python-multipart`, `pywin32`…).
+  **Transparencia:** hipercampo usa **solo el servidor STDIO** de `mcp`
+  (`mcp.server.fastmcp`, `mcp.server.stdio`); **no** usa el transporte HTTP
+  (`uvicorn`/`starlette`), ni JWT, ni multipart. Ese stack se instala como dependencia
+  dura de `mcp` aunque hipercampo no lo toque: es superficie que viene de una dep de
+  conveniencia, no de una necesidad del código.
+- **Extras opcionales, opt-in y declarados:** `[semantic]` (sentence-transformers →
+  torch: árbol grande, lo aceptas tú), `[procs]` (psutil). No entran por defecto.
+- **Extensión de VS Code:** 3 dependencias **de desarrollo** (`typescript`,
+  `@types/*`), fijadas con `package-lock.json`, y **nada** de eso se envía en el `.vsix`
+  (solo JS compilado). Superficie de runtime del visor: cero npm.
+- **`mcp` acotado** a `>=1.28.1,<2` para que un major nuevo con cambios de API o
+  procedencia no entre solo.
+
+### Defensas ya en pie
+
+- **Publicación por Trusted Publishing (OIDC) + attestations/PEP 740.** No hay token
+  largo de PyPI que robar; cada release lleva **procedencia verificable** (qué workflow,
+  qué commit la construyó). Es la defensa moderna contra la suplantación de paquetes.
+- **Deps mínimas y de licencia clara** (`numpy` BSD, `mcp` MIT).
+- **Sin ejecución de código de terceros en caliente:** el núcleo no usa `eval`,
+  `exec`, `pickle`, `subprocess` ni red (ver arriba).
+
+### Cómo VERIFICAR una release (para quien instala)
+
+```bash
+# Descarga sin instalar y comprueba hashes/artefactos:
+pip download hipercampo --no-deps -d /tmp/hc && ls /tmp/hc
+# Instalación reproducible con hashes fijados (si mantienes un requirements con --hash):
+pip install --require-hashes -r requirements.lock
+# Procedencia: en la página de PyPI del release, revisa las "attestations"
+# (qué repo/workflow/commit lo publicó). Debe ser este repositorio.
+```
+
+### Endurecimientos: estado y pendientes
+
+- 🟢 **Árbol mínimo** y `mcp` acotado (`<2`).
+- 🟢 **Trusted Publishing + attestations** en el release.
+- 🟡 **`pip-audit` en CI** (escaneo de CVEs conocidas del árbol). Añadido como paso de
+  visibilidad; conviene volverlo bloqueante cuando el árbol esté limpio.
+- ⚪ **Fijar `vsce`** en `vsix.yml`: hoy `npx --yes @vscode/vsce publish` trae el
+  **último** vsce de npm y le pasa el `VSCE_PAT`. Debe fijarse a una versión concreta
+  (`@vscode/vsce@X.Y.Z`, verificada con red) para que un vsce comprometido no acceda al
+  token. **Es el pendiente de mayor prioridad** (toca un secreto).
+- ⚪ **Fijar las GitHub Actions al SHA** (no al tag): `actions/checkout@<sha>`,
+  `setup-python@<sha>`, `pypa/gh-action-pypi-publish@<sha>`. Un tag es mutable; un SHA
+  no. `release.yml` tiene permiso de publicar en PyPI, así que su cadena de acciones es
+  crítica.
+- ⚪ **Palanca disponible con coste: `mcp` opcional.** Mover `mcp` a un extra `[mcp]`
+  dejaría el core en **una sola dependencia** (`numpy`) y eliminaría el stack HTTP no
+  usado. El coste es cambiar el comando de instalación del servidor a
+  `pip install hipercampo[mcp]`; es una decisión de producto, anotada aquí para
+  tomarla a conciencia, no por defecto.
+
+### Política
+
+- **No se añade una dependencia sin justificarla** frente a la stdlib. Cada dep nueva
+  es superficie de ataque permanente.
+- Los extras pesados (modelos, torch) son **opt-in**, nunca en el core.
+- Toda release se publica con procedencia; nunca a mano con un token largo.
+
 ## Alcance recomendado
 
 Uso **local, mono-usuario**, como memoria personal de tu asistente. Para

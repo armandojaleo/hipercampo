@@ -60,6 +60,18 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python -m mypy hipercampo/
 
+      # Cadena de suministro: escaneo de CVEs conocidas del árbol de dependencias.
+      # Informativo por ahora (no bloquea): sirve para VER una vulnerabilidad en cuanto
+      # aparece, sin romper el verde por un aviso en una transitiva que no controlamos.
+      # Volver bloqueante (quitar continue-on-error) cuando el árbol esté limpio.
+      # Ver la política en SECURITY.md.
+      - name: Supply-chain audit (pip-audit)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit --strict --desc
+
       - name: Test suite (todas las suites, incluidas las generativas)
         shell: bash
         env:
