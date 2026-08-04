@@ -246,6 +246,23 @@ investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
 microcontroladores sin Linux (Liga B). El álgebra VSA es popcount+XOR y cabría en
 pocos KB, pero es un spin-off; se anota, no se mete en este repo.
 
+## Ideas (backlog vivo)
+
+Aquí se quedan las ideas y se van **actualizando** — no es una promesa, es un depósito
+que evoluciona. Cuando una madura, sube a una fase con su medición.
+
+- **Vista de hechos en el visor.** Ya existe `hipercampo facts [--json]`; falta una
+  pestaña/vista en la extensión para explorar y consultar los hechos estructurados
+  (el diferenciador VSA, "¿quién muerde a quién?") de forma visual.
+- **Cadena de suministro (necesitan red):** fijar `vsce` a versión exacta en `vsix.yml`
+  (protege el `VSCE_PAT`) y las GitHub Actions al SHA. Detalle en [SECURITY.md](SECURITY.md).
+- **Decisión abierta: `mcp` opcional** (`[mcp]`) → core de 1 dependencia (numpy). Reduce
+  superficie de ataque; coste: cambia el comando de instalación del servidor.
+- **Sinónimos:** medido que el random indexing no rinde a esta escala; la vía es el hook
+  semántico opcional. Idea a revisitar solo si aparece un recurso léxico compacto y libre.
+- **Consolidación con resumen real** (summarizer), relaciones tipadas
+  (`supports`/`contradicts`/`updates`), datasets externos estándar (LongMemEval…).
+
 ---
 
 **Regla de la casa**: cada fase se cierra con *medición*, no con opinión. Nada de
