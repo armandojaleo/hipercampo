@@ -268,10 +268,15 @@ que evoluciona. Cuando una madura, sube a una fase con su medición.
 Ideas de más calado, filtradas con la regla de la casa (local-first, CPU, medir antes
 de creer). Cada una entra en una fase solo con su medición delante:
 
-1. **Atomización + encoding multicanal** — *la de mayor retorno.* Ataca el límite YA
-   MEDIDO (dilución 1/√T en textos largos): trocear la entrada en eventos/hechos
-   atómicos y guardar un hipervector POR CANAL (léxico/temporal/espacial/rol), fusionando
-   en la recuperación en vez de un bundle único. Promesa medible: +Recall@5 en textos largos.
+1. **Atomización** — 🟢 HECHO. Ataca el límite nº1 (dilución 1/√T en textos largos):
+   `remember()` trocea el texto en átomos (`hipercampo/atomize.py`, sin dependencias) y
+   guarda cada uno enlazado a su fuente (`type='atom'`). Medido (`scripts/atom_probe.py`):
+   un hecho enterrado en un texto de 64 ideas pasa de **acierto@1 0.15 (monolítico) a 1.00
+   (atomizado)**; end-to-end, una pista corta recupera el átomo exacto. Desactivable con
+   `HIPERCAMPO_NO_ATOMIZE=1`. Tests en `test_atomize.py` y `test_atomize_remember.py`.
+   **Falta: encoding MULTICANAL** — guardar un hipervector por canal
+   (léxico/temporal/espacial/rol) y fusionar en la recuperación, para que una consulta
+   espacial no se diluya con las palabras descriptivas. Promesa medible: +nDCG con RAM < 1.5×.
 2. **Benchmarks externos multilingües** (LongMemEval, LoCoMo, MuSiQue, BEIR) — convertir
    los claims en evidencia fuera del banco propio. Cierra el hueco "datasets estándar".
 3. **Meta-memoria: admisión por UTILIDAD+sorpresa** (no solo sorpresa, que no equivale a

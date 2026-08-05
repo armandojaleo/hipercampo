@@ -327,7 +327,10 @@ def test_si_no_cabe_ni_un_recuerdo_se_calla_en_vez_de_avisar_a_secas():
     un solo dato. Se paga igual que un recuerdo útil, no aporta nada y el modelo ni
     siquiera sabe qué pedir. Callarse es gratis."""
     hc = Hipercampo(_DB, namespace="nocabe")
-    hc.remember("nota kilometrica sobre el despliegue: " + "detalle larguisimo " * 120, 0.9)
+    # Nota de UN solo átomo (sin fin de oración ni conectores): así el atomizador no la
+    # trocea y sigue siendo un único recuerdo demasiado grande para el presupuesto — que
+    # es lo que este test comprueba (presupuesto, no atomización).
+    hc.remember("nota kilometrica del despliegue con " + "detalle larguisimo " * 120, 0.9)
     hc.close()
     env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_NAMESPACE="nocabe",
                HIPERCAMPO_HOOK_BUDGET="60", HIPERCAMPO_LOG="0")

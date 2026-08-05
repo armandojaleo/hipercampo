@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Added
+- **Atomization on write — buried facts stop being invisible.** A long note used to be
+  one hypervector; a short query for one fact inside it was almost unrecoverable, because
+  bundling T facts dilutes each by ~1/√T. Now `remember()` splits multi-idea text into
+  atoms (`hipercampo/atomize.py`, dependency-free sentence/clause segmenter for ES/EN) and
+  stores each atom linked to its source (`type='atom'`). Measured (`scripts/atom_probe.py`):
+  finding a fact buried in a 64-fact text goes from **hit@1 0.15 (monolithic) to 1.00
+  (atomized)**; end-to-end, a short cue retrieves the exact atom. Opt out with
+  `HIPERCAMPO_NO_ATOMIZE=1`. Tests in `test_atomize.py`, `test_atomize_remember.py`.
+
 ## [0.1.0b12] — 2026-07-30
 
 ### Added

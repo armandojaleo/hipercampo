@@ -26,6 +26,7 @@ from typing import Any
 import numpy as np
 
 from . import audit, budget, config
+from .atomize import atomize
 from .encoder import encode_text, semantic_active
 from .safety import redact_secrets, scan_injection, scan_secrets
 from .store import Store
@@ -33,6 +34,9 @@ from .surprise import SurpriseModel
 from .vsa import bundle, similarity, similarity_batch
 
 # --- parámetros de criterio (aquí es donde manda el juicio humano) -------
+# Atomizar al grabar: un texto de varias ideas se trocea y cada átomo se guarda
+# enlazado a su fuente, para que un hecho enterrado no se diluya (1/√T, medido).
+ATOMIZE_ON_REMEMBER = os.environ.get("HIPERCAMPO_NO_ATOMIZE") != "1"
 NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
 SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
 SUPERSEDE_HINT_SIMILARITY = 0.72 # por encima -> avisamos de posible actualización
@@ -378,8 +382,42 @@ class Hipercampo:
     @resiliente
     def remember(self, text: str, importance: float = 0.5,
                  confidence: float = 0.5) -> dict:
-        """Graba un episodio salvo doble veto: NO lo guarda si es redundante (ya hay
-        algo casi igual) NI si es predecible (el modelo de sorpresa ya lo esperaba)."""
+        """Graba un episodio. Si el texto tiene VARIAS ideas, lo ATOMIZA: guarda el texto
+        fuente y cada átomo enlazado a él (`type='atom'`), para que un hecho enterrado no
+        quede diluido —dilución 1/√T, medida: a 64 hechos por texto, acierto@1 pasa de
+        0.15 (monolítico) a 1.00 (atomizado)—. Un texto de una sola idea se guarda entero,
+        como siempre. Desactivable con HIPERCAMPO_NO_ATOMIZE=1."""
+        if config.paused():
+            audit.log("remember", "en pausa: no se graba")
+            return {"stored": False, "paused": True,
+                    "reason": "memoria en pausa (modo 'no recordar')"}
+        atomos = atomize(text) if ATOMIZE_ON_REMEMBER and isinstance(text, str) else []
+        if len(atomos) <= 1:                          # una sola idea: como siempre
+            return self._remember_one(text, importance, confidence)
+        fuente = self._remember_one(text, importance, confidence)   # el texto completo
+        src_id = fuente.get("id")
+        creados = 0
+        for a in atomos:
+            r = self._remember_one(a, importance, confidence)
+            if r.get("stored") and src_id and r.get("id"):
+                try:
+                    with self.store.transaction():    # el átomo cuelga de su fuente
+                        self.store.link(src_id, r["id"], weight=0.9, type="atom")
+                except sqlite3.Error:
+                    pass
+                creados += 1
+        audit.log("remember", f"atomizado: {creados}/{len(atomos)} átomos",
+                  fuente=src_id, texto=str(text)[:60])
+        return {"stored": bool(src_id) or creados > 0, "id": src_id,
+                "atomized": True, "atoms": len(atomos), "atoms_created": creados,
+                "novelty": fuente.get("novelty"), "surprise": fuente.get("surprise"),
+                "importance": _clip01(importance)}
+
+    def _remember_one(self, text: str, importance: float = 0.5,
+                      confidence: float = 0.5) -> dict:
+        """Graba UN episodio (un átomo o un texto de una idea) salvo doble veto: NO lo
+        guarda si es redundante (ya hay algo casi igual) NI si es predecible (el modelo
+        de sorpresa ya lo esperaba)."""
         if config.paused():                    # modo 'no recordar': no se escribe nada
             audit.log("remember", "en pausa: no se graba")
             return {"stored": False, "paused": True,
