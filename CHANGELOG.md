@@ -6,6 +6,11 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Real-corpus navigation quality gate.** `scripts/nav_real.py --check` now fails CI
+  when navigation drifts from full scan, semantic group quality degrades, p95 latency or
+  resident memory exceed their budgets, the explored fraction grows too far, or the
+  reproducible stdlib corpus becomes too small. `--json` exposes the same metrics for
+  machines; focused tests verify every failure path.
 - **Structured facts are visible in the viewer (v0.9.8).** The **Facts** tab exposes
   role-record queries and history without dropping to the CLI, while Ideas now explains
   plainly what bridge produced each hypothesis. The extension manifest and lockfile are

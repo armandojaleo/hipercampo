@@ -39,7 +39,8 @@ La beta b12 está cerrada y publicada en PyPI tras CI multiplataforma verde.
    calidad; ese techo es del *encoding* léxico → cuello de los sinónimos (abajo 🟡).
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
-4. Ablaciones y corpus externos para validar que la mejora no depende del banco sintético.
+4. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,
+   memoria y coste navegable; faltan ablaciones y datasets externos estándar.
 5. Selección de namespace y UX estable de la extensión; la extensión no se etiqueta como producto estable todavía.
 
 ## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
@@ -157,9 +158,8 @@ separar contextos *dentro de una misma máquina*:
   guarda su **sombra textual** (entra en recall/muse/consolidación/olvido) y lleva
   **validez temporal**: un hecho nuevo con mismo sujeto+predicado y otro objeto CIERRA
   al anterior (no lo borra) — historia, no sobrescritura. Tests en `test_roles.py`.
-- ⚪ **Hacer VISIBLES los hechos** (hueco real): hoy los hechos estructurados no se
-  ven ni por CLI ni en el visor. Un `hipercampo facts --json` + una pestaña/vista en la
-  extensión mostrarían el diferenciador VSA (que ningún vector-DB tiene) al usuario.
+- ✅ **Hechos visibles.** `hipercampo facts [--json]` y la pestaña **Facts** del visor
+  permiten consultar los role-records y su historia temporal sin salir de la UI.
 - ⚪ Consolidación con **resumen real** (summarizer LLM — el gancho ya existe),
   detección de conflictos, procedencia y validez temporal (`valid_from`/`valid_to`).
 - ⚪ Relaciones tipadas y dirigidas (`supports`, `contradicts`, `updates`, `caused_by`).

@@ -118,6 +118,10 @@ jobs:
         run: python -m ruff check hipercampo/ tests/ scripts/ examples/
       - name: Benchmark de calidad (modo léxico)
         run: python scripts/benchmark.py
+      - name: Gate navegable sobre corpus real (calidad, latencia y memoria)
+        env:
+          HIPERCAMPO_LOG: "0"
+        run: python scripts/nav_real.py --check
       - name: Banco de estrés (10 hechos + 10 distractores confusos)
         run: python scripts/stress.py
       - name: Latencia y RAM de recall a escala (p50/p95/p99, con y sin cota)
