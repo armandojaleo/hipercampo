@@ -82,18 +82,21 @@ De solo lectura para consultar: llama al CLI, nunca toca la base de datos direct
 ## Batería de pruebas — que hace lo que dice
 
 ```bash
-python tests/test_vsa.py          # álgebra VSA (bind/bundle/orden)
-python tests/test_memory.py       # el CICLO: sorpresa, recall, sueño, olvido, persistencia
-python tests/test_namespaces.py   # aislamiento de contextos, concurrencia, transacciones
-python tests/test_calibration.py  # sorpresa adaptativa, rollback, consulta vacía, cohesión
-python tests/test_properties.py   # invariantes con datos fabricados (8 rondas)
-python scripts/scenarios.py       # historia narrada: Claude recordando a un usuario
+python -m pytest tests/                  # suite de regresión completa
+python -m ruff check hipercampo/ tests/ scripts/ examples/
+python -m mypy hipercampo/
+python scripts/nav_real.py --check       # fidelidad navegable, latencia y RAM
+python scripts/ablations.py --check      # aísla los cuatro mecanismos cognitivos
+python scripts/context_efficiency.py --check  # calidad, tokens de contexto y latencia
 ```
 
-20 suites en total, todas verdes en CI (Python 3.11–3.13). Ejemplos de invariantes
-comprobadas: *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera
+La suite completa se ejecuta en CI sobre Windows, macOS y Ubuntu con Python 3.11–3.13.
+Ejemplos de invariantes comprobadas: *un duplicado nunca crea un segundo recuerdo*, *una aguja se recupera
 entre 25 distractores*, *el olvido nunca borra algo con importancia ≥ 0.8*, *un
 contexto no ve ni puede modificar lo de otro*, *una transacción fallida no deja rastro*.
+El medidor de eficiencia de contexto también acepta el JSON oficial de LongMemEval y
+separa el recall de las sesiones-evidencia de la calidad de respuesta, para no confundir
+la recuperación con el juicio de un LLM.
 
 ## Comparativa con baselines (Fase 2)
 
@@ -122,14 +125,18 @@ Lectura honesta:
 
 ## Escala y latencia (medido)
 
-| Recuerdos | `recall()` completo (CPU) | ¿Encuentra la aguja? |
-|-----------|:---:|:---:|
-| 2.000 | ~40 ms | sí, posición #1 |
-| 10.000 | ~164 ms | sí, posición #1 |
+| Corpus | Calidad | p95 | Visitado |
+|--------|:---:|:---:|:---:|
+| 655 documentos reales de la stdlib de Python | fidelidad navegación-vs-escaneo 1,000 | bloqueado por CI | 42,6% |
+| 10.000 recuerdos estructurados | precisión@5 1,000 | ~2,2 ms | 1,751% |
+| 100.000 recuerdos estructurados | precisión de grupo@5 1,000 | 6,94 ms | 1,094% |
 
-Escaneo **vectorizado** (XOR de toda la matriz + popcount nativo de NumPy 2.0):
-~5× más rápido que fila-a-fila. Lineal (sin índice ANN): sobrado para memoria
-personal (cientos a miles); a ~100k haría falta un índice. Límite conocido, no oculto.
+Recall usa un grafo persistente y adaptado a la topología con landmarks VSA jerárquicos,
+y conserva el escaneo completo acotable como fallback seguro. A 100k, el índice residente
+ocupa 141,5 MB, la construcción fría tarda 7,46 s y la reutilización caliente 0,073 ms.
+Los resultados estructurados miden el coste navegable; el gate de corpus real impide que
+la velocidad oculte regresiones de recuperación. Se reproducen con `scripts/nav_scale.py`
+y `scripts/nav_real.py --check`.
 
 ## Herramientas que gana cualquier agente
 

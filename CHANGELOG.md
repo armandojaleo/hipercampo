@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+## [0.1.0b13] — 2026-08-05
+
 ### Added
 - **Context efficiency is now a quality gate.** `scripts/context_efficiency.py`
   measures retrieval quality, selective precision, abstention, complete MCP payload

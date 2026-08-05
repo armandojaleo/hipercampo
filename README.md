@@ -83,18 +83,22 @@ database directly.
 ## Test battery — it does what it says
 
 ```bash
-python tests/test_vsa.py          # VSA algebra (bind/bundle/order)
-python tests/test_memory.py       # the CYCLE: surprise, recall, sleep, forget, persistence
-python tests/test_namespaces.py   # context isolation, concurrency, transactions
-python tests/test_calibration.py  # adaptive surprise, rollback, empty query, cohesion
-python tests/test_properties.py   # invariants over fabricated data (8 rounds)
-python scripts/scenarios.py       # narrated story: Claude remembering a user
+python -m pytest tests/                  # complete regression suite
+python -m ruff check hipercampo/ tests/ scripts/ examples/
+python -m mypy hipercampo/
+python scripts/nav_real.py --check       # navigation fidelity, latency and RAM
+python scripts/ablations.py --check      # isolate the four cognitive mechanisms
+python scripts/context_efficiency.py --check  # quality, context tokens and latency
 ```
 
-20 suites in total, all green in CI (Python 3.11–3.13). Example invariants checked:
+The complete suite runs in CI on Windows, macOS and Ubuntu with Python 3.11–3.13.
+Example invariants checked:
 *a duplicate never creates a second memory*, *a needle is retrieved among 25
 distractors*, *forgetting never deletes something with importance ≥ 0.8*, *one
 context can neither see nor modify another's data*, *a failed transaction leaves no trace*.
+The context-efficiency runner also accepts official LongMemEval JSON; it reports
+evidence-session recall separately from answer quality, so retrieval is not confused
+with an LLM judge.
 
 ## Baseline comparison (Phase 2)
 
@@ -122,14 +126,18 @@ Honest reading:
 
 ## Scale & latency (measured)
 
-| Memories | full `recall()` (CPU) | Finds the needle? |
-|----------|:---:|:---:|
-| 2,000 | ~40 ms | yes, rank #1 |
-| 10,000 | ~164 ms | yes, rank #1 |
+| Corpus | Quality | p95 | Visited |
+|--------|:---:|:---:|:---:|
+| 655 real Python stdlib documents | navigation-vs-scan fidelity 1.000 | CI-gated | 42.6% |
+| 10,000 structured memories | precision@5 1.000 | ~2.2 ms | 1.751% |
+| 100,000 structured memories | group precision@5 1.000 | 6.94 ms | 1.094% |
 
-**Vectorized** scan (XOR of the whole matrix + native NumPy 2.0 popcount): ~5× faster
-than row-by-row. It's linear (no ANN index): plenty for personal memory (hundreds to
-thousands); at ~100k you'd want an index. A known limit, not hidden.
+Recall uses a persistent, topology-adaptive graph and hierarchical VSA landmarks,
+with bounded full scan as a safe fallback. At 100k, the resident index is 141.5 MB,
+cold construction takes 7.46 s and warm reuse 0.073 ms. Structured scale results show
+navigation cost; the real-corpus gate separately prevents speed from hiding retrieval
+quality regressions. Reproduce them with `scripts/nav_scale.py` and
+`scripts/nav_real.py --check`.
 
 ## Tools every agent gains
 
