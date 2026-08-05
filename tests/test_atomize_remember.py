@@ -12,6 +12,7 @@ Aquí se congela el CONTRATO de la integración:
 Ejecuta:  python tests/test_atomize_remember.py
 """
 
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -46,6 +47,22 @@ def test_atomiza_y_enlaza_a_la_fuente():
     assert len(enlaces_atom) == n, enlaces_atom
     hc.close()
 
+
+def test_repetir_documento_reutiliza_fuente_y_atomos():
+    """Reforzar el mismo documento no crea copias ni pierde la jerarquía."""
+    hc = memoria("atom_repetido")
+    primero = hc.remember(_LARGO, 0.7)
+    filas_antes = len(hc.store.all(only_active=False))
+    segundo = hc.remember(_LARGO, 0.7)
+    enlaces = [e for e in hc.store.links_dump() if e["type"] == "atom"]
+    assert segundo.get("atomized") is True, segundo
+    assert not segundo.get("stored")
+    assert segundo.get("id") == primero.get("id")
+    assert segundo.get("atoms_created") == 0
+    assert segundo.get("atoms_linked") == segundo.get("atoms")
+    assert len(hc.store.all(only_active=False)) == filas_antes
+    assert len(enlaces) == segundo.get("atoms")
+    hc.close()
 
 def test_nota_corta_no_se_atomiza():
     """Una nota de pocas frases se guarda ENTERA: atomizarla la fragmentaría en trozos
@@ -89,6 +106,56 @@ def test_se_puede_desactivar():
     finally:
         _mem.ATOMIZE_ON_REMEMBER = previo
 
+
+def test_atomiza_solo_el_texto_que_puede_persistir():
+    """Nada posterior al límite de la fuente puede filtrarse como átomo suelto."""
+    hc = memoria("atom_limite")
+    prefijo = (_LARGO + " ") * ((_mem.MAX_TEXT_LEN // len(_LARGO)) + 2)
+    marcador = "MARCADOR_QUE_ESTA_FUERA_DEL_LIMITE"
+    r = hc.remember(prefijo[:_mem.MAX_TEXT_LEN] + marcador, 0.7)
+    assert r.get("atomized") is True, r
+    textos = [row["text"] for row in hc.store.all(only_active=False)]
+    assert textos and all(marcador not in texto for texto in textos)
+    assert max(map(len, textos)) <= _mem.MAX_TEXT_LEN
+    hc.close()
+
+
+def test_tope_de_memoria_conserva_fuente_y_grupo_coherente():
+    """El lote se acota sin desalojar su fuente ni dejar enlaces colgantes."""
+    previo = _mem.MAX_MEMORIES
+    _mem.MAX_MEMORIES = 4
+    try:
+        hc = memoria("atom_cap")
+        r = hc.remember(_LARGO, 0.7)
+        filas = hc.store.all(only_active=False)
+        ids = {row["id"] for row in filas}
+        enlaces = [e for e in hc.store.links_dump() if e["type"] == "atom"]
+        assert r.get("atomized") is True, r
+        assert r.get("id") in ids
+        assert len(filas) == 4
+        assert r.get("atoms_created") == 3
+        assert r.get("atoms_skipped") == r.get("atoms") - 3
+        assert len(enlaces) == 3
+        assert all(e["src"] in ids and e["dst"] in ids for e in enlaces)
+        hc.close()
+    finally:
+        _mem.MAX_MEMORIES = previo
+
+def test_fallo_de_enlace_revierte_toda_la_atomizacion():
+    """Fuente y átomos no deben sobrevivir como una escritura parcial."""
+    hc = memoria("atom_rollback")
+    link_real = hc.store.link
+
+    def link_con_fallo(src, dst, weight=1.0, type="lexical"):
+        if type == "atom":
+            raise sqlite3.OperationalError("fallo simulado al enlazar átomo")
+        return link_real(src, dst, weight=weight, type=type)
+
+    hc.store.link = link_con_fallo
+    r = hc.remember(_LARGO, 0.7)
+    assert not r.get("stored") and "error" in r, r
+    assert hc.store.all(only_active=False) == []
+    hc.close()
 
 if __name__ == "__main__":
     limpiar()

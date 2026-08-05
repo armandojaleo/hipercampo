@@ -251,9 +251,9 @@ pocos KB, pero es un spin-off; se anota, no se mete en este repo.
 Aquí se quedan las ideas y se van **actualizando** — no es una promesa, es un depósito
 que evoluciona. Cuando una madura, sube a una fase con su medición.
 
-- **Vista de hechos en el visor.** Ya existe `hipercampo facts [--json]`; falta una
-  pestaña/vista en la extensión para explorar y consultar los hechos estructurados
-  (el diferenciador VSA, "¿quién muerde a quién?") de forma visual.
+- ✅ **Vista de hechos en el visor.** `hipercampo facts [--json]` y la pestaña **Facts**
+  de la extensión ya permiten explorar y consultar los hechos estructurados (el
+  diferenciador VSA, "¿quién muerde a quién?") de forma visual.
 - **Cadena de suministro (necesitan red):** fijar `vsce` a versión exacta en `vsix.yml`
   (protege el `VSCE_PAT`) y las GitHub Actions al SHA. Detalle en [SECURITY.md](SECURITY.md).
 - **Decisión abierta: `mcp` opcional** (`[mcp]`) → core de 1 dependencia (numpy). Reduce

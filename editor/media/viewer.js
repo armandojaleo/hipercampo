@@ -86,7 +86,7 @@
       sMcpDesconocida: "(no legible en este sistema)",
       ideasCargando: "Buscando ideas (puentes entre recuerdos)…",
       ideasVacio: "Sin ideas nuevas por ahora. El sueño propone puentes cuando dos recuerdos comparten un asociado común pero no están conectados; con poca memoria aún no hay qué cruzar.",
-      ideasIntro: "Hipótesis que la memoria sugiere — conexiones que aún no sabías. Son propuestas, no verdades: no se han grabado.",
+      ideasIntro: "Conexiones que la memoria descubrió SOLA entre recuerdos lejanos: dos notas que no guardaste juntas pero que comparten un 'puente' común. Son pistas para ideas nuevas (💡), no verdades — no se graban. En cada una: los dos recuerdos y el puente que los enlaza.",
       ideasVia: "ambos evocan",
       ideasHipotesis: (a, b, via) => `«${a}» y «${b}» quizá se relacionan`,
       ideasSim: "afinidad",

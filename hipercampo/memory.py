@@ -396,33 +396,48 @@ class Hipercampo:
             audit.log("remember", "en pausa: no se graba")
             return {"stored": False, "paused": True,
                     "reason": "memoria en pausa (modo 'no recordar')"}
+        # Atomiza exactamente el texto que puede persistirse. Sin esta validación,
+        # un documento > MAX_TEXT_LEN podía crear átomos a partir de contenido que
+        # no existía en su fuente truncada.
+        text = _validate_text(text)
         # Solo atomizar DOCUMENTOS largos con varios hechos, no notas cortas.
-        atomizar = (ATOMIZE_ON_REMEMBER and isinstance(text, str)
-                    and len(text) >= ATOMIZE_MIN_LEN)
+        atomizar = ATOMIZE_ON_REMEMBER and len(text) >= ATOMIZE_MIN_LEN
         atomos = atomize(text) if atomizar else []
         if len(atomos) < ATOMIZE_MIN_ATOMS:           # nota o texto corto: entero
             return self._remember_one(text, importance, confidence)
-        fuente = self._remember_one(text, importance, confidence)   # el texto completo
-        src_id = fuente.get("id")
-        creados = 0
-        for a in atomos:
-            r = self._remember_one(a, importance, confidence)
-            if r.get("stored") and src_id and r.get("id"):
-                try:
-                    with self.store.transaction():    # el átomo cuelga de su fuente
-                        self.store.link(src_id, r["id"], weight=0.9, type="atom")
-                except sqlite3.Error:
-                    pass
-                creados += 1
+        creados = enlazados = 0
+        # Fuente, átomos y enlaces forman una sola unidad: si falla un enlace no
+        # dejamos una atomización parcial. transaction() es reentrante, por lo que
+        # las transacciones internas de _remember_one participan en esta misma.
+        with self.store.transaction():
+            fuente = self._remember_one(text, importance, confidence)
+            src_id = fuente.get("id") or fuente.get("reinforced_id")
+            if not src_id:
+                # Un veto de la fuente no debe producir átomos huérfanos.
+                return {**fuente, "atomized": False,
+                        "atomization_skipped": "source_not_stored"}
+            protegidos = {src_id}
+            for a in atomos:
+                r = self._remember_one(a, importance, confidence,
+                                       protected_ids=protegidos)
+                atom_id = r.get("id") or r.get("reinforced_id")
+                if atom_id:
+                    self.store.link(src_id, atom_id, weight=0.9, type="atom")
+                    protegidos.add(atom_id)
+                    enlazados += 1
+                if r.get("stored"):
+                    creados += 1
         audit.log("remember", f"atomizado: {creados}/{len(atomos)} átomos",
                   fuente=src_id, texto=str(text)[:60])
-        return {"stored": bool(src_id) or creados > 0, "id": src_id,
+        return {"stored": bool(fuente.get("stored")) or creados > 0, "id": src_id,
                 "atomized": True, "atoms": len(atomos), "atoms_created": creados,
+                "atoms_linked": enlazados, "atoms_skipped": len(atomos) - enlazados,
                 "novelty": fuente.get("novelty"), "surprise": fuente.get("surprise"),
                 "importance": _clip01(importance)}
 
     def _remember_one(self, text: str, importance: float = 0.5,
-                      confidence: float = 0.5) -> dict:
+                      confidence: float = 0.5,
+                      protected_ids: set[int] | None = None) -> dict:
         """Graba UN episodio (un átomo o un texto de una idea) salvo doble veto: NO lo
         guarda si es redundante (ya hay algo casi igual) NI si es predecible (el modelo
         de sorpresa ya lo esperaba)."""
@@ -482,9 +497,10 @@ class Hipercampo:
             todos = self.store.all(only_active=False, include_dormant=True,
                                    own_only=True)
             if len(todos) >= MAX_MEMORIES:
+                protegidos = protected_ids or set()
                 podables = [r for r in todos
                             if r["kind"] == "episodic" and r["importance"] < 0.8
-                            and r["id"] != best_id]
+                            and r["id"] != best_id and r["id"] not in protegidos]
                 podables.sort(key=lambda r: (not r["dormant"], self.retention(r)))
                 if not podables:
                     self.surprise.learn(text)

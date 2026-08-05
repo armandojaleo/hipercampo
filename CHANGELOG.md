@@ -6,6 +6,10 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Structured facts are visible in the viewer (v0.9.8).** The **Facts** tab exposes
+  role-record queries and history without dropping to the CLI, while Ideas now explains
+  plainly what bridge produced each hypothesis. The extension manifest and lockfile are
+  synchronized at v0.9.9.
 - **Living memory: the viewer warns when a server runs stale code.** An MCP server is a
   long-lived process that loads code at startup and can't hot-reload, so after upgrading
   hipercampo a running server may keep serving the old code silently (e.g. not atomizing).
@@ -26,6 +30,13 @@ All notable changes to this project are documented here. Format loosely based on
   memory) — the list shows the coherent source; atoms stay for precise recall and appear
   under their source in the Map (green edge). Opt out with `HIPERCAMPO_NO_ATOMIZE=1`.
   Tests in `test_atomize.py`, `test_atomize_remember.py`.
+
+### Fixed
+- **Atomized writes preserve document integrity.** Source, atoms and their links now
+  share one database transaction; link failures roll back the whole write, duplicate
+  atoms reuse their reinforced IDs, and content beyond `MAX_TEXT_LEN` cannot leak into
+  standalone atoms. Under `HIPERCAMPO_MAX_MEMORIES`, the source and accepted atoms are
+  protected as one bounded group instead of evicting one another.
 
 ## [0.1.0b12] — 2026-07-30
 
