@@ -74,6 +74,11 @@
       backup: "Copia de seguridad",
       backupHint: "Crea una copia consistente del .db",
       sMcpDb: "memoria", sMcpCtx: "contexto",
+      reiniciarActualizar: "Sirve código VIEJO — reiniciar para actualizar",
+      sMcpViejo: (v) => `⚠ código viejo (${v || "?"})`,
+      sMcpViejoAviso: "Este servidor arrancó antes de la última actualización de "
+        + "hipercampo: sigue sirviendo el código anterior. Reinícialo (↻) para "
+        + "que cargue lo nuevo; el cliente lo relanza al usarlo.",
       sMcpDesconocida: "(no legible en este sistema)",
       ideasCargando: "Buscando ideas (puentes entre recuerdos)…",
       ideasVacio: "Sin ideas nuevas por ahora. El sueño propone puentes cuando dos recuerdos comparten un asociado común pero no están conectados; con poca memoria aún no hay qué cruzar.",
@@ -149,6 +154,11 @@
       backup: "Backup",
       backupHint: "Make a consistent copy of the .db",
       sMcpDb: "memory", sMcpCtx: "context",
+      reiniciarActualizar: "Running OLD code — restart to update",
+      sMcpViejo: (v) => `⚠ old code (${v || "?"})`,
+      sMcpViejoAviso: "This server started before hipercampo's last update: it's still "
+        + "serving the old code. Restart it (↻) to load the new one; the client "
+        + "relaunches it on use.",
       sMcpDesconocida: "(not readable on this system)",
       ideasCargando: "Looking for ideas (bridges between memories)…",
       ideasVacio: "No new ideas yet. Dreaming proposes bridges when two memories share a common associate but aren't connected; with little memory there's nothing to cross yet.",
@@ -719,8 +729,12 @@
             ? ctx + (fichero ? ` · ${esc(fichero)}` : "")
             : (fichero ? `${L.sMcpDb}: ${esc(fichero)}` : L.sMcpDesconocida);
           const cerrar = `<button class="sbtn kill" data-cmd="kill" data-pid="${p.pid}" `
-            + `title="${L.matarServidor}">✕</button>`;
-          return fila(`· ${quien}`,
+            + `title="${p.stale ? L.reiniciarActualizar : L.matarServidor}">`
+            + `${p.stale ? "↻" : "✕"}</button>`;
+          const aviso = p.stale
+            ? ` <span class="sbadge-old" title="${L.sMcpViejoAviso}">${L.sMcpViejo(p.version)}</span>`
+            : "";
+          return fila(`· ${quien}${aviso}`,
             `${L.sDesde(p.arranque ? fecha(p.arranque) : "?")} · pid ${p.pid} ${cerrar}`);
         }).join(""))
       + `</div>`

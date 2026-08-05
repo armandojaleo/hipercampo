@@ -6,6 +6,13 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Living memory: the viewer warns when a server runs stale code.** An MCP server is a
+  long-lived process that loads code at startup and can't hot-reload, so after upgrading
+  hipercampo a running server may keep serving the old code silently (e.g. not atomizing).
+  Now the server signs its version + pid into memory on startup; `hipercampo status`
+  compares it to the installed version; and the viewer (v0.9.7) shows an *"old code"*
+  badge with a one-click **↻ restart** on the stale server (the client relaunches it fresh).
+  No more memory quietly in a coma after an update.
 - **Atomization on write — buried facts stop being invisible.** A long note used to be
   one hypervector; a short query for one fact inside it was almost unrecoverable, because
   bundling T facts dilutes each by ~1/√T. Now `remember()` splits multi-idea text into

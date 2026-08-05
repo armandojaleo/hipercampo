@@ -689,8 +689,26 @@ def cmd_status(_args) -> int:
 
     # Servidor MCP: en marcha o no (el cliente lo arranca al usar una herramienta).
     try:
+        from .store import Store
         procesos = listar()
-        out["mcp"] = {"running": len(procesos), "servers": procesos}
+        for p in procesos:                        # ¿sirve código VIEJO tras actualizar?
+            p["version"] = None
+            p["stale"] = False
+            if p.get("db") and p.get("namespace"):
+                try:
+                    s = Store(p["db"], namespace=p["namespace"])
+                    try:
+                        ver = s.get_meta("server_version")
+                        pid = s.get_meta("server_pid")
+                    finally:
+                        s.close()
+                    if ver and str(pid) == str(p["pid"]):
+                        p["version"] = ver
+                        p["stale"] = ver != __version__
+                except Exception:
+                    pass
+        out["mcp"] = {"running": len(procesos), "servers": procesos,
+                      "installed": __version__}
     except Exception as e:
         out["mcp"] = {"error": str(e)}
 
