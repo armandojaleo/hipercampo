@@ -387,7 +387,21 @@
     }
   }
 
+  // Los átomos son el 'dst' de los enlaces type='atom' (un átomo cuelga de su fuente).
+  function atomHijos() {
+    const s = new Set();
+    for (const e of EDGES) if (e.type === "atom") s.add(e.dst);
+    return s;
+  }
+
   function renderList(items) {
+    // Al NAVEGAR (no en resultados de recall), ocultar los átomos: un trozo suelto
+    // ("', consultable por rol.") no es un recuerdo. Se muestra la FUENTE coherente; el
+    // átomo sigue existiendo para el recall preciso y se ve en el Mapa (enlace verde).
+    if (HITS === null) {
+      const hijos = atomHijos();
+      if (hijos.size) items = items.filter((m) => !hijos.has(m.id));
+    }
     const c = $("view-list");
     c.innerHTML = "";
     const frag = document.createDocumentFragment();

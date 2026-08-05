@@ -34,9 +34,14 @@ from .surprise import SurpriseModel
 from .vsa import bundle, similarity, similarity_batch
 
 # --- parámetros de criterio (aquí es donde manda el juicio humano) -------
-# Atomizar al grabar: un texto de varias ideas se trocea y cada átomo se guarda
-# enlazado a su fuente, para que un hecho enterrado no se diluya (1/√T, medido).
+# Atomizar al grabar: un DOCUMENTO largo de varias ideas se trocea y cada átomo se
+# guarda enlazado a su fuente, para que un hecho enterrado no se diluya (1/√T, medido).
+# Solo documentos, NO notas: una nota corta se guarda entera (atomizarla la fragmenta en
+# trozos sin sentido —"', consultable por rol."— que ensucian la memoria). La dilución a
+# pocas frases es leve (medido: +0.075 a 4 hechos); el gran salto está en textos largos.
 ATOMIZE_ON_REMEMBER = os.environ.get("HIPERCAMPO_NO_ATOMIZE") != "1"
+ATOMIZE_MIN_LEN = int(os.environ.get("HIPERCAMPO_ATOMIZE_MIN_LEN", "500"))  # chars
+ATOMIZE_MIN_ATOMS = 4    # y al menos tantos átomos: si no, no compensa fragmentar
 NOVELTY_WRITE_THRESHOLD = 0.06   # por debajo -> ya lo tenemos, no dupliques
 SURPRISE_WRITE_THRESHOLD = 0.05  # por debajo -> el modelo ya lo predecía, trivial
 SUPERSEDE_HINT_SIMILARITY = 0.72 # por encima -> avisamos de posible actualización
@@ -391,8 +396,11 @@ class Hipercampo:
             audit.log("remember", "en pausa: no se graba")
             return {"stored": False, "paused": True,
                     "reason": "memoria en pausa (modo 'no recordar')"}
-        atomos = atomize(text) if ATOMIZE_ON_REMEMBER and isinstance(text, str) else []
-        if len(atomos) <= 1:                          # una sola idea: como siempre
+        # Solo atomizar DOCUMENTOS largos con varios hechos, no notas cortas.
+        atomizar = (ATOMIZE_ON_REMEMBER and isinstance(text, str)
+                    and len(text) >= ATOMIZE_MIN_LEN)
+        atomos = atomize(text) if atomizar else []
+        if len(atomos) < ATOMIZE_MIN_ATOMS:           # nota o texto corto: entero
             return self._remember_one(text, importance, confidence)
         fuente = self._remember_one(text, importance, confidence)   # el texto completo
         src_id = fuente.get("id")

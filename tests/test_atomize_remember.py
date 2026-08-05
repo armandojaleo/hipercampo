@@ -21,21 +21,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from helpers import ejecutar, limpiar, memoria     # noqa: E402
 from hipercampo import memory as _mem                # noqa: E402
 
-_LARGO = ("El servidor de produccion esta en Frankfurt. La reunion diaria es a las "
-          "nueve. La clave del wifi es girasol2024. El cliente principal es una empresa "
-          "de logistica maritima. El despliegue fallo por un timeout de red.")
+# Un DOCUMENTO largo (>500 chars, varios hechos): esto SÍ se atomiza. Una nota corta
+# no (ver test_nota_corta_no_se_atomiza): atomizarla la fragmentaría en trozos inútiles.
+_LARGO = ("El servidor de produccion esta alojado en Frankfurt desde el ultimo "
+          "traslado. La reunion diaria del equipo es a las nueve de la manana en la "
+          "sala grande. La clave del wifi de la oficina es girasol2024 y cambia cada "
+          "trimestre. El cliente principal es una empresa de logistica maritima con "
+          "sede en Rotterdam. El ultimo despliegue de la version dos fallo por un "
+          "timeout de red en el balanceador. La copia de seguridad nocturna se guarda "
+          "en el almacen frio del proveedor. El responsable de guardia esta localizable "
+          "por el canal de incidencias del movil corporativo.")
 
 
 def test_atomiza_y_enlaza_a_la_fuente():
     hc = memoria("atom_rem")
     r = hc.remember(_LARGO, 0.7)
     assert r.get("atomized") is True, r
-    assert r.get("atoms") == 5 and r.get("atoms_created") == 5, r
-    # fuente + 5 átomos = 6 recuerdos
-    assert len(hc.store.all(only_active=False)) == 6
+    n = r.get("atoms")
+    assert n >= 4 and r.get("atoms_created") == n, r
+    # fuente + n átomos
+    assert len(hc.store.all(only_active=False)) == n + 1
     # cada átomo cuelga de la fuente (type='atom')
     enlaces_atom = [e for e in hc.store.links_dump() if e["type"] == "atom"]
-    assert len(enlaces_atom) == 5, enlaces_atom
+    assert len(enlaces_atom) == n, enlaces_atom
+    hc.close()
+
+
+def test_nota_corta_no_se_atomiza():
+    """Una nota de pocas frases se guarda ENTERA: atomizarla la fragmentaría en trozos
+    inútiles ('", consultable por rol.') que ensucian la memoria. Solo documentos largos."""
+    hc = memoria("atom_corta")
+    r = hc.remember("El servidor esta en Frankfurt. La reunion es a las nueve.", 0.7)
+    assert not r.get("atomized"), r
+    assert len(hc.store.all(only_active=False)) == 1
     hc.close()
 
 

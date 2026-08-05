@@ -19,8 +19,13 @@ All notable changes to this project are documented here. Format loosely based on
   atoms (`hipercampo/atomize.py`, dependency-free sentence/clause segmenter for ES/EN) and
   stores each atom linked to its source (`type='atom'`). Measured (`scripts/atom_probe.py`):
   finding a fact buried in a 64-fact text goes from **hit@1 0.15 (monolithic) to 1.00
-  (atomized)**; end-to-end, a short cue retrieves the exact atom. Opt out with
-  `HIPERCAMPO_NO_ATOMIZE=1`. Tests in `test_atomize.py`, `test_atomize_remember.py`.
+  (atomized)**; end-to-end, a short cue retrieves the exact atom. Only **long documents**
+  are split (≥500 chars and ≥4 atoms, tunable via `HIPERCAMPO_ATOMIZE_MIN_LEN`): a short
+  note stays whole, since atomizing it would just scatter meaningless fragments. And the
+  atoms are **hidden from the flat memory list** (a fragment out of context is not a
+  memory) — the list shows the coherent source; atoms stay for precise recall and appear
+  under their source in the Map (green edge). Opt out with `HIPERCAMPO_NO_ATOMIZE=1`.
+  Tests in `test_atomize.py`, `test_atomize_remember.py`.
 
 ## [0.1.0b12] — 2026-07-30
 
