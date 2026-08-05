@@ -6,6 +6,12 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Cognitive ablations are measured, not assumed.** `scripts/ablations.py --check`
+  isolates surprise, confidence, propagation and consolidation on fixed corpora and
+  queries, emits JSON for machines and now runs in CI. Measured lexical results:
+  surprise stores 46/100 routine observations while retaining the rare anomaly;
+  confidence raises MRR 0.783→0.820; propagation is neutral at 0.820; consolidation
+  cuts active nodes 20→11 while raising content MRR 0.820→0.860.
 - **Prediction memory survives restarts.** The adaptive surprise model now persists its
   unigram/bigram counts and 300-sample calibration window per namespace, including
   observations rejected as redundant or predictable. Token identifiers are stable

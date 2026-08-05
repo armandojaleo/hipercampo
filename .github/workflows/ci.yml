@@ -130,6 +130,10 @@ jobs:
         run: python scripts/latency.py 1000 5000 10000
       - name: Comparativa con baselines (BM25 vs hipercampo, léxico)
         run: python scripts/baselines.py
+      - name: Ablaciones cognitivas (sorpresa, confianza, propagación, consolidación)
+        env:
+          HIPERCAMPO_LOG: "0"
+        run: python scripts/ablations.py --check
       - name: Ejemplos de uso (smoke)
         run: |
           for e in examples/*.py; do echo "== $e =="; python "$e"; done

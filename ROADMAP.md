@@ -44,7 +44,7 @@ La beta b12 está cerrada y publicada en PyPI tras CI multiplataforma verde.
 4. ✅ Continuidad de sorpresa entre procesos: estado incremental aislado por namespace,
    persistente, acotado y atómico; una observación rechazada ya no se pierde al reiniciar.
 5. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,
-   memoria y coste navegable; faltan ablaciones y datasets externos estándar.
+   memoria y coste navegable; faltan datasets externos estándar.
 6. Selección de namespace y UX estable de la extensión; la extensión no se etiqueta como producto estable todavía.
 
 ## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
@@ -128,8 +128,12 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
   embeddings); en léxico ya supera a BM25 (erratas 0.95 vs 0.77). La abstención
   (falsaRec) estaba en 1.00 por un umbral mal puesto; **calibrada a 0.17-0.20**, a la
   par de embeddings (ver Fase 1b y `scripts/calibrate.py`).
-- 🟡 **Ablación**: sin propagación (medida: no cambia en este corpus). Faltan
-  sin-sorpresa / sin-consolidación / sin-confianza aisladas.
+- 🟢 **Ablaciones aisladas y bloqueantes** (`scripts/ablations.py --check`): la
+  sorpresa reduce una corriente predecible de 100→46 recuerdos y conserva la
+  anomalía; la confianza mejora MRR 0,783→0,820; la propagación es neutral aquí
+  (0,820→0,820, por lo que no se le atribuye una mejora falsa); consolidar reduce
+  nodos activos 20→11 y mejora MRR de contenido 0,820→0,860. El CI falla si estas
+  relaciones se invierten o la consolidación degrada más de 0,02.
 - ⚪ Sobre datasets **estándar** (LongMemEval, MemoryAgentBench), no solo el propio.
 - ⚪ Métricas extra: precisión de abstención calibrada, tokens metidos en contexto,
   latencia p50/p95.
