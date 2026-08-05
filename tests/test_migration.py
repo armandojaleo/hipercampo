@@ -168,6 +168,22 @@ def Store_version():
     return Store.SCHEMA_VERSION
 
 
+def test_migracion_crea_estado_de_sorpresa_versionado():
+    _crear_bd_v0()
+    hc = Hipercampo(_DB, namespace="default")
+    tablas = {row[0] for row in hc.store.db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )}
+    assert {"surprise_counts", "surprise_history"} <= tablas
+    assert hc.store.db.execute("PRAGMA user_version").fetchone()[0] == 7
+    total = hc.surprise.total
+    assert total > 0
+    hc.close()
+    reopened = Hipercampo(_DB, namespace="default")
+    assert reopened.surprise.total == total
+    reopened.close(); _clean()
+
+
 def test_puede_escribir_tras_migrar():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")

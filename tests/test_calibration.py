@@ -7,6 +7,7 @@ Tests de las garantías de la ronda de calibración/consistencia:
 Ejecuta:  python tests/test_calibration.py
 """
 
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -96,6 +97,60 @@ def test_sorpresa_no_se_adelanta_a_la_bd_en_rollback():
     s_despues = hc.surprise.surprise(texto)
     assert abs(s_antes - s_despues) < 1e-9, "el modelo aprendió algo que la BD revirtió"
     assert hc.stats()["total"] == 0
+
+
+def test_persistencia_de_sorpresa_es_atomica_con_la_memoria():
+    hc = fresh()
+    total = hc.surprise.total
+
+    def falla(*_args, **_kwargs):
+        raise sqlite3.OperationalError("disk is full")
+
+    hc.store.record_surprise = falla
+    result = hc.remember("esta escritura debe revertirse por completo", 0.5)
+    assert "error" in result
+    assert hc.stats()["total"] == 0
+    assert hc.surprise.total == total
+    assert hc.store.load_surprise() is None
+
+
+def test_historial_persistente_de_sorpresa_esta_acotado():
+    hc = fresh()
+    for i in range(315):
+        hc.store.record_surprise([], float(i))
+    scores = [row[0] for row in hc.store.db.execute(
+        "SELECT score FROM surprise_history WHERE namespace='c' ORDER BY id"
+    )]
+    assert len(scores) == 300
+    assert scores[0] == 15.0 and scores[-1] == 314.0
+
+
+def test_sorpresa_persiste_rechazos_y_se_aisla_por_namespace():
+    hc = fresh()
+    frase = "el servidor estable repite exactamente esta secuencia conocida"
+    resultados = [hc.remember(frase, 0.5) for _ in range(45)]
+    assert any(not r["stored"] for r in resultados), "no ejercitó el camino rechazado"
+    total = hc.surprise.total
+    recent = list(hc.surprise._recent)
+    score = hc.surprise.surprise(frase)
+    predictable = hc.surprise.predictable(score)
+    tokens_db = {row[0] for row in hc.store.db.execute(
+        "SELECT token FROM surprise_counts WHERE namespace='c'"
+    )}
+    assert "servidor" not in tokens_db, "los contadores no deben guardar texto literal"
+    hc.close()
+
+    reopened = Hipercampo(_DB, namespace="c")
+    assert reopened.surprise.total == total
+    assert list(reopened.surprise._recent) == recent
+    assert abs(reopened.surprise.surprise(frase) - score) < 1e-12
+    assert reopened.surprise.predictable(score) is predictable
+
+    isolated = Hipercampo(_DB, namespace="otro")
+    assert isolated.surprise.total == 0
+    assert list(isolated.surprise._recent) == []
+    isolated.close()
+    reopened.close()
 
 
 if __name__ == "__main__":

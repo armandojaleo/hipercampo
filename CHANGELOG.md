@@ -6,6 +6,13 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Prediction memory survives restarts.** The adaptive surprise model now persists its
+  unigram/bigram counts and 300-sample calibration window per namespace, including
+  observations rejected as redundant or predictable. Token identifiers are stable
+  hashes rather than plaintext, migrations upgrade existing databases to schema v7,
+  and model updates commit atomically with memory writes. A 1,000-update in-memory
+  probe costs 0.244 ms per observation; restart, isolation, growth bound and rollback
+  behavior have regression tests.
 - **Real-corpus navigation quality gate.** `scripts/nav_real.py --check` now fails CI
   when navigation drifts from full scan, semantic group quality degrades, p95 latency or
   resident memory exceed their budgets, the explored fraction grows too far, or the

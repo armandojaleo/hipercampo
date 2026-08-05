@@ -15,11 +15,11 @@ imprevisible = sorprendente. Pocos bits = ya era predecible = redundante.
 Es 100% original, determinista y corre en CPU. Se "calienta" reproduciendo la
 memoria GUARDADA al arrancar (ver Hipercampo.__init__).
 
-Limitación honesta: tras reiniciar se reconstruye SOLO desde los recuerdos
-guardados; lo que se vio pero se rechazó (por redundante/predecible) no persiste.
-Persistir los contadores es un pendiente del roadmap (Fase 1b).
+El estado incremental puede restaurarse desde SQLite: incluye también lo visto pero
+rechazado, sin guardar el texto literal en los contadores persistentes.
 """
 
+import hashlib
 import math
 import re
 from collections import Counter, defaultdict, deque
@@ -64,9 +64,17 @@ class SurpriseModel:
             return 0.6 * p_bi + 0.4 * p_uni
         return p_uni
 
+    @staticmethod
+    def tokens(text: str) -> list[str]:
+        """Identificadores estables de tokens; no persisten palabras en claro."""
+        return [
+            hashlib.blake2s(token.encode("utf-8"), digest_size=8).hexdigest()
+            for token in _word.findall(text.lower())
+        ]
+
     def bits(self, text: str) -> float:
         """Bits/token medios para predecir 'text' dado lo aprendido (sin aprenderlo)."""
-        toks = _word.findall(text.lower())
+        toks = self.tokens(text)
         if not toks:
             return 0.0
         total_bits = 0.0
@@ -95,7 +103,7 @@ class SurpriseModel:
 
     def learn(self, text: str) -> None:
         """Incorpora el texto al modelo: lo que se ve, deja de sorprender."""
-        toks = _word.findall(text.lower())
+        toks = self.tokens(text)
         prev = None
         for t in toks:
             self.uni[t] += 1
@@ -104,3 +112,31 @@ class SurpriseModel:
             if prev is not None:
                 self.bi[prev][t] += 1
             prev = t
+
+    def count_rows(self) -> list[tuple[str, str, int]]:
+        """Estado compacto listo para persistir: '' identifica unigramas."""
+        rows = [("", token, int(count)) for token, count in self.uni.items()]
+        rows.extend(
+            (previous, token, int(count))
+            for previous, context in self.bi.items()
+            for token, count in context.items()
+        )
+        return rows
+
+    def restore(self, rows: list[tuple[str, str, int]],
+                recent: list[float]) -> None:
+        """Restaura contadores y calibración reciente desde el namespace propio."""
+        self.uni.clear()
+        self.bi.clear()
+        self.total = 0
+        self.vocab.clear()
+        self._recent.clear()
+        for previous, token, count in rows:
+            count = int(count)
+            if previous:
+                self.bi[previous][token] = count
+            else:
+                self.uni[token] = count
+                self.total += count
+                self.vocab.add(token)
+        self._recent.extend(float(score) for score in recent)

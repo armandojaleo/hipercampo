@@ -41,9 +41,11 @@ La beta b12 está cerrada y publicada en PyPI tras CI multiplataforma verde.
    la navegación no degrada la calidad; ese techo es del *encoding* léxico → cuello de los sinónimos (abajo 🟡).
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
-4. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,
+4. ✅ Continuidad de sorpresa entre procesos: estado incremental aislado por namespace,
+   persistente, acotado y atómico; una observación rechazada ya no se pierde al reiniciar.
+5. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,
    memoria y coste navegable; faltan ablaciones y datasets externos estándar.
-5. Selección de namespace y UX estable de la extensión; la extensión no se etiqueta como producto estable todavía.
+6. Selección de namespace y UX estable de la extensión; la extensión no se etiqueta como producto estable todavía.
 
 ## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
 
@@ -92,7 +94,7 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
   si algo falla a mitad, se revierte (`store.transaction()`).
 - 🟢 **Validación de entradas en el núcleo**: texto no vacío + longitud máxima,
   `importance`/`confidence` acotados, `k`/`hops` acotados, namespace saneado.
-- 🟢 Migraciones versionadas (`PRAGMA user_version`, 6 pasos idempotentes,
+- 🟢 Migraciones versionadas (`PRAGMA user_version`, 7 pasos idempotentes,
   copia previa, reanudables). Tests en `tests/test_migration.py`.
 - 🟢 **Purga física / borrado seguro** (no confundir con el olvido, que solo adormece):
   `hipercampo purge --ids …` / `--older-than DÍAS` para secretos, derecho de supresión
@@ -106,8 +108,11 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
   alcanzable con secuencias realistas (`tests/test_calibration.py`).
 - 🟢 Aprender **después** del commit (el modelo no se adelanta a la BD si hay rollback)
   y reforzar solo si es redundante (no por un match débil al vetar por predecible).
-- ⚪ **Persistencia real** de los contadores unigrama/bigrama por namespace (hoy se
-  reconstruye solo desde lo guardado; lo visto-y-rechazado no persiste al reiniciar).
+- 🟢 **Persistencia real de la sorpresa por namespace**: unigramas/bigramas y la
+  ventana adaptativa de 300 observaciones sobreviven al reinicio, incluyendo lo
+  visto-y-rechazado. Los tokens se persisten como hashes, no como texto literal;
+  aprendizaje y memoria comparten transacción. Migración v7 y tests de continuidad,
+  aislamiento, rollback y crecimiento acotado.
 - 🟢 Calibrada la **abstención** midiendo la tasa de falsas recuperaciones al crecer N
   (`scripts/calibrate.py`). Hallazgo: `MIN_RECALL_SCORE` era **inerte** (moverlo no cambia
   ni MRR ni falsaRec); la palanca real, `ANSWER_MIN_SCORE`, estaba **por debajo** del

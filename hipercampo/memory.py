@@ -266,11 +266,16 @@ class Hipercampo:
         linked = [n for n in linked if n != SELF_NAMESPACE]
         self.store = Store(path, namespace=namespace, linked=tuple(linked))
         audit.set_logfile(path)
-        # Modelo de sorpresa: se "calienta" reproduciendo la memoria existente,
-        # así lo ya guardado no vuelve a considerarse sorprendente tras un reinicio.
+        # El modelo de sorpresa persiste incluso lo visto y rechazado. Las bases
+        # anteriores se siembran una vez desde recuerdos PROPIOS (no los enlazados).
         self.surprise = SurpriseModel()
-        for row in self.store.all(only_active=False):
-            self.surprise.learn(row["text"])
+        persisted = self.store.load_surprise()
+        if persisted is None:
+            for row in self.store.all(only_active=False, own_only=True):
+                self.surprise.learn(row["text"])
+            self.store.seed_surprise(self.surprise.count_rows())
+        else:
+            self.surprise.restore(*persisted)
         from .roles import RoleMemory
         self.roles = RoleMemory(self.store)   # memoria composicional de hechos
         # Señales crudas de la última decisión de abstención (diagnóstico, no estado):
@@ -465,17 +470,20 @@ class Hipercampo:
 
         novelty = 1.0 - best_sim                      # ¿hay algo parecido ya?
         surprise = self.surprise.surprise(text)       # ¿era predecible? (bits, MDL)
+        surprise_tokens = self.surprise.tokens(text)
 
         # DOBLE VETO. Se decide 'predecible' con el historial PREVIO; luego se observa
         # (para no meter la muestra actual en la distribución que la juzga a sí misma).
         redundante = best_id is not None and novelty < NOVELTY_WRITE_THRESHOLD
         predecible = self.surprise.predictable(surprise)
-        self.surprise.observe(surprise)
         if redundante or predecible:
             # refuerzo SOLO si es redundante (similitud real); si solo era predecible,
             # el "mejor" match puede ser un parecido débil que no debemos reforzar.
-            if redundante:
-                self.store.reinforce(best_id)
+            with self.store.transaction():
+                if redundante:
+                    self.store.reinforce(best_id)
+                self.store.record_surprise(surprise_tokens, surprise)
+            self.surprise.observe(surprise)
             self.surprise.learn(text)
             audit.log("remember", "saltado: " + ("redundante" if redundante else "predecible"),
                       novedad=round(novelty, 2), sorpresa=round(surprise, 2))
@@ -503,6 +511,9 @@ class Hipercampo:
                             and r["id"] != best_id and r["id"] not in protegidos]
                 podables.sort(key=lambda r: (not r["dormant"], self.retention(r)))
                 if not podables:
+                    with self.store.transaction():
+                        self.store.record_surprise(surprise_tokens, surprise)
+                    self.surprise.observe(surprise)
                     self.surprise.learn(text)
                     return {"stored": False, "reason": "memoria llena (todo protegido)",
                             "novelty": round(novelty, 3), "surprise": round(surprise, 3)}
@@ -534,6 +545,8 @@ class Hipercampo:
                     n_knn += cur.rowcount
                     if n_knn >= NAV_WRITE_NEIGHBORS:
                         break
+            self.store.record_surprise(surprise_tokens, surprise)
+        self.surprise.observe(surprise)
         self.surprise.learn(text)                     # aprender tras confirmar
         audit.log("remember", f"guardado id={mem_id}", texto=text[:60],
                   novedad=round(novelty, 2), sorpresa=round(surprise, 2),
@@ -614,6 +627,7 @@ class Hipercampo:
                 self.store.mark_superseded([best["id"]])
                 self.store.link(new_id, best["id"], weight=1.0,
                                 type="update")      # cadena de historia
+            self.store.record_surprise(self.surprise.tokens(new_text))
         self.surprise.learn(new_text)                     # aprender tras confirmar
 
         if confiable:

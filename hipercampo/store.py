@@ -9,6 +9,7 @@ Un solo fichero .db portátil. En Docker vive en el volumen /data.
 import os
 import sqlite3
 import time
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -80,6 +81,18 @@ CREATE TABLE IF NOT EXISTS meta (
     value     TEXT,
     PRIMARY KEY (namespace, key)
 );
+CREATE TABLE IF NOT EXISTS surprise_counts (
+    namespace TEXT NOT NULL,
+    context   TEXT NOT NULL,
+    token     TEXT NOT NULL,
+    count     INTEGER NOT NULL,
+    PRIMARY KEY (namespace, context, token)
+);
+CREATE TABLE IF NOT EXISTS surprise_history (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    namespace TEXT NOT NULL,
+    score     REAL NOT NULL
+);
 """
 
 # Los índices van APARTE y se crean DESPUÉS de migrar: en una BD antigua las
@@ -89,6 +102,7 @@ _INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_kind ON memories(namespace, kind, consolidated);
 CREATE INDEX IF NOT EXISTS idx_links_ns ON links(namespace);
 CREATE INDEX IF NOT EXISTS idx_facts_ns ON facts(namespace);
+CREATE INDEX IF NOT EXISTS idx_surprise_history_ns ON surprise_history(namespace, id);
 CREATE INDEX IF NOT EXISTS idx_vivos ON memories(namespace, strength DESC, last_access DESC);
 """
 
@@ -171,7 +185,8 @@ class Store:
         try:
             tablas = {r[0] for r in self.db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'")}
-            faltan = {"memories", "links", "facts", "meta"} - tablas
+            faltan = {"memories", "links", "facts", "meta",
+                      "surprise_counts", "surprise_history"} - tablas
             info["esquema"] = "ok" if not faltan else f"faltan tablas: {sorted(faltan)}"
         except Exception as e:
             info["esquema"] = f"ERROR: {e}"
@@ -295,6 +310,19 @@ class Store:
             if columna in self._columnas(tabla):
                 self.db.execute(f"UPDATE {tabla} SET {columna} = {columna}")
 
+    def _m007_sorpresa_persistente(self):
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS surprise_counts ("
+            "namespace TEXT NOT NULL, context TEXT NOT NULL, "
+            "token TEXT NOT NULL, count INTEGER NOT NULL, "
+            "PRIMARY KEY (namespace, context, token))"
+        )
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS surprise_history ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "namespace TEXT NOT NULL, score REAL NOT NULL)"
+        )
+
     def _m005_metadatos_de_salud(self):
         # Un enlace solo puede estar en uno de estos estados; una BD antigua con
         # basura queda normalizada antes de que la máquina de estados dependa de ella.
@@ -316,14 +344,17 @@ class Store:
         (4, "hechos_con_historia", _m004_hechos_con_historia),
         (5, "metadatos_de_salud", _m005_metadatos_de_salud),
         (6, "reescribir_filas_antiguas", _m006_reescribir_filas_antiguas),
+        (7, "sorpresa_persistente", _m007_sorpresa_persistente),
     ]
-    SCHEMA_VERSION = 6
+    SCHEMA_VERSION = 7
 
     # Columnas que _SCHEMA crea de fábrica: si están TODAS, la BD ya nació al día.
     _COLUMNAS_ACTUALES = {
         "memories": {"superseded", "confidence", "namespace", "dormant", "fact_id"},
         "links": {"namespace", "type", "status", "created_at"},
         "facts": {"valid_from", "valid_to", "supersedes", "source"},
+        "surprise_counts": {"namespace", "context", "token", "count"},
+        "surprise_history": {"id", "namespace", "score"},
     }
 
     def _al_dia(self) -> bool:
@@ -451,6 +482,57 @@ class Store:
             "INSERT INTO meta(namespace,key,value) VALUES(?,?,?) "
             "ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value",
             (self.namespace, key, str(value)))
+        self._commit()
+
+    def load_surprise(self):
+        """Carga el modelo incremental del namespace, o None si aún no existe."""
+        counts = list(self.db.execute(
+            "SELECT context, token, count FROM surprise_counts WHERE namespace=?",
+            (self.namespace,),
+        ))
+        recent = [row[0] for row in self.db.execute(
+            "SELECT score FROM surprise_history WHERE namespace=? "
+            "ORDER BY id DESC LIMIT 300", (self.namespace,),
+        )][::-1]
+        return (counts, recent) if counts or recent else None
+
+    def seed_surprise(self, rows) -> None:
+        """Inicializa una BD anterior desde sus recuerdos, una sola vez."""
+        if self.load_surprise() is not None:
+            return
+        self.db.executemany(
+            "INSERT INTO surprise_counts(namespace,context,token,count) "
+            "VALUES(?,?,?,?) ON CONFLICT(namespace,context,token) DO NOTHING",
+            ((self.namespace, context, token, count)
+             for context, token, count in rows),
+        )
+        self._commit()
+
+    def record_surprise(self, tokens: list[str], score: float | None = None,
+                        history_limit: int = 300) -> None:
+        """Suma una observación sin guardar su texto literal."""
+        unigrams = Counter(tokens)
+        bigrams = Counter(zip(tokens, tokens[1:], strict=False))
+        rows = [(self.namespace, "", token, count)
+                for token, count in unigrams.items()]
+        rows.extend((self.namespace, previous, token, count)
+                    for (previous, token), count in bigrams.items())
+        self.db.executemany(
+            "INSERT INTO surprise_counts(namespace,context,token,count) "
+            "VALUES(?,?,?,?) ON CONFLICT(namespace,context,token) DO UPDATE "
+            "SET count=count+excluded.count", rows,
+        )
+        if score is not None:
+            self.db.execute(
+                "INSERT INTO surprise_history(namespace,score) VALUES(?,?)",
+                (self.namespace, float(score)),
+            )
+            self.db.execute(
+                "DELETE FROM surprise_history WHERE namespace=? AND id NOT IN "
+                "(SELECT id FROM surprise_history WHERE namespace=? "
+                "ORDER BY id DESC LIMIT ?)",
+                (self.namespace, self.namespace, history_limit),
+            )
         self._commit()
 
     def close_fact(self, fact_id: int, when: float | None = None):
