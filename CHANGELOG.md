@@ -6,6 +6,13 @@ All notable changes to this project are documented here. Format loosely based on
 ## [Unreleased]
 
 ### Added
+- **Context efficiency is now a quality gate.** `scripts/context_efficiency.py`
+  measures retrieval quality, selective precision, abstention, complete MCP payload
+  tokens and p50/p95 latency on 30 positive plus 30 unrelated queries. Current lexical
+  results are MRR 0.744, abstention 0.833, selective precision 0.786, payload p95 401
+  estimated tokens and latency p95 ~6.2 ms. The same dependency-free runner accepts
+  official LongMemEval JSON and reports evidence-session recall@k separately from LLM
+  answer quality; a schema-faithful offline fixture protects the adapter.
 - **Cognitive ablations are measured, not assumed.** `scripts/ablations.py --check`
   isolates surprise, confidence, propagation and consolidation on fixed corpora and
   queries, emits JSON for machines and now runs in CI. Measured lexical results:

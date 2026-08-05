@@ -134,6 +134,10 @@ jobs:
         env:
           HIPERCAMPO_LOG: "0"
         run: python scripts/ablations.py --check
+      - name: Eficiencia de contexto (calidad, tokens y latencia)
+        env:
+          HIPERCAMPO_LOG: "0"
+        run: python scripts/context_efficiency.py --check
       - name: Ejemplos de uso (smoke)
         run: |
           for e in examples/*.py; do echo "== $e =="; python "$e"; done

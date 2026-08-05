@@ -134,9 +134,14 @@ La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 ab
   (0,820→0,820, por lo que no se le atribuye una mejora falsa); consolidar reduce
   nodos activos 20→11 y mejora MRR de contenido 0,820→0,860. El CI falla si estas
   relaciones se invierten o la consolidación degrada más de 0,02.
-- ⚪ Sobre datasets **estándar** (LongMemEval, MemoryAgentBench), no solo el propio.
-- ⚪ Métricas extra: precisión de abstención calibrada, tokens metidos en contexto,
-  latencia p50/p95.
+- 🟡 Sobre datasets **estándar**: adaptador de retrieval para el JSON oficial de
+  LongMemEval listo y probado (`scripts/context_efficiency.py --longmemeval …`),
+  con recall de sesiones de evidencia y abstención; falta ejecutar y publicar las
+  500 instancias oficiales. MemoryAgentBench sigue pendiente.
+- 🟢 **Eficiencia de contexto bloqueante** (`scripts/context_efficiency.py --check`):
+  sobre 30 consultas positivas + 30 ajenas mide MRR, cobertura, precisión selectiva,
+  abstención, payload MCP estimado y latencia. Estado léxico: MRR 0,744, abstención
+  0,833, precisión selectiva 0,786, p95 401 tokens y p95 6,2 ms.
 
 ## Fase 3 — Rendimiento a escala
 - 🟢 **Escaneo vectorizado**: XOR de toda la matriz + popcount nativo (NumPy 2.0) con
