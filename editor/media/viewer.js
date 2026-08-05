@@ -31,7 +31,7 @@
       nodosVisitados: (n) => `${n} nodos visitados`,
       actMuse: "Conexiones (muse)", actWake: "Despertar", actMove: "Mover a otro contexto",
       actForget: "Olvidar (reversible)", actPurge: "Borrar del todo (irreversible)",
-      leyAsociacion: "asociación", leyPuente: "puente onírico",
+      leyAsociacion: "asociación", leyPuente: "puente onírico", leyAtomo: "átomo → fuente",
       detMuse: "💡 conexiones", detWake: "☀️ despertar", detForget: "💤 olvidar",
       detPurge: "🗑️ borrar",
       tlLatente: "💤 latente", tlPronto: "⚠️ pronto latente",
@@ -106,7 +106,7 @@
       nodosVisitados: (n) => `${n} nodes visited`,
       actMuse: "Connections (muse)", actWake: "Wake", actMove: "Move to another context",
       actForget: "Forget (reversible)", actPurge: "Delete for good (irreversible)",
-      leyAsociacion: "association", leyPuente: "dream bridge",
+      leyAsociacion: "association", leyPuente: "dream bridge", leyAtomo: "atom → source",
       detMuse: "💡 connections", detWake: "☀️ wake", detForget: "💤 forget",
       detPurge: "🗑️ delete",
       tlLatente: "💤 dormant", tlPronto: "⚠️ soon dormant",
@@ -430,7 +430,8 @@
     l.innerHTML = nss.map((ns) =>
       `<div class="k"><span class="dot" style="background:${nsColor(ns)}"></span>${esc(ns)}</div>`).join("")
       + `<div class="k"><span class="ln" style="border-color:var(--vscode-foreground);opacity:.5"></span>${L.leyAsociacion}</div>`
-      + `<div class="k"><span class="ln" style="border-color:var(--vscode-textLink-foreground);border-top-style:dashed"></span>${L.leyPuente}</div>`;
+      + `<div class="k"><span class="ln" style="border-color:var(--vscode-textLink-foreground);border-top-style:dashed"></span>${L.leyPuente}</div>`
+      + `<div class="k"><span class="ln" style="border-color:rgba(120,190,140,.9)"></span>${L.leyAtomo}</div>`;
   }
 
   function ajustarCanvas(c) {
@@ -506,10 +507,12 @@
       const a = toScreen(s), b = toScreen(t);
       const puente = e.status === "proposed" || e.type === "bridge" || e.type === "dream";
       const knn = e.type === "knn";   // estructura de navegación: fina y tenue
+      const atomo = e.type === "atom"; // átomo -> su texto fuente: se muestra claro
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
       ctx.strokeStyle = puente ? getVar("--vscode-textLink-foreground")
-        : (knn ? "rgba(140,140,140,.13)" : "rgba(140,140,140,.45)");
-      ctx.lineWidth = puente ? 1.2 : (knn ? 0.5 : Math.min(2.5, 0.5 + (e.weight || 0.5) * 1.5));
+        : atomo ? "rgba(120,190,140,.6)"
+          : (knn ? "rgba(140,140,140,.13)" : "rgba(140,140,140,.45)");
+      ctx.lineWidth = puente ? 1.2 : atomo ? 1.5 : (knn ? 0.5 : Math.min(2.5, 0.5 + (e.weight || 0.5) * 1.5));
       if (puente) ctx.setLineDash([4, 4]); else ctx.setLineDash([]);
       const resaltar = G.sel && (e.src === G.sel || e.dst === G.sel);
       ctx.globalAlpha = G.sel && !resaltar ? 0.15 : 1;
