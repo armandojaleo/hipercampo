@@ -274,9 +274,13 @@ de creer). Cada una entra en una fase solo con su medición delante:
    un hecho enterrado en un texto de 64 ideas pasa de **acierto@1 0.15 (monolítico) a 1.00
    (atomizado)**; end-to-end, una pista corta recupera el átomo exacto. Desactivable con
    `HIPERCAMPO_NO_ATOMIZE=1`. Tests en `test_atomize.py` y `test_atomize_remember.py`.
-   **Falta: encoding MULTICANAL** — guardar un hipervector por canal
-   (léxico/temporal/espacial/rol) y fusionar en la recuperación, para que una consulta
-   espacial no se diluya con las palabras descriptivas. Promesa medible: +nDCG con RAM < 1.5×.
+   **Encoding MULTICANAL — MEDIDO y NO justificado (para recuperación de texto).** Se
+   prototipó (contenido + lugar + tiempo por canal vs bundle único, con consultas por
+   aspecto): **empate a Recall@1 1.000**, incluso con contenido "confuso" que menciona
+   otros lugares. La dilución baja la similitud absoluta pero NO el ranking, y los
+   **bigramas** del encoder ya distinguen "almacen norte" (campo) de un "norte" suelto.
+   Un HV por canal sería un rediseño grande para cero ganancia medida en texto. Podría
+   tener sentido en multimodal (sensores/robots), pero eso es el spin-off, no el core.
 2. **Benchmarks externos multilingües** (LongMemEval, LoCoMo, MuSiQue, BEIR) — convertir
    los claims en evidencia fuera del banco propio. Cierra el hueco "datasets estándar".
 3. **Meta-memoria: admisión por UTILIDAD+sorpresa** (no solo sorpresa, que no equivale a
