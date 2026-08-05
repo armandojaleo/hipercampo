@@ -23,7 +23,7 @@ BASE = {
     "corpus": 655,
     "fidelity": 1.0,
     "p95_ms": 9.0,
-    "visited_ratio": 0.48,
+    "visited_ratio": 0.43,
     "rss_mb": 60.0,
     "group_nav": 0.50,
     "group_scan": 0.50,
@@ -39,7 +39,7 @@ def test_gate_detecta_cada_regresion():
         ("corpus", {"corpus": 499}),
         ("fidelity", {"fidelity": 0.97}),
         ("p95_ms", {"p95_ms": 31.0}),
-        ("visited_ratio", {"visited_ratio": 0.66}),
+        ("visited_ratio", {"visited_ratio": 0.56}),
         ("rss_mb", {"rss_mb": 257.0}),
         ("group_gap", {"group_nav": 0.40, "group_scan": 0.50}),
     ]
@@ -59,8 +59,8 @@ def test_cli_cablea_el_presupuesto_sin_ejecutar_el_corpus():
     llamadas = []
     real = nav_real.run_benchmark
 
-    def simulado(queries, candidates, ef, shortcuts):
-        llamadas.append((queries, candidates, ef, shortcuts))
+    def simulado(queries, candidates, ef, shortcuts, adaptive_shortcuts):
+        llamadas.append((queries, candidates, ef, shortcuts, adaptive_shortcuts))
         return dict(BASE)
 
     nav_real.run_benchmark = simulado
@@ -68,11 +68,12 @@ def test_cli_cablea_el_presupuesto_sin_ejecutar_el_corpus():
         code = nav_real.main([
             "--check", "--json", "--queries", "7",
             "--candidates", "9", "--ef", "8", "--shortcuts", "1",
+            "--no-adaptive-shortcuts",
         ])
     finally:
         nav_real.run_benchmark = real
     assert code == 0
-    assert llamadas == [(7, 9, 8, 1)]
+    assert llamadas == [(7, 9, 8, 1, False)]
 
 def test_percentil_es_determinista():
     assert percentile([9.0, 1.0, 5.0, 3.0], 0.5) == 5.0

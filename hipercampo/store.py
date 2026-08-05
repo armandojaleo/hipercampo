@@ -104,7 +104,7 @@ class Store:
         self._ns_lectura = (namespace, *self.linked)
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._txn_depth = 0
-        self._nav_cache: dict[int, tuple[int, object]] = {}
+        self._nav_cache: dict[tuple[int, bool], tuple[int, object]] = {}
         self._connect()
 
     def _connect(self) -> None:
@@ -749,14 +749,17 @@ class Store:
         self._invalidate_nav()
         return tejidos
 
-    def navgraph(self, shortcuts: int = 2):
+    def navgraph(self, shortcuts: int = 2, adaptive_shortcuts: bool = True):
         """Monta el índice de NAVEGACIÓN del propio contexto: nodos = recuerdos (con su
         hipervector), aristas = los enlaces knn del mapa + atajos efímeros. Es el 'GPS'
         para recordar navegando en vez de escanear. Se construye desde lo ya guardado;
-        los atajos viven solo aquí (no en el mapa ni en la activación)."""
+        los atajos viven solo aquí (no en el mapa ni en la activación). El modo
+        adaptativo los omite solo cuando la topología base ya ofrece expansión
+        suficiente; adaptive_shortcuts=False conserva la ablación fija."""
         from .navgraph import NavGraph
         data_version = int(self.db.execute("PRAGMA data_version").fetchone()[0])
-        cached = self._nav_cache.get(shortcuts)
+        cache_key = (shortcuts, adaptive_shortcuts)
+        cached = self._nav_cache.get(cache_key)
         if cached is not None and cached[0] == data_version:
             return cached[1]
         # Camino estrecho: el GPS no necesita texto ni metadatos. Iterar cursores con
@@ -780,8 +783,9 @@ class Store:
         graph = NavGraph.desde_enlaces(
             {}, edges, shortcuts=shortcuts, compact=True,
             code_ids=code_ids, code_matrix=code_matrix,
+            adaptive_shortcuts=adaptive_shortcuts,
         )
-        self._nav_cache[shortcuts] = (data_version, graph)
+        self._nav_cache[cache_key] = (data_version, graph)
         return graph
 
     def reclassify(self, ids: list[int], to_namespace: str) -> int:

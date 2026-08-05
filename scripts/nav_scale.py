@@ -86,7 +86,10 @@ def benchmark(n: int) -> None:
         f"N={n:,} | seed={seed_ms / 1000:.2f}s | "
         f"index cold={cold_ms:.1f}ms warm={warm_ms:.3f}ms | "
         f"index resident={resident / 1024 / 1024:.1f}MB "
-        f"peak={peak / 1024 / 1024:.1f}MB | same={same is graph}"
+        f"peak={peak / 1024 / 1024:.1f}MB | same={same is graph} | "
+        f"components={graph.component_count} | "
+        f"shortcuts={graph.effective_shortcuts}/{graph.shortcuts} | "
+        f"coverage2={100 * graph.two_hop_coverage:.1f}%"
     )
     for candidates, ef, entry_count in (
         (12, 12, 0), (16, 16, 0), (16, 32, 0), (16, 48, 0), (16, 48, 1)

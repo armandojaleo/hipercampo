@@ -675,7 +675,7 @@ class Hipercampo:
             try:
                 g = self.store.navgraph(shortcuts=2)
                 # Medido en corpus sintético y real: 2×k (mínimo 12) conserva la
-                # fidelidad y reduce el recorrido real de 81% a ~47%. La búsqueda
+                # fidelidad y reduce el recorrido real de 81% a 42-47%. La búsqueda
                 # devuelve su coste para no recorrer el grafo otra vez al medirlo.
                 candidatos = max(k * 2, 12)
                 encontrados, nav_visits = g.search_with_stats(

@@ -140,6 +140,57 @@ def test_busqueda_con_metricas_hace_un_solo_recorrido():
     assert llamadas == 1
 
 
+def test_shortcuts_adaptativos_solo_se_apagan_en_componente_denso():
+    codes = {i: encode_text(f"nodo topologico {i}") for i in range(24)}
+
+    densos = set()
+    for i in range(12):
+        for salto in range(1, 5):
+            densos.add(tuple(sorted((i, (i + salto) % 12))))
+    denso = NavGraph.desde_enlaces(
+        codes={i: codes[i] for i in range(12)},
+        edges=sorted(densos),
+        shortcuts=2,
+        adaptive_shortcuts=True,
+    )
+    fijo = NavGraph.desde_enlaces(
+        codes={i: codes[i] for i in range(12)},
+        edges=sorted(densos),
+        shortcuts=2,
+        adaptive_shortcuts=False,
+    )
+    assert denso.component_count == 1
+    assert denso.mean_base_degree >= 8.0
+    assert denso.effective_shortcuts == 0
+    assert fijo.effective_shortcuts == 2
+    assert fijo.edge_count > denso.edge_count
+
+    cadena = [(i, i + 1) for i in range(11)]
+    disperso = NavGraph.desde_enlaces(
+        codes={i: codes[i] for i in range(12)},
+        edges=cadena,
+        shortcuts=2,
+        adaptive_shortcuts=True,
+    )
+    assert disperso.component_count == 1
+    assert disperso.mean_base_degree < 8.0
+    assert disperso.effective_shortcuts == 2
+
+    islas = [
+        (i, j)
+        for base in (12, 18)
+        for i in range(base, base + 6)
+        for j in range(i + 1, base + 6)
+    ]
+    separado = NavGraph.desde_enlaces(
+        codes={i: codes[i] for i in range(12, 24)},
+        edges=islas,
+        shortcuts=2,
+        adaptive_shortcuts=True,
+    )
+    assert separado.component_count == 2
+    assert separado.effective_shortcuts == 2
+
 def test_landmarks_eligen_la_isla_semantica_correcta():
     """Un representante por componente evita depender de atajos aleatorios."""
     bases = [encode_text(f"concepto totalmente distinto {i}") for i in range(10)]

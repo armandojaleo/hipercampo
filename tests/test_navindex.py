@@ -48,6 +48,8 @@ def test_navegar_recupera_como_escanear():
     textos, tema = _sembrar(hc)
     hc.store.reindex_navgraph(M=12)                 # teje los knn (el mapa)
     g = hc.store.navgraph(shortcuts=2)              # monta el índice de navegación
+    assert g.two_hop_coverage < 0.30, g.two_hop_coverage
+    assert g.effective_shortcuts == 2, "las comunidades aún necesitan small-world"
 
     rows = hc.store.all(only_active=False, own_only=True, include_dormant=True)
     ids = [r["id"] for r in rows]
@@ -258,6 +260,9 @@ def test_grafo_residente_se_reutiliza_e_invalida_con_cambios_reales():
     g1 = hc.store.navgraph(shortcuts=2)
     g2 = hc.store.navgraph(shortcuts=2)
     assert g2 is g1
+    fijo = hc.store.navgraph(shortcuts=2, adaptive_shortcuts=False)
+    assert fijo is not g2
+    assert hc.store.navgraph(shortcuts=2, adaptive_shortcuts=False) is fijo
 
     primero = hc.store.all(own_only=True)[0]["id"]
     hc.store.touch([primero])

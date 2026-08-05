@@ -27,6 +27,10 @@ import numpy as np
 
 from .vsa import D, _popcount_rows
 
+ADAPTIVE_MIN_MEAN_DEGREE = 8.0
+ADAPTIVE_MIN_TWO_HOP_COVERAGE = 0.30
+ADAPTIVE_TOPOLOGY_SAMPLES = 8
+
 
 def _hamming(a: np.ndarray, b: np.ndarray) -> int:
     """Bits en los que difieren dos hipervectores empaquetados (uint8[1250])."""
@@ -48,6 +52,10 @@ class NavGraph:
                  max_degree: int = 40, seed: int = 0):
         self.M = M
         self.shortcuts = shortcuts
+        self.effective_shortcuts = shortcuts
+        self.component_count = 0
+        self.mean_base_degree = 0.0
+        self.two_hop_coverage = 0.0
         self.ef = ef
         self.max_degree = max_degree
         self.adj: dict[int, list[int]] = {}
@@ -83,7 +91,8 @@ class NavGraph:
     @classmethod
     def desde_enlaces(cls, codes: dict, edges, shortcuts: int = 2, seed: int = 0,
                       compact: bool = False, code_ids: list[int] | None = None,
-                      code_matrix: np.ndarray | None = None, **kw) -> "NavGraph":
+                      code_matrix: np.ndarray | None = None,
+                      adaptive_shortcuts: bool = False, **kw) -> "NavGraph":
         """Construye el índice a partir de enlaces YA existentes (los knn del mapa) +
         atajos de largo alcance efímeros (del índice, no del mapa: no se guardan ni se
         muestran, y no propagan activación — solo hacen navegable el grafo). `codes`
@@ -125,8 +134,34 @@ class NavGraph:
                         vistos.add(vecino)
                         pila.append(vecino)
             g.entries.append(max(componente, key=lambda x: len(g.adj[x])))
+        g.component_count = len(g.entries)
+        g.mean_base_degree = (
+            sum(len(g.adj[mid]) for mid in ids) / len(ids) if ids else 0.0
+        )
+        if ids:
+            sample_count = min(ADAPTIVE_TOPOLOGY_SAMPLES, len(ids))
+            sample = [ids[i * len(ids) // sample_count] for i in range(sample_count)]
+            coverages = []
+            for mid in sample:
+                one_hop = set(g.adj[mid])
+                two_hops = {
+                    neighbor
+                    for first in one_hop
+                    for neighbor in g.adj.get(first, ())
+                }
+                coverages.append(len({mid} | one_hop | two_hops) / len(ids))
+            g.two_hop_coverage = sum(coverages) / len(coverages)
+        # En un componente KNN que ya cubre gran parte del mapa en dos saltos, los
+        # atajos aleatorios solo ensanchan la frontera. Si hay comunidades, cadenas
+        # o islas, se conserva small-world: ahí sí aporta rutas que faltan.
+        if (adaptive_shortcuts and g.component_count == 1
+                and g.mean_base_degree >= ADAPTIVE_MIN_MEAN_DEGREE
+                and g.two_hop_coverage >= ADAPTIVE_MIN_TWO_HOP_COVERAGE):
+            g.effective_shortcuts = 0
+        else:
+            g.effective_shortcuts = shortcuts
         for mid in ids:                          # atajos small-world (índice interno)
-            for _ in range(shortcuts):
+            for _ in range(g.effective_shortcuts):
                 r = g._rnd.choice(ids)
                 if r != mid and r not in g.adj[mid]:
                     g.adj[mid].append(r)

@@ -52,7 +52,7 @@ DEFAULT_THRESHOLDS = {
     "min_corpus": 500,
     "min_fidelity": 0.98,
     "max_p95_ms": 30.0,
-    "max_visited_ratio": 0.65,
+    "max_visited_ratio": 0.55,
     "max_rss_mb": 256.0,
     "max_group_gap": 0.02,
 }
@@ -169,7 +169,8 @@ def evaluate(metrics: dict, thresholds: dict | None = None) -> list[str]:
 
 
 def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
-                  shortcuts: int = 2) -> dict:
+                  shortcuts: int = 2,
+                  adaptive_shortcuts: bool = True) -> dict:
     textos, etiquetas, nombres = cosechar()
     n = len(textos)
     if n < 6:
@@ -197,7 +198,9 @@ def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
         tracemalloc.start()
         started = time.perf_counter()
         store.reindex_navgraph(M=12)
-        graph = store.navgraph(shortcuts=shortcuts)
+        graph = store.navgraph(
+            shortcuts=shortcuts, adaptive_shortcuts=adaptive_shortcuts
+        )
         index_seconds = time.perf_counter() - started
         _, index_peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
@@ -232,6 +235,11 @@ def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
             "candidates": candidates,
             "ef": ef,
             "shortcuts": shortcuts,
+            "adaptive_shortcuts": adaptive_shortcuts,
+            "effective_shortcuts": graph.effective_shortcuts,
+            "component_count": graph.component_count,
+            "mean_base_degree": graph.mean_base_degree,
+            "two_hop_coverage": graph.two_hop_coverage,
             "distribution": dict(
                 sorted(reparto.items(), key=lambda item: -item[1])[:8]
             ),
@@ -260,7 +268,10 @@ def print_report(metrics: dict) -> None:
     print("reparto:", metrics["distribution"], "…")
     print(
         f"configuración: candidatos={metrics['candidates']} · "
-        f"ef={metrics['ef']} · shortcuts={metrics['shortcuts']}"
+        f"ef={metrics['ef']} · shortcuts={metrics['effective_shortcuts']}/"
+        f"{metrics['shortcuts']} · componentes={metrics['component_count']} · "
+        f"grado={metrics['mean_base_degree']:.1f} · "
+        f"cobertura2={100 * metrics['two_hop_coverage']:.1f}%"
     )
     print(
         f"sembrado+codificado: {metrics['seed_seconds']:.1f}s · "
@@ -298,14 +309,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="anchura de búsqueda (por defecto: 12)")
     parser.add_argument("--shortcuts", type=int, default=2,
                         help="atajos efímeros por nodo (por defecto: 2)")
+    parser.add_argument("--adaptive-shortcuts", action=argparse.BooleanOptionalAction,
+                        default=True, help="ajusta atajos según la topología")
     args = parser.parse_args(argv)
     if args.queries < 1:
         parser.error("--queries debe ser mayor que cero")
     if args.candidates < 5 or args.ef < 1 or args.shortcuts < 0:
         parser.error("candidatos>=5, ef>0 y shortcuts>=0 son obligatorios")
 
-    metrics = run_benchmark(args.queries, candidates=args.candidates,
-                            ef=args.ef, shortcuts=args.shortcuts)
+    metrics = run_benchmark(
+        args.queries, candidates=args.candidates, ef=args.ef,
+        shortcuts=args.shortcuts, adaptive_shortcuts=args.adaptive_shortcuts
+    )
     failures = evaluate(metrics) if args.check else []
     result = {
         **metrics,

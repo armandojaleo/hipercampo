@@ -39,12 +39,13 @@ All notable changes to this project are documented here. Format loosely based on
 ### Changed
 - **Production navigation spends less without losing answers.** Recall now requests
   2×k candidates (minimum 12) instead of 3×k (minimum 16). On 655 real stdlib
-  documents, the measured 12/12 budget preserves navigation-vs-scan fidelity at 1.000
-  while reducing visited nodes from 81.3% (the old benchmark at 48/48) to 47.1%.
-  At 10,000 structured memories it also preserves precision@5 1.000 while improving
-  16/16 → 12/12 from 1.950% to 1.751% visited and p95 2.03 → 1.85 ms.
-  Ablation kept two small-world shortcuts: removing them helped this connected corpus
-  slightly but would weaken navigation across semantic islands.
+  documents, 12/12 plus topology-adaptive shortcuts preserves navigation-vs-scan
+  fidelity at 1.000 while reducing visited nodes from 81.3% (old 48/48) to 42.6%.
+  Adaptation removes shortcuts only for one dense component with at least 30% two-hop
+  coverage. The community corpus (8.7% coverage), sparse chains and separate islands
+  keep both small-world shortcuts and their recall. The fixed mode remains available
+  for exact ablations. At 10,000 structured memories, 12/12 preserves precision@5
+  1.000 while improving 16/16 from 1.950% to 1.751% visited.
 
 ### Fixed
 - **Atomized writes preserve document integrity.** Source, atoms and their links now
