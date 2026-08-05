@@ -143,6 +143,12 @@ async function fetchIdeas(): Promise<any> {
   return JSON.parse(out);
 }
 
+// Hechos estructurados (role-records): el diferenciador VSA, de todos los contextos.
+async function fetchFacts(): Promise<any> {
+  const out = await run(["facts", "--json", "--all-namespaces"]);
+  return JSON.parse(out);
+}
+
 async function chooseDatabase(): Promise<boolean> {
   const es = vscode.env.language.toLowerCase().startsWith("es");
   const picked = await vscode.window.showOpenDialog({
@@ -263,6 +269,8 @@ class Controller {
         this.post({ type: "tokens", data: await fetchTokens() });
       } else if (msg.type === "ideas-request") {
         this.post({ type: "ideas", data: await fetchIdeas() });
+      } else if (msg.type === "facts-request") {
+        this.post({ type: "facts", data: await fetchFacts() });
       } else if (msg.type === "setPaused") {
         await run([msg.value ? "pause" : "resume"]);
         await this.load();

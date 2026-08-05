@@ -408,21 +408,35 @@ def cmd_budget(args) -> int:
 
 def cmd_facts(args) -> int:
     """Vuelca los hechos estructurados (SUJETO/PREDICADO/OBJETO/TIEMPO/FUENTE) del
-    contexto — el diferenciador VSA, hasta ahora invisible. Sin el blob hv."""
+    contexto — el diferenciador VSA, hasta ahora invisible. Sin el blob hv. Con
+    --all-namespaces, agrega de TODOS los contextos (etiquetando cada uno)."""
     import json as _json
     from .config import db_path
     from .store import Store
-    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
-    s = Store(db_path(), namespace=ns)
-    try:
-        filas = s.all_facts(only_current=getattr(args, "current", False))
-        hechos = []
-        for r in filas:
-            hechos.append({"id": r["id"], "fields": _json.loads(r["fields"]),
-                           "source": r["source"], "valid_from": r["valid_from"],
-                           "valid_to": r["valid_to"], "vigente": r["valid_to"] is None})
-    finally:
-        s.close()
+    solo_vig = getattr(args, "current", False)
+
+    def _hechos_de(ns):
+        s = Store(db_path(), namespace=ns)
+        try:
+            out = []
+            for r in s.all_facts(only_current=solo_vig):
+                out.append({"id": r["id"], "fields": _json.loads(r["fields"]),
+                            "source": r["source"], "valid_from": r["valid_from"],
+                            "valid_to": r["valid_to"], "vigente": r["valid_to"] is None,
+                            "context": ns})
+            return out
+        finally:
+            s.close()
+
+    if getattr(args, "all_namespaces", False):
+        base = Store(db_path(), namespace="default")
+        nss = sorted({m["namespace"] for m in base.dump(all_namespaces=True)})
+        base.close()
+        hechos = [h for ns in nss for h in _hechos_de(ns)]
+        ns = "*"
+    else:
+        ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+        hechos = _hechos_de(ns)
     if getattr(args, "json", False):
         print(_json.dumps({"count": len(hechos), "namespace": ns, "facts": hechos},
                           ensure_ascii=False, default=str))
@@ -801,6 +815,8 @@ def main(argv=None) -> int:
     ft.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
     ft.add_argument("--current", action="store_true", help="solo los vigentes (no cerrados)")
     ft.add_argument("--namespace", help="contexto (por defecto el del entorno)")
+    ft.add_argument("--all-namespaces", action="store_true",
+                    help="hechos de TODOS los contextos (etiquetados)")
     ri = sub.add_parser("reindex", help="tejer el grafo de vecinos (mapa denso, mejor recall)")
     ri.add_argument("--neighbors", type=int, default=12, help="vecinos por recuerdo")
     ri.add_argument("--namespace", help="contexto (por defecto el del entorno)")

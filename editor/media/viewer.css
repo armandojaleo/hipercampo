@@ -199,6 +199,19 @@ canvas { display: block; width: 100%; height: 100%; }
   border-radius: 4px; font-size: .92em; }
 .idea-via { margin-top: 6px; color: var(--vscode-descriptionForeground); }
 
+/* hechos (role-records) ----------------------------------------------------- */
+#view-facts { padding: 8px 4px; }
+.fact { border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
+  border-left: 3px solid var(--vscode-charts-purple, #c48ae0); border-radius: 6px;
+  padding: 7px 10px; margin: 7px 0; }
+.fact.cerrado { opacity: .6; border-left-style: dashed; }
+.fact-head { display: flex; gap: 8px; align-items: baseline; font-size: .85em; }
+.fact-triple { margin-top: 3px; font-size: 1.02em; }
+.fact-triple i { color: var(--vscode-descriptionForeground); font-style: italic; }
+.fact-extra { color: var(--vscode-descriptionForeground); margin-top: 3px; }
+.fact-ctx { color: var(--vscode-descriptionForeground); font-size: .9em; }
+.fact-old { color: var(--vscode-errorForeground); font-size: .82em; }
+
 /* botones de acción en Estado (backup, abrir registro) ---------------------- */
 .sbtn { cursor: pointer; padding: 3px 10px; border-radius: 4px; font-size: .9em; margin-top: 4px; }
 .sbtn:hover { background: var(--vscode-button-hoverBackground, var(--vscode-button-background)); }

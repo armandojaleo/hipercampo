@@ -16,7 +16,11 @@
       refrescar: "Refrescar", cambiarBD: "Cambiar base de datos", todosContextos: "todos los contextos",
       banner: "⏸ Memoria <b>en pausa</b>: no se graban recuerdos nuevos ni se refuerzan (leer sí funciona).",
       tabs: { list: "Lista", graph: "Mapa", timeline: "Tiempo", axes: "Ejes",
-        ideas: "Ideas", tokens: "Tokens", log: "Registro", status: "Estado" },
+        ideas: "Ideas", facts: "Hechos", tokens: "Tokens", log: "Registro", status: "Estado" },
+      factsCargando: "Leyendo los hechos…",
+      factsVacio: "Sin hechos estructurados. Se crean con hc_remember_fact (SUJETO⊗PREDICADO⊗OBJETO): el diferenciador VSA, consultable por rol.",
+      factsIntro: "Hechos estructurados por ROL (sujeto·predicado·objeto·tiempo·fuente), con validez temporal: un hecho nuevo cierra la verdad anterior sin borrarla.",
+      factsCerrado: "cerrado",
       vacio: "Nada que mostrar.",
       vacioHint: "Prueba a limpiar el buscador o activa «todos los contextos».",
       guion: "—", hoy: "hoy", dias: (n) => `hace ${n} d`, mes: (n) => `hace ${n} mes`,
@@ -96,7 +100,11 @@
       refrescar: "Refresh", cambiarBD: "Change database", todosContextos: "all contexts",
       banner: "⏸ Memory <b>paused</b>: no new memories are written or reinforced (reading still works).",
       tabs: { list: "List", graph: "Map", timeline: "Timeline", axes: "Axes",
-        ideas: "Ideas", tokens: "Tokens", log: "Log", status: "Status" },
+        ideas: "Ideas", facts: "Facts", tokens: "Tokens", log: "Log", status: "Status" },
+      factsCargando: "Reading facts…",
+      factsVacio: "No structured facts yet. Created with hc_remember_fact (SUBJECT⊗PREDICATE⊗OBJECT): the VSA differentiator, queryable by role.",
+      factsIntro: "Facts structured by ROLE (subject·predicate·object·time·source), with temporal validity: a new fact closes the previous truth without deleting it.",
+      factsCerrado: "closed",
       vacio: "Nothing to show.",
       vacioHint: "Try clearing the search or turn on “all contexts”.",
       guion: "—", hoy: "today", dias: (n) => `${n}d ago`, mes: (n) => `${n}mo ago`,
@@ -873,6 +881,33 @@
   }
 
   // ==========================================================================
+  // HECHOS (role-records: el diferenciador VSA, hecho visible)
+  // ==========================================================================
+  const _ROLES = ["subject", "predicate", "object", "time", "source"];
+  function renderFacts(d) {
+    const c = $("view-facts");
+    if (!d) { c.innerHTML = `<p class="hint">${L.factsCargando}</p>`; return; }
+    const fs = d.facts || [];
+    if (!fs.length) { c.innerHTML = `<p class="hint">${L.factsVacio}</p>`; return; }
+    const chip = (f) => {
+      const s = f.fields.subject, p = f.fields.predicate, o = f.fields.object;
+      return (s ? `<b>${esc(s)}</b> ` : "") + (p ? `<i>${esc(p)}</i> ` : "")
+        + (o ? `<b>${esc(o)}</b>` : "");
+    };
+    c.innerHTML = `<p class="hint">${L.factsIntro}</p>` + fs.map((f) => {
+      const extra = _ROLES.slice(3).filter((r) => f.fields[r])
+        .map((r) => `${esc(r)}: ${esc(f.fields[r])}`).join(" · ");
+      const estado = f.vigente ? "" : `<span class="fact-old">${L.factsCerrado}</span>`;
+      const ctx = f.context ? `<span class="fact-ctx">⟨${esc(f.context)}⟩</span>` : "";
+      return `<div class="fact${f.vigente ? "" : " cerrado"}">`
+        + `<div class="fact-head"><span class="id">#${f.id}</span>${ctx}${estado}</div>`
+        + `<div class="fact-triple">${chip(f)}</div>`
+        + (extra ? `<div class="fact-extra"><small>${extra}</small></div>` : "")
+        + `</div>`;
+    }).join("");
+  }
+
+  // ==========================================================================
   // pestañas, búsqueda, mensajes
   // ==========================================================================
   const PIDE = {
@@ -880,9 +915,10 @@
     tokens: () => vscode.postMessage({ type: "tokens-request" }),
     log: () => vscode.postMessage({ type: "log-request" }),
     ideas: () => vscode.postMessage({ type: "ideas-request" }),
+    facts: () => vscode.postMessage({ type: "facts-request" }),
   };
   const PLACEHOLDER_VACIO = { status: renderStatus, tokens: renderTokens, log: renderLog,
-    ideas: renderIdeas };
+    ideas: renderIdeas, facts: renderFacts };
 
   function activarVista(v) {
     VIEW = v;
@@ -935,6 +971,8 @@
       renderTokens(msg.data);
     } else if (msg.type === "log") {
       renderLog(msg.data);
+    } else if (msg.type === "facts") {
+      renderFacts(msg.data);
     } else if (msg.type === "ideas") {
       renderIdeas(msg.data);
     } else if (msg.type === "error") {
