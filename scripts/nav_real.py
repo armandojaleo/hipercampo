@@ -52,7 +52,7 @@ DEFAULT_THRESHOLDS = {
     "min_corpus": 500,
     "min_fidelity": 0.98,
     "max_p95_ms": 30.0,
-    "max_visited_ratio": 0.95,
+    "max_visited_ratio": 0.65,
     "max_rss_mb": 256.0,
     "max_group_gap": 0.02,
 }
@@ -168,7 +168,8 @@ def evaluate(metrics: dict, thresholds: dict | None = None) -> list[str]:
     return failures
 
 
-def run_benchmark(query_count: int = 40) -> dict:
+def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
+                  shortcuts: int = 2) -> dict:
     textos, etiquetas, nombres = cosechar()
     n = len(textos)
     if n < 6:
@@ -196,7 +197,7 @@ def run_benchmark(query_count: int = 40) -> dict:
         tracemalloc.start()
         started = time.perf_counter()
         store.reindex_navgraph(M=12)
-        graph = store.navgraph(shortcuts=2)
+        graph = store.navgraph(shortcuts=shortcuts)
         index_seconds = time.perf_counter() - started
         _, index_peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
@@ -212,7 +213,7 @@ def run_benchmark(query_count: int = 40) -> dict:
             orden = [int(p) for p in np.argsort(sims)[::-1] if int(p) != qi][:5]
             scan_ids = {ids[p] for p in orden}
             started = time.perf_counter()
-            found, visited = graph.search_with_stats(q, k=6, ef=48)
+            found, visited = graph.search_with_stats(q, k=candidates, ef=ef)
             lat.append((time.perf_counter() - started) * 1000)
             vis.append(visited)
             nav_ids = [mid for mid, _ in found if mid != qid][:5]
@@ -228,6 +229,9 @@ def run_benchmark(query_count: int = 40) -> dict:
             "corpus": n,
             "modules": len(set(nombres)),
             "queries": len(sample),
+            "candidates": candidates,
+            "ef": ef,
+            "shortcuts": shortcuts,
             "distribution": dict(
                 sorted(reparto.items(), key=lambda item: -item[1])[:8]
             ),
@@ -254,6 +258,10 @@ def print_report(metrics: dict) -> None:
         f"(categoría = módulo)"
     )
     print("reparto:", metrics["distribution"], "…")
+    print(
+        f"configuración: candidatos={metrics['candidates']} · "
+        f"ef={metrics['ef']} · shortcuts={metrics['shortcuts']}"
+    )
     print(
         f"sembrado+codificado: {metrics['seed_seconds']:.1f}s · "
         f"índice: {metrics['index_seconds']:.1f}s · "
@@ -284,11 +292,20 @@ def main(argv: list[str] | None = None) -> int:
                         help="emite métricas y veredicto como JSON")
     parser.add_argument("--queries", type=int, default=40,
                         help="número de consultas deterministas (por defecto: 40)")
+    parser.add_argument("--candidates", type=int, default=12,
+                        help="candidatos navegables (por defecto: 12)")
+    parser.add_argument("--ef", type=int, default=12,
+                        help="anchura de búsqueda (por defecto: 12)")
+    parser.add_argument("--shortcuts", type=int, default=2,
+                        help="atajos efímeros por nodo (por defecto: 2)")
     args = parser.parse_args(argv)
     if args.queries < 1:
         parser.error("--queries debe ser mayor que cero")
+    if args.candidates < 5 or args.ef < 1 or args.shortcuts < 0:
+        parser.error("candidatos>=5, ef>0 y shortcuts>=0 son obligatorios")
 
-    metrics = run_benchmark(args.queries)
+    metrics = run_benchmark(args.queries, candidates=args.candidates,
+                            ef=args.ef, shortcuts=args.shortcuts)
     failures = evaluate(metrics) if args.check else []
     result = {
         **metrics,

@@ -61,7 +61,7 @@ def test_navegar_recupera_como_escanear():
         q = encode_text(" ".join(base[:4]))
         sims = similarity_batch(q, mat)             # VERDAD por escaneo completo
         verdad = set(int(ids[i]) for i in np.argsort(sims)[::-1][:5])
-        encontrados, visitados = g.search_with_stats(q, k=16, ef=16)
+        encontrados, visitados = g.search_with_stats(q, k=12, ef=12)
         nav = set(mid for mid, _ in encontrados[:5])
         recall += len(nav & verdad) / 5.0
         visitas += visitados
@@ -97,8 +97,18 @@ def test_recall_opcional_puede_navegar_el_grafo_del_store():
     hc.store.reindex_navgraph(M=10)
 
     normal = hc.recall(consulta, k=5)
+    graph = hc.store.navgraph(shortcuts=2)
+    search_real = graph.search_with_stats
+    presupuesto = []
+
+    def medir_presupuesto(*args, **kwargs):
+        presupuesto.append((kwargs.get("k"), kwargs.get("ef")))
+        return search_real(*args, **kwargs)
+
+    graph.search_with_stats = medir_presupuesto
     nav = hc.recall(consulta, k=5, nav=True)
 
+    assert presupuesto == [(12, 12)], presupuesto
     assert normal, "el recall base debe seguir encontrando senal"
     assert nav, "el recall navegable debe devolver resultados"
     assert (

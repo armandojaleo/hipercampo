@@ -88,7 +88,9 @@ def benchmark(n: int) -> None:
         f"index resident={resident / 1024 / 1024:.1f}MB "
         f"peak={peak / 1024 / 1024:.1f}MB | same={same is graph}"
     )
-    for ef, entry_count in ((16, 0), (32, 0), (48, 0), (48, 1)):
+    for candidates, ef, entry_count in (
+        (12, 12, 0), (16, 16, 0), (16, 32, 0), (16, 48, 0), (16, 48, 1)
+    ):
         entries = None
         if entry_count:
             entries = [1 + i * n // entry_count for i in range(entry_count)]
@@ -98,7 +100,7 @@ def benchmark(n: int) -> None:
         for cluster_id in sample:
             started = time.perf_counter()
             found, visited = graph.search_with_stats(
-                bases[int(cluster_id)], k=16, ef=ef, entradas=entries
+                bases[int(cluster_id)], k=candidates, ef=ef, entradas=entries
             )
             latencies.append((time.perf_counter() - started) * 1000)
             visits.append(visited)
@@ -108,7 +110,8 @@ def benchmark(n: int) -> None:
                 / len(top)
             )
         print(
-            f"  ef={ef:>2} entries={'auto' if entries is None else entry_count} | "
+            f"  candidates={candidates:>2} ef={ef:>2} "
+            f"entries={'auto' if entries is None else entry_count} | "
             f"p50={statistics.median(latencies):.3f}ms "
             f"p95={percentile(latencies, 0.95):.3f}ms | "
             f"visited={statistics.mean(visits):.1f} "

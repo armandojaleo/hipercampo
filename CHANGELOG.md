@@ -36,6 +36,16 @@ All notable changes to this project are documented here. Format loosely based on
   under their source in the Map (green edge). Opt out with `HIPERCAMPO_NO_ATOMIZE=1`.
   Tests in `test_atomize.py`, `test_atomize_remember.py`.
 
+### Changed
+- **Production navigation spends less without losing answers.** Recall now requests
+  2×k candidates (minimum 12) instead of 3×k (minimum 16). On 655 real stdlib
+  documents, the measured 12/12 budget preserves navigation-vs-scan fidelity at 1.000
+  while reducing visited nodes from 81.3% (the old benchmark at 48/48) to 47.1%.
+  At 10,000 structured memories it also preserves precision@5 1.000 while improving
+  16/16 → 12/12 from 1.950% to 1.751% visited and p95 2.03 → 1.85 ms.
+  Ablation kept two small-world shortcuts: removing them helped this connected corpus
+  slightly but would weaken navigation across semantic islands.
+
 ### Fixed
 - **Atomized writes preserve document integrity.** Source, atoms and their links now
   share one database transaction; link failures roll back the whole write, duplicate

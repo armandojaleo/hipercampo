@@ -33,10 +33,11 @@ La beta b12 está cerrada y publicada en PyPI tras CI multiplataforma verde.
    **Validado también en corpus REAL** (`scripts/nav_real.py`: docstrings de la stdlib,
    texto inglés difuso, offline): la **fidelidad navegar-vs-escaneo es 1.000** —navegar
    recupera exactamente el mismo top-5 que escanear también en texto real, no solo en el
-   banco sintético—. Límite honesto: a ese N (~650) el %visitado aún no baja (la
-   sublinealidad solo se ve a escala, medida en el banco sintético). Y la **precisión de
-   grupo léxica es ~0.50** (igual navegando que escaneando): la navegación no degrada la
-   calidad; ese techo es del *encoding* léxico → cuello de los sinónimos (abajo 🟡).
+   banco sintético—. Con el presupuesto de producción 12/12 visita **47,1%** a ese
+   N (~650), frente al 81,3% del antiguo 48/48; el gate exige mantenerse por debajo
+   del 65%. A 10.000 recuerdos conserva precisión@5=1,000 visitando 1,751% (p95
+   1,85 ms). La **precisión de grupo léxica es ~0.50** (igual navegando que escaneando):
+   la navegación no degrada la calidad; ese techo es del *encoding* léxico → cuello de los sinónimos (abajo 🟡).
 3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
    proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
 4. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,

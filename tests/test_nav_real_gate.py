@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from helpers import ejecutar                         # noqa: E402
+from scripts import nav_real  # noqa: E402
 from scripts.nav_real import current_rss_mb, evaluate, percentile  # noqa: E402
 
 
@@ -22,7 +23,7 @@ BASE = {
     "corpus": 655,
     "fidelity": 1.0,
     "p95_ms": 9.0,
-    "visited_ratio": 0.82,
+    "visited_ratio": 0.48,
     "rss_mb": 60.0,
     "group_nav": 0.50,
     "group_scan": 0.50,
@@ -38,7 +39,7 @@ def test_gate_detecta_cada_regresion():
         ("corpus", {"corpus": 499}),
         ("fidelity", {"fidelity": 0.97}),
         ("p95_ms", {"p95_ms": 31.0}),
-        ("visited_ratio", {"visited_ratio": 0.96}),
+        ("visited_ratio", {"visited_ratio": 0.66}),
         ("rss_mb", {"rss_mb": 257.0}),
         ("group_gap", {"group_nav": 0.40, "group_scan": 0.50}),
     ]
@@ -53,6 +54,25 @@ def test_umbrales_se_pueden_endurecer_sin_cambiar_el_runner():
     fallos = evaluate(BASE, {"max_p95_ms": 8.0, "max_rss_mb": 59.0})
     assert {fallo.split(":")[0] for fallo in fallos} == {"p95_ms", "rss_mb"}
 
+
+def test_cli_cablea_el_presupuesto_sin_ejecutar_el_corpus():
+    llamadas = []
+    real = nav_real.run_benchmark
+
+    def simulado(queries, candidates, ef, shortcuts):
+        llamadas.append((queries, candidates, ef, shortcuts))
+        return dict(BASE)
+
+    nav_real.run_benchmark = simulado
+    try:
+        code = nav_real.main([
+            "--check", "--json", "--queries", "7",
+            "--candidates", "9", "--ef", "8", "--shortcuts", "1",
+        ])
+    finally:
+        nav_real.run_benchmark = real
+    assert code == 0
+    assert llamadas == [(7, 9, 8, 1)]
 
 def test_percentil_es_determinista():
     assert percentile([9.0, 1.0, 5.0, 3.0], 0.5) == 5.0
