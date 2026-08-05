@@ -1,55 +1,46 @@
-# Publicar el visor en el Marketplace de VS Code
+# Publish the viewer to VS Code Marketplace
 
-Esto es **aparte** de subir el código a git. Publicar en el Marketplace hace que
-cualquiera lo instale con un clic desde VS Code. Requiere una cuenta de editor y un
-token; son pasos que hace **el dueño** (tú), una sola vez. Mientras tanto, el `.vsix`
-generado con `npx @vscode/vsce package` ya sirve para instalar a mano.
+Publishing the extension is separate from pushing the repository. A generated `.vsix`
+can always be installed manually; Marketplace publication additionally needs a publisher
+account and token. [Leer en español](PUBLISHING.es.md).
 
-## Pasos de un solo uso (los haces tú)
+## One-time setup
 
-1. **Crear un publisher.** Entra en <https://marketplace.visualstudio.com/manage> con
-   una cuenta Microsoft. Crea un publisher con el ID **`armandojaleo`** (el mismo que
-   está en `editor/package.json` → `"publisher"`). Si eliges otro ID, cámbialo también
-   ahí.
-
-2. **Crear un Personal Access Token (PAT).** En <https://dev.azure.com> → *User
-   settings* → *Personal Access Tokens* → *New Token*:
+1. Open <https://marketplace.visualstudio.com/manage> with a Microsoft account and create
+   the **`armandojaleo`** publisher, matching `publisher` in `package.json`.
+2. At <https://dev.azure.com>, create a Personal Access Token with:
    - Organization: **All accessible organizations**.
-   - Scopes: **Marketplace → Manage**.
-   - Copia el token (no se vuelve a mostrar).
+   - Scope: **Marketplace → Manage**.
+3. Add the token to the GitHub repository as the **`VSCE_PAT`** Actions secret.
 
-3. **Guardar el token como secreto del repo.** En GitHub → *Settings* → *Secrets and
-   variables* → *Actions* → *New repository secret*:
-   - Nombre: **`VSCE_PAT`**
-   - Valor: el token del paso 2.
+Never commit or paste the token into source files, issues or logs.
 
-Con eso, el workflow de abajo publica solo.
+## Automated release
 
-## Publicar una versión
-
-El workflow `.github/workflows/vsix.yml` publica al empujar un tag `viewer-vX.Y.Z`:
+The `.github/workflows/vsix.yml` workflow publishes tags shaped as `viewer-vX.Y.Z`.
+The tag must exactly match `editor/package.json`:
 
 ```bash
-# sube la versión en editor/package.json ("version": "0.2.0" -> "0.2.1")
-git tag viewer-v0.2.1
-git push origin viewer-v0.2.1
+git tag viewer-v0.9.10
+git push origin viewer-v0.9.10
 ```
 
-Comprueba la versión: el tag debe coincidir con `editor/package.json`.
+Before publishing, the workflow installs locked dependencies, compiles TypeScript, runs
+the localization/icon contract, checks the tag version and only then calls `vsce publish`.
 
-## Publicar a mano (sin workflow)
+## Build and inspect locally
 
 ```bash
 cd editor
 npm ci
-npm run compile
-npx @vscode/vsce publish -p <TU_PAT>
+npm test
+npx @vscode/vsce package
+npx @vscode/vsce ls
 ```
 
-## Pendientes recomendados antes de publicar (no bloquean)
+Install the resulting file through **Extensions → … → Install from VSIX…**. Verify both
+an English and Spanish VS Code profile before creating the release tag.
 
-- **Icono de la extensión**: un PNG 128×128 en `editor/media/icon.png` y
-  `"icon": "media/icon.png"` en `package.json`. El Marketplace lo muestra en la ficha.
-  (El `brain.svg` actual es el de la barra de actividad, no vale como icono de ficha.)
-- **`galleryBanner`** y capturas de pantalla en el README para que la ficha luzca.
-- Revisar `LICENSE` (MIT del repo) y `repository` en `package.json`.
+The Marketplace icon is `media/icon.png` (128×128) and the Activity Bar uses the
+theme-aware monochrome `media/brain.svg`. The next presentation improvement is adding
+current screenshots to the Marketplace README.

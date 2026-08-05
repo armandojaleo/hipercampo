@@ -1,5 +1,7 @@
 .vscode/**
 src/**
+tests/**
+PUBLISHING*.md
 node_modules/**
 tsconfig.json
 **/*.map

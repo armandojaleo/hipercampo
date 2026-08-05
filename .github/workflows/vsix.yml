@@ -21,8 +21,8 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Compilar
-        run: npm run compile
+      - name: Compilar y probar
+        run: npm test
 
       - name: La versión del tag debe coincidir con package.json
         run: |

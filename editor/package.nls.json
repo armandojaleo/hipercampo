@@ -1,6 +1,6 @@
 {
   "ext.displayName": "hipercampo — memory viewer",
-  "ext.description": "View and explore hipercampo's memory from VS Code: list, map, timeline, axes, ideas (local-first, no network).",
+  "ext.description": "Explore hipercampo memory from VS Code: map, timeline, facts, ideas, token cost and health (local-first, no network).",
   "cmd.showMemories": "hipercampo: view memories",
   "cmd.refresh": "hipercampo: refresh memories",
   "view.home": "Memory",

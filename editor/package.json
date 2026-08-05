@@ -2,9 +2,14 @@
   "name": "hipercampo-viewer",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "publisher": "armandojaleo",
   "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#080d3a",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/armandojaleo/hipercampo"
@@ -96,8 +101,9 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
+    "test": "npm run compile && node tests/i18n.test.js",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run compile"
+    "vscode:prepublish": "npm test"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { execFile } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
+import { hostMessages } from "./i18n";
 
 /**
  * Visor de memoria de hipercampo. No habla SQLite ni conoce el esquema: llama al
@@ -90,9 +91,7 @@ async function run(args: string[]): Promise<string> {
     if ("fail" in r) ultimoFallo = r.fail;   // existe pero falló: es un error real
   }
   if (ultimoFallo) throw new Error(ultimoFallo);
-  throw new Error(
-    "No se encontró «hipercampo» (ni «python -m hipercampo.cli»). Instálalo con "
-    + "«pip install --pre hipercampo», o pon la ruta en el ajuste hipercampo.command.");
+  throw new Error(hostMessages(vscode.env.language).commandNotFound);
 }
 
 async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: string; db?: string; paused?: boolean }> {
@@ -101,8 +100,7 @@ async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: 
   // pantalla por depender del fetch de un namespace que quizá no existe.
   const out = await run(["graph", "--all-namespaces"]);
   const data = JSON.parse(out);
-  const es = vscode.env.language.toLowerCase().startsWith("es");
-  const scope = es ? "todos los contextos" : "all contexts";
+  const scope = hostMessages(vscode.env.language).allContexts;
   return { memories: data.nodes || [], edges: data.edges || [], scope, db: data.db, paused: !!data.paused };
 }
 
@@ -150,19 +148,18 @@ async function fetchFacts(): Promise<any> {
 }
 
 async function chooseDatabase(): Promise<boolean> {
-  const es = vscode.env.language.toLowerCase().startsWith("es");
+  const text = hostMessages(vscode.env.language);
   const picked = await vscode.window.showOpenDialog({
     canSelectFiles: true,
     canSelectFolders: false,
     canSelectMany: false,
     filters: { "SQLite / hipercampo": ["db", "sqlite", "sqlite3"] },
-    title: es ? "Elegir base de datos de hipercampo" : "Choose hipercampo database",
+    title: text.chooseDatabase,
   });
   const file = picked?.[0]?.fsPath;
   if (!file) return false;
   await cfg().update("dbPath", file, vscode.ConfigurationTarget.Global);
-  vscode.window.showInformationMessage(
-    es ? `Memoria activa: ${file}` : `Active memory: ${file}`);
+  vscode.window.showInformationMessage(text.activeMemory(file));
   return true;
 }
 /** Mueve un recuerdo a otro contexto (curación). Pregunta el destino: uno existente
@@ -175,16 +172,16 @@ async function reclassify(id: number, namespace: string | undefined): Promise<bo
     nss = [...new Set((data.nodes || []).map((n: any) => n.namespace))]
       .filter((n): n is string => typeof n === "string" && n !== origen).sort();
   } catch { /* sin lista, se podrá teclear uno nuevo igual */ }
-  const es = vscode.env.language.toLowerCase().startsWith("es");
-  const NUEVO = es ? "＋ nuevo contexto…" : "＋ new context…";
+  const text = hostMessages(vscode.env.language);
+  const NUEVO = text.newContext;
   const pick = await vscode.window.showQuickPick([...nss, NUEVO], {
-    placeHolder: es ? `Mover del contexto «${origen}» a…` : `Move from context “${origen}” to…`,
+    placeHolder: text.moveFrom(origen),
   });
   if (!pick) return false;
   let destino: string | undefined = pick;
   if (pick === NUEVO) {
     destino = (await vscode.window.showInputBox({
-      prompt: es ? "Nombre del contexto destino" : "Target context name",
+      prompt: text.targetContextName,
     }))?.trim();
   }
   if (!destino) return false;
@@ -205,10 +202,10 @@ async function mutate(id: number, namespace: string | undefined,
     return true;
   }
   // purge: físico e irreversible -> confirmación MODAL antes de nada
+  const text = hostMessages(vscode.env.language);
   const ok = await vscode.window.showWarningMessage(
-    `¿Borrar del todo el recuerdo #${id}? Es físico e irreversible (no es el olvido, `
-    + `que solo adormece).`, { modal: true }, "Borrar del todo");
-  if (ok !== "Borrar del todo") return false;
+    text.purgePrompt(id), { modal: true }, text.purgeAction);
+  if (ok !== text.purgeAction) return false;
   await run(["purge", "--ids", String(id), "--yes", ...nsArgs]);
   return true;
 }
@@ -276,15 +273,14 @@ class Controller {
         await this.load();
       } else if (msg.type === "backup") {
         const out = (await run(["backup"])).trim();
-        vscode.window.showInformationMessage(out || "Copia creada.");
+        vscode.window.showInformationMessage(out || hostMessages(vscode.env.language).backupCreated);
         this.post({ type: "status", data: await fetchStatus() });   // refrescar tamaños
       } else if (msg.type === "open-log") {
         if (msg.path) {
           const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(msg.path));
           await vscode.window.showTextDocument(doc, { preview: true });
         } else {
-          vscode.window.showInformationMessage(
-            "El registro está desactivado (HIPERCAMPO_LOG=0): no hay fichero que abrir.");
+          vscode.window.showInformationMessage(hostMessages(vscode.env.language).logDisabled);
         }
       } else if (msg.type === "open-external") {
         if (msg.url) { await vscode.env.openExternal(vscode.Uri.parse(msg.url)); }
@@ -297,7 +293,7 @@ class Controller {
       } else if (msg.type === "reindex") {
         const out = JSON.parse(await run(["reindex", "--neighbors", "4", "--all-namespaces"]));
         vscode.window.showInformationMessage(
-          `Grafo tejido: ${out.enlaces_tejidos ?? 0} enlaces nuevos en el mapa.`);
+          hostMessages(vscode.env.language).graphWoven(out.enlaces_tejidos ?? 0));
         await this.load();                              // refresca el mapa, ya denso
       }
     } catch (e: any) {
@@ -369,7 +365,7 @@ class Panel {
   static show(ctx: vscode.ExtensionContext) {
     if (Panel.current) { Panel.current.panel.reveal(); Panel.current.ctrl.load(); return; }
     const panel = vscode.window.createWebviewPanel(
-      "hipercampoViewer", "hipercampo — memoria", vscode.ViewColumn.Beside,
+      "hipercampoViewer", hostMessages(vscode.env.language).panelTitle, vscode.ViewColumn.Beside,
       { enableScripts: true, retainContextWhenHidden: true });
     const ctrl = new Controller(panel.webview, ctx);
     Panel.current = { ctrl, panel };
@@ -397,7 +393,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Botón siempre visible en la barra de estado (abajo): un clic abre el panel ancho.
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   status.text = "$(database) Hipercampo";
-  status.tooltip = "Hipercampo: ver memorias";
+  status.tooltip = hostMessages(vscode.env.language).statusTooltip;
   status.command = "hipercampo.showMemories";
   status.show();
 

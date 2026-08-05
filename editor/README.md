@@ -1,91 +1,83 @@
-# hipercampo — visor de memoria (VS Code)
+# hipercampo — memory viewer for VS Code
 
-Una ventana para **ver y explorar** la memoria de hipercampo sin salir del editor.
-Local-first: no abre red ni base de datos; llama al CLI `hipercampo`, que ya sabe de
-contextos y aislamiento. Es de **solo lectura para consultar**, y toda escritura
-(olvidar / borrar) es una acción explícita que pasa por el propio CLI con confirmación.
+See and explore an agent's hipercampo memory without leaving the editor. The viewer is
+local-first: it opens no network connection and never accesses SQLite directly. It calls
+the `hipercampo` CLI, which already enforces contexts, migrations and isolation.
 
-## Cómo abrirlo
+The extension follows the language configured in VS Code. English is the fallback and
+Spanish is fully localized. [Leer en español](README.es.md).
 
-- Botón **🗄 Hipercampo** en la **barra de estado** (abajo) → abre el panel ancho a un lado.
-- Icono de Hipercampo en la **barra de actividad** (tira izquierda) → el **visor completo**
-  vive ahí mismo (ensancha la barra arrastrando su borde si quieres más sitio).
-- O `Ctrl/Cmd+Shift+P` → **«hipercampo: ver memorias»**.
+## Open the viewer
 
-**Se refresca solo**: vigila el `.db` y el `.log`, así que según el agente va guardando,
-recordando y decidiendo, las pestañas se actualizan en vivo sin cerrar y abrir.
+- Select **Hipercampo** in the status bar to open a wide editor panel.
+- Select the hipercampo graph icon in the Activity Bar to use the complete sidebar view.
+- Or run **hipercampo: view memories** from the Command Palette.
 
-## Qué muestra (siete pestañas)
+The viewer watches the `.db` and `.log` files, so visible data refreshes automatically
+while agents remember, retrieve and make decisions.
 
-- **Lista** — una tarjeta por recuerdo: texto, tipo (episódico / semántico / identidad),
-  y sus ejes medidos (importancia, fiabilidad, fuerza, usos, última vez visto). Estado con
-  iconos: 💤 latente · 📦 consolidado · ↩ reemplazado · ⚠️ pronto latente. Acciones por
-  tarjeta: 💡 conexiones · 💤 olvidar / ☀️ despertar · 🗑️ borrar.
-- **Mapa** — el grafo asociativo real: nodos = recuerdos (color por proyecto, tamaño por
-  importancia), aristas = asociaciones. Arrastra nodos, rueda para zoom, arrastra el fondo
-  para desplazar, clic en un nodo lo resalta con sus vecinos y muestra detalle. Los puentes
-  oníricos (`hc_dream` propuestos) salen de puntos. Las posiciones se conservan entre
-  refrescos (no re-baila).
-- **Tiempo** — recuerdos por acceso reciente, con barra de fuerza; marca los que están a
-  punto de dormirse.
-- **Ejes** — dispersión importancia × fiabilidad (tamaño = fuerza); pasa el ratón para ver
-  el texto. Caza de un vistazo lo «importante pero poco fiable».
-- **Tokens** — la **factura**: gastados, ahorrados por el presupuesto, inyecciones, hoy;
-  un medidor de media-por-inyección contra el presupuesto y el historial en barras. Siempre
-  es una estimación, y lo dice.
-- **Registro** — el log de decisiones en vivo (recall / remember / sleep / forget / tokens…),
-  coloreado por acción, más reciente arriba.
-- **Estado** — salud con semáforos: CLI, base de datos (integridad, esquema, tamaño),
-  memoria por contexto, servidor MCP (en marcha o no) y registro.
+## What it shows
 
-## Buscar y filtrar
+The nine views expose the memory instead of reducing it to a flat note list:
 
-- **Modo texto**: filtro instantáneo en cliente (sin acentos). Un visor debe *encontrar*,
-  no abstenerse.
-- **Recall explicable**: las tarjetas muestran el score y, al pasar el ratón, sus
-  componentes (`activation`, fuerza, confianza y penalización por superado). También
-  enseñan si se usó navegación y cuántos nodos visitó (`nav · N`).
-- **Modo recall / muse**: busca «como el agente». `recall` es el directo (sabe abstenerse);
-  **muse** es la vía *eureka*: trae conexiones indirectas y recuerdos latentes. Escribe y
-  pulsa Enter. El 💡 de cada tarjeta lanza `muse` desde ese recuerdo.
-- **Chips de proyecto**: si hay varios contextos, aparecen arriba; clic para mostrar/ocultar
-  cada uno. Afecta a todas las vistas.
+- **List** — memory text, kind, importance, reliability, strength, uses and last access.
+  Actions can discover connections, move context, forget, wake or permanently delete.
+- **Map** — the associative graph, including navigation links, dream bridges and atoms
+  connected to their source. Nodes can be dragged, zoomed and inspected.
+- **Timeline** — recent access and strength, including memories close to dormancy.
+- **Axes** — importance × reliability, with strength encoded by size.
+- **Ideas** — explicit hypotheses produced by bridges between distant memories.
+- **Facts** — structured subject/predicate/object/time/source records and their history.
+- **Tokens** — estimated context cost, savings, budgets and injection history.
+- **Log** — live, structured decisions from recall, remember, sleep, forget and hooks.
+- **Status** — CLI, database, schema, memory, MCP processes and audit-log health.
 
-## Olvidar vs. borrar
+## Search and curation
 
-Igual que en el motor: **olvidar** (💤) solo adormece y es reversible (💤→☀️); **borrar**
-(🗑️) es físico e irreversible y pide **confirmación modal** — hace el borrado seguro +
-`VACUUM` del CLI (`hipercampo purge`).
+- **Text** filters the loaded memories instantly and never abstains.
+- **Recall**, **recall auto** and **recall nav** query memory like an agent. Result cards
+  explain score components, navigation mode and visited-node cost.
+- **Muse** surfaces indirect and dormant connections for exploration.
+- Context chips filter every view. Memories can be moved to an existing or new context.
 
-## Requisitos
+Forgetting is reversible: it only makes a memory dormant. Permanent deletion is physical,
+irreversible and always requires modal confirmation before the CLI performs the purge.
 
-`hipercampo` instalado (`pip install --pre hipercampo`). Si no está en el PATH que ve VS
-Code, la extensión prueba automáticamente `python -m hipercampo.cli`; y si tampoco, lo pones
-en el ajuste `hipercampo.command`.
+## Requirements
 
-## Ajustes
+Install hipercampo first:
 
-| Ajuste | Por defecto | Para qué |
+```bash
+pip install --pre hipercampo
+```
+
+If `hipercampo` is not on the PATH inherited by VS Code, the extension automatically tries
+`python -m hipercampo.cli`, `python3 -m hipercampo.cli` and `py -m hipercampo.cli`. You can
+also set an explicit command.
+
+## Settings
+
+| Setting | Default | Purpose |
 |---|---|---|
-| `hipercampo.command` | `hipercampo` | Ejecutable. Si no está en el PATH: ruta completa o `python -m hipercampo.cli`. |
-| `hipercampo.dbPath` | (vacío) | Fichero `.db` (`HIPERCAMPO_DB`). Vacío = el de por defecto. |
-| `hipercampo.namespace` | (vacío) | Contexto (`HIPERCAMPO_NAMESPACE`). |
-| `hipercampo.allNamespaces` | `true` | Mostrar todo el fichero, no solo un contexto. |
+| `hipercampo.command` | `hipercampo` | Executable, full path or `python -m hipercampo.cli`. |
+| `hipercampo.dbPath` | empty | Memory `.db` file (`HIPERCAMPO_DB`); empty uses the CLI default. |
+| `hipercampo.namespace` | empty | Context (`HIPERCAMPO_NAMESPACE`). |
+| `hipercampo.allNamespaces` | `true` | Show the whole file instead of one context. |
 
-## Desarrollo
+## Development
 
 ```bash
 cd editor
 npm install
-npm run compile
+npm test
 ```
 
-Abre `editor/` en VS Code y **F5** (Run Extension). Publicación al Marketplace: ver
-[PUBLISHING.md](PUBLISHING.md).
+Open `editor/` in VS Code and press **F5** to launch an Extension Development Host.
+Marketplace release instructions are in [PUBLISHING.md](PUBLISHING.md).
 
-## Cómo lee los datos
+## Data boundary
 
-Todo por el CLI (que ya sabe de contextos y aislamiento): `graph --json` (nodos + aristas
-+ ruta del `.db`), `list --json`, `status`, `tokens`, `log --json`, y `recall`/`muse` para
-la búsqueda de agente. La auditoría va a stderr, así que el stdout es JSON limpio. Esos
-comandos existen en el CLI y sirven también fuera de aquí.
+All reads and mutations go through public CLI commands such as `graph`, `status`, `tokens`,
+`log`, `facts`, `recall`, `muse`, `reclassify`, `dormant` and `purge`. Audit output stays on
+stderr, leaving stdout as machine-readable JSON. The webview has a restrictive CSP and no
+remote dependencies.

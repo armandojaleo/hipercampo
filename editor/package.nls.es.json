@@ -1,6 +1,6 @@
 {
   "ext.displayName": "hipercampo — visor de memoria",
-  "ext.description": "Ver y explorar la memoria de hipercampo desde VS Code: lista, mapa, tiempo, ejes e ideas (local-first, sin red).",
+  "ext.description": "Explora la memoria de hipercampo desde VS Code: mapa, tiempo, hechos, ideas, coste de tokens y salud (local-first, sin red).",
   "cmd.showMemories": "hipercampo: ver memorias",
   "cmd.refresh": "hipercampo: refrescar memorias",
   "view.home": "Memoria",

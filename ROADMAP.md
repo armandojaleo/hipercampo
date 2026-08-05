@@ -47,7 +47,9 @@ de enviar `main`, obtener CI multiplataforma verde y crear el tag.
    persistente, acotado y atómico; una observación rechazada ya no se pierde al reiniciar.
 5. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,
    memoria y coste navegable; faltan datasets externos estándar.
-6. Selección de namespace y UX estable de la extensión; la extensión no se etiqueta como producto estable todavía.
+6. 🟡 Selección de namespace y UX estable de la extensión: localización EN/ES, icono,
+   manifiesto y contrato de CI ya están hechos; faltan capturas y validación manual del
+   VSIX en ambos idiomas antes de etiquetarla como producto estable.
 
 ## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
 

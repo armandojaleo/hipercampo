@@ -23,8 +23,8 @@ jobs:
         run: npm ci
       - name: Comprobar JavaScript del webview
         run: node --check media/viewer.js
-      - name: Compilar extensión
-        run: npm run compile
+      - name: Compilar y probar extensión
+        run: npm test
 
   test:
     # hipercampo es una app LOCAL: Windows y macOS no son opcionales.

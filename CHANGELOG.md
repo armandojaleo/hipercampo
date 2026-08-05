@@ -8,6 +8,12 @@ All notable changes to this project are documented here. Format loosely based on
 ## [0.1.0b13] — 2026-08-05
 
 ### Added
+- **The VS Code viewer is now bilingual and branded (v0.9.10).** English is the
+  default for the host, startup HTML, Marketplace metadata and documentation; Spanish
+  remains a complete locale. A tested localization contract covers both languages and
+  fallback behavior. The new 128×128 memory-field icon and gallery banner give the
+  Marketplace package a product identity without replacing the theme-aware Activity Bar
+  glyph.
 - **Context efficiency is now a quality gate.** `scripts/context_efficiency.py`
   measures retrieval quality, selective precision, abstention, complete MCP payload
   tokens and p50/p95 latency on 30 positive plus 30 unrelated queries. Current lexical
@@ -35,8 +41,7 @@ All notable changes to this project are documented here. Format loosely based on
   machines; focused tests verify every failure path.
 - **Structured facts are visible in the viewer (v0.9.8).** The **Facts** tab exposes
   role-record queries and history without dropping to the CLI, while Ideas now explains
-  plainly what bridge produced each hypothesis. The extension manifest and lockfile are
-  synchronized at v0.9.9.
+  plainly what bridge produced each hypothesis.
 - **Living memory: the viewer warns when a server runs stale code.** An MCP server is a
   long-lived process that loads code at startup and can't hot-reload, so after upgrading
   hipercampo a running server may keep serving the old code silently (e.g. not atomizing).

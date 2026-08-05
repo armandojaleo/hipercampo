@@ -5,30 +5,30 @@
   <meta http-equiv="Content-Security-Policy" content="%CSP%">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="%STYLE%">
-  <title>hipercampo — memoria</title>
+  <title>hipercampo — memory</title>
 </head>
 <body>
   <header>
     <div class="row">
-      <input id="q" type="search" placeholder="Filtrar por texto…" autocomplete="off">
-      <select id="mode" title="Cómo buscar">
-        <option value="text">texto</option>
-        <option value="recall">recall (agente)</option>
+      <input id="q" type="search" placeholder="Filter by text…" autocomplete="off">
+      <select id="mode" title="How to search">
+        <option value="text">text</option>
+        <option value="recall">recall (agent)</option>
         <option value="recall-auto">recall auto</option>
         <option value="recall-nav">recall nav</option>
         <option value="muse">muse (eureka)</option>
       </select>
-      <button id="pause" title="Pausar la memoria (modo 'no recordar')">⏸</button>
-      <button id="choose-db" title="Cambiar base de datos">📂</button>
-      <button id="weave" title="Tejer el grafo de vecinos (densifica el mapa)">🕸</button>
-      <button id="refresh" title="Refrescar">↻</button>
-      <button id="issue" title="Reportar un problema (GitHub)">🐛</button>
+      <button id="pause" title="Pause the memory ('don't remember' mode)">⏸</button>
+      <button id="choose-db" title="Change database">📂</button>
+      <button id="weave" title="Weave the neighbor graph (densifies the map)">🕸</button>
+      <button id="refresh" title="Refresh">↻</button>
+      <button id="issue" title="Report a problem (GitHub)">🐛</button>
     </div>
     <div id="paused-banner" class="banner hidden">
-      ⏸ Memoria <b>en pausa</b>: no se graban recuerdos nuevos ni se refuerzan (leer sí funciona).
+      ⏸ Memory <b>paused</b>: no new memories are written or reinforced (reading still works).
     </div>
     <div class="row meta">
-      <label><input type="checkbox" id="all"> <span id="all-label">todos los contextos</span></label>
+      <label><input type="checkbox" id="all"> <span id="all-label">all contexts</span></label>
       <span id="chips" class="chips"></span>
       <span id="scope" class="scope"></span>
       <span id="count" class="count"></span>
@@ -36,15 +36,15 @@
   </header>
 
   <nav id="tabs">
-    <button class="tab active" data-view="list">Lista</button>
-    <button class="tab" data-view="graph">Mapa</button>
-    <button class="tab" data-view="timeline">Tiempo</button>
-    <button class="tab" data-view="axes">Ejes</button>
+    <button class="tab active" data-view="list">List</button>
+    <button class="tab" data-view="graph">Map</button>
+    <button class="tab" data-view="timeline">Timeline</button>
+    <button class="tab" data-view="axes">Axes</button>
     <button class="tab" data-view="ideas">Ideas</button>
-    <button class="tab" data-view="facts">Hechos</button>
+    <button class="tab" data-view="facts">Facts</button>
     <button class="tab" data-view="tokens">Tokens</button>
-    <button class="tab" data-view="log">Registro</button>
-    <button class="tab" data-view="status">Estado</button>
+    <button class="tab" data-view="log">Log</button>
+    <button class="tab" data-view="status">Status</button>
   </nav>
 
   <main>
@@ -67,8 +67,8 @@
   </main>
 
   <div id="empty" class="empty hidden">
-    <p>Nada que mostrar.</p>
-    <p class="hint">Prueba a limpiar el buscador o activa «todos los contextos».</p>
+    <p>Nothing to show.</p>
+    <p class="hint">Try clearing the search or turn on “all contexts”.</p>
   </div>
   <div id="error" class="error hidden"></div>
 
