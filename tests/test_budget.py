@@ -360,23 +360,51 @@ def test_el_presupuesto_se_puede_desactivar():
 # --- superficie de herramientas --------------------------------------------
 
 def _tools(env: dict) -> list[str]:
-    msgs = "\n".join([
-        json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                    "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                               "clientInfo": {"name": "t", "version": "0"}}}),
-        json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
-        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
-        json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})]) + "\n"
-    r = subprocess.run([sys.executable, "-m", "hipercampo.server"], input=msgs,
-                       capture_output=True, text=True, encoding="utf-8", env=env)
-    for linea in r.stdout.splitlines():
+    # MCP sobre stdio es una conversación, no un fichero por lotes: si se escriben
+    # todas las peticiones y se cierra stdin inmediatamente, el servidor puede observar
+    # EOF antes de terminar la respuesta (la carrera aparecía en CPython 3.13/Linux).
+    p = subprocess.Popen(
+        [sys.executable, "-m", "hipercampo.server"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", errors="replace", bufsize=1, env=env,
+    )
+
+    def enviar(msg: dict) -> None:
+        assert p.stdin is not None
+        p.stdin.write(json.dumps(msg) + "\n")
+        p.stdin.flush()
+
+    def esperar(id_esperado: int) -> dict:
+        assert p.stdout is not None
+        for linea in p.stdout:
+            try:
+                respuesta = json.loads(linea)
+            except json.JSONDecodeError:
+                continue
+            if respuesta.get("id") == id_esperado:
+                return respuesta
+        error = p.stderr.read() if p.stderr is not None else ""
+        raise AssertionError(
+            f"MCP cerró sin responder a id={id_esperado}; stderr={error!r}")
+
+    try:
+        enviar({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                           "clientInfo": {"name": "t", "version": "0"}}})
+        esperar(1)
+        enviar({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        enviar({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        respuesta = esperar(2)
+        return [t["name"] for t in respuesta.get("result", {}).get("tools", [])]
+    finally:
+        if p.stdin is not None:
+            p.stdin.close()
+        p.terminate()
         try:
-            d = json.loads(linea)
-        except json.JSONDecodeError:
-            continue
-        if d.get("id") in (2, 3):
-            return [t["name"] for t in d.get("result", {}).get("tools", [])]
-    raise AssertionError(f"tools/list no respondió; stdout={r.stdout!r} stderr={r.stderr!r}")
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait(timeout=5)
 
 
 def test_por_defecto_solo_se_anuncia_el_nucleo():

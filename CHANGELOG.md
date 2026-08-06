@@ -75,6 +75,11 @@ All notable changes to this project are documented here. Format loosely based on
   1.000 while improving 16/16 from 1.950% to 1.751% visited.
 
 ### Fixed
+- **The full MCP tool-surface test no longer races server shutdown on Python 3.13.**
+  It now performs the stdio handshake response by response, uses one request ID per
+  call and closes the subprocess deliberately instead of batching requests and sending
+  EOF before the larger `tools/list` response could flush. The complete contract remains
+  asserted; only the invalid transport timing changed.
 - **Atomized writes preserve document integrity.** Source, atoms and their links now
   share one database transaction; link failures roll back the whole write, duplicate
   atoms reuse their reinforced IDs, and content beyond `MAX_TEXT_LEN` cannot leak into
