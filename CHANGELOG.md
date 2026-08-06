@@ -5,7 +5,7 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
-## [0.1.0b13] — 2026-08-05
+## [0.1.0b13] — 2026-08-06
 
 ### Added
 - **The VS Code viewer is now bilingual and branded (v0.9.10).** English is the
