@@ -55,6 +55,44 @@ La beta b13 está cerrada y publicada en PyPI tras CI multiplataforma y benchmar
    Faltan **capturas** y **validación manual del VSIX en ambos idiomas** antes de
    etiquetarla como producto estable.
 
+## El próximo salto: de AÑADIR a DEMOSTRAR (fase de evidencia)
+
+Una revisión externa (ChatGPT, ago 2026) coincide con el rumbo de la casa y lo afila:
+hipercampo ya tiene **suficientes conceptos cognitivos** (VSA + sorpresa + semántico +
+grafo navegable + sueño + olvido + hechos temporales + muse + dream + bridges +
+observabilidad). El riesgo ya **no es tener pocas ideas, sino tantas que cueste demostrar
+cuál produce la ventaja**. Por eso `scripts/ablations.py` es de los ficheros más
+importantes del repo. El próximo salto **no** es "otra función", sino:
+
+> **«un agente con hipercampo recuerda mejor durante meses, usando menos memoria y menos
+> contexto» — demostrado de forma independiente y reproducible.**
+
+Tres demostraciones, en orden de esfuerzo/valor:
+
+1. 🟡 **LongMemEval completo (no solo el adaptador).** Ejecutar y publicar las 500
+   instancias oficiales, reproducibles, comparando contra **Mem0, Letta/MemGPT,
+   Zep/Graphiti, RAG clásico y embeddings+reranker**. Separando *evidence-session recall*
+   de la calidad de respuesta del LLM (el runner ya lo hace). Hoy bloqueado por dato/red.
+2. ⚪ **Experimento longitudinal (el definitivo).** 100k–1M eventos sobre meses simulados:
+   cambios de preferencia, contradicciones, hechos que caducan, ruido repetitivo, eventos
+   excepcionales, recuerdos que reaparecen. Métricas: *useful memory/MB*, *useful
+   memory/token*, false recall, tasa de contradicción, corrección temporal, calidad del
+   olvido, calidad del *resurfacing*. Primero el **generador + las métricas** (medir antes
+   de creer), luego el número.
+3. ⚪ **Uso real prolongado (A/B).** Un Claude/Codex con hipercampo sobre un proyecto real
+   ~3 meses, contra el mismo agente sin él. La prueba más convincente y la más lenta;
+   empieza sola al usarlo en el día a día (dogfooding).
+
+**Posicionamiento** (cuando haya evidencia): de *"experimental cognitive memory for AI
+agents"* a **"Auditable cognitive memory infrastructure for persistent AI agents"** —
+cuatro palabras: **persistent · local · adaptive · auditable**. La **memoria observable**
+(ver qué recuerda, por qué, de dónde salió, qué olvidó, qué asoció) es un diferenciador
+que una base vectorial no responde con elegancia: puede pesar más que +2 de Recall@10.
+
+**Disciplina:** pausar la adición de grandes conceptos cognitivos. Converger y **demostrar**,
+no ampliar. Las features de producto (visibilidad de valor, Ideas accionables) van en
+ramas; los conceptos nuevos, al backlog hasta que la evidencia lo pida.
+
 ## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
 
 Revisiones externas (jul 2026) proponen cinco saltos. No todos valen lo mismo:
