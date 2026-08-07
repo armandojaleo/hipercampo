@@ -13,6 +13,8 @@ export interface HostMessages {
   graphWoven: (links: number) => string;
   panelTitle: string;
   statusTooltip: string;
+  statusValue: (saved: string) => string;
+  valueTooltip: (served: number, injected: number, saved: number, today: number) => string;
 }
 
 const MESSAGES: Record<"en" | "es", HostMessages> = {
@@ -34,6 +36,11 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     graphWoven: (links) => `Graph woven: ${links} new links on the map.`,
     panelTitle: "Hipercampo — memory",
     statusTooltip: "Hipercampo: view memories",
+    statusValue: (saved) => `Hipercampo · ${saved} lean`,
+    valueTooltip: (served, injected, saved, today) =>
+      `Memory served ${served} times · ~${injected} tokens injected`
+      + ` · ~${saved} kept lean by the budget · ${today} today.`
+      + `\nEstimates (Claude's tokenizer isn't public). Click to open the viewer.`,
   },
   es: {
     commandNotFound: "No se encontró 'hipercampo' ni 'python -m hipercampo.cli'. "
@@ -53,6 +60,11 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     graphWoven: (links) => `Grafo tejido: ${links} enlaces nuevos en el mapa.`,
     panelTitle: "Hipercampo — memoria",
     statusTooltip: "Hipercampo: ver memorias",
+    statusValue: (saved) => `Hipercampo · ${saved} ahorrados`,
+    valueTooltip: (served, injected, saved, today) =>
+      `Memoria servida ${served} veces · ~${injected} tokens inyectados`
+      + ` · ~${saved} recortados por el presupuesto · ${today} hoy.`
+      + `\nEstimaciones (el tokenizador de Claude no es público). Clic para abrir el visor.`,
   },
 };
 

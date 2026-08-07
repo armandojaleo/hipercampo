@@ -95,6 +95,37 @@ async function run(args: string[]): Promise<string> {
   throw new Error(hostMessages(vscode.env.language).commandNotFound);
 }
 
+// --- valor ambiente: la memoria hecha visible en la barra de estado -----------------
+// No hay telemetría; el propio dueño ve la "factura" y el ahorro. Se lee del CLI `tokens`
+// (que a su vez lee el registro auditable), sin contadores nuevos ni escrituras.
+let statusItem: vscode.StatusBarItem | undefined;
+
+function kfmt(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
+
+async function refreshValue(): Promise<void> {
+  if (!statusItem) return;
+  const t = hostMessages(vscode.env.language);
+  try {
+    const s = (JSON.parse(await run(["tokens"])).summary) || {};
+    const saved = Number(s.ahorrado_por_presupuesto || 0);
+    if (saved > 0 || Number(s.inyecciones || 0) > 0) {
+      statusItem.text = `$(database) ${t.statusValue(kfmt(saved))}`;
+      statusItem.tooltip = t.valueTooltip(Number(s.inyecciones || 0), Number(s.total || 0),
+        saved, Number(s.hoy || 0));
+    } else {
+      statusItem.text = "$(database) Hipercampo";
+      statusItem.tooltip = t.statusTooltip;
+    }
+  } catch {
+    // sin CLI o sin registro: se queda como marca simple, sin ruido.
+    statusItem.text = "$(database) Hipercampo";
+    statusItem.tooltip = t.statusTooltip;
+  }
+}
+
 async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: string; db?: string; paused?: boolean }> {
   // El visor SIEMPRE trae todos los contextos; la selección (ver uno, ver todos) es
   // client-side vía los chips. Así, desmarcar "todos los contextos" nunca vacía la
@@ -309,6 +340,7 @@ class Controller {
       const { memories, edges, scope, db, paused } = await fetchGraph();
       this.post({ type: "data", memories, edges, scope, paused });
       if (db && db !== this.db) { this.db = db; this.vigilar(db); }
+      void refreshValue();   // datos frescos -> actualiza también el valor de la barra
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
     } finally {
@@ -391,15 +423,19 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  // Botón siempre visible en la barra de estado (abajo): un clic abre el panel ancho.
-  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  status.text = "$(database) Hipercampo";
-  status.tooltip = hostMessages(vscode.env.language).statusTooltip;
-  status.command = "hipercampo.showMemories";
-  status.show();
+  // Botón siempre visible en la barra de estado (abajo): un clic abre el panel ancho, y
+  // el propio texto hace VISIBLE EL VALOR (cuánto ahorró la memoria), sin pop-ups.
+  statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusItem.text = "$(database) Hipercampo";
+  statusItem.tooltip = hostMessages(vscode.env.language).statusTooltip;
+  statusItem.command = "hipercampo.showMemories";
+  statusItem.show();
+  void refreshValue();                               // al arrancar
+  const valueTimer = setInterval(() => void refreshValue(), 60000);   // y en vivo, sin agobiar
 
   context.subscriptions.push(
-    status,
+    statusItem,
+    new vscode.Disposable(() => clearInterval(valueTimer)),
     vscode.window.registerWebviewViewProvider("hipercampo.home", new SidebarProvider(context),
       { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand("hipercampo.showMemories", () => Panel.show(context)),
