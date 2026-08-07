@@ -3,6 +3,7 @@
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
   "version": "0.9.15",
+  "preview": true,
   "publisher": "armandojaleo",
   "license": "MIT",
   "icon": "media/icon.png",
