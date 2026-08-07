@@ -11,6 +11,11 @@
   const DICT = {
     es: {
       filtrar: "Filtrar por texto…", comoBuscar: "Cómo buscar",
+      filtrarTipo: "Filtrar por tipo", ordenar: "Ordenar",
+      tipoTodos: "todos los tipos", ordReciente: "reciente", ordImp: "importancia",
+      ordUsos: "usos", ordFuerza: "fuerza",
+      vecindario: "vecindario", vecindarioTit: "Mostrar solo el nodo elegido y sus vecinos a N saltos (más legible que todo el grafo)",
+      saltos: (n) => `${n} salto${n > 1 ? "s" : ""}`, elegirNodo: "Elige un nodo para ver su vecindario",
       optText: "texto", optRecall: "recall (agente)", optRecallAuto: "recall auto", optRecallNav: "recall nav", optMuse: "muse (eureka)",
       pausar: "Pausar la memoria (modo 'no recordar')", reanudar: "Reanudar la memoria",
       refrescar: "Refrescar", cambiarBD: "Cambiar base de datos", todosContextos: "todos los contextos",
@@ -71,6 +76,8 @@
       phRecall: "Escribe una consulta y pulsa Enter (recall, como el agente)…",
       phMuse: "Escribe una semilla y pulsa Enter (muse: conexiones eureka)…",
       buscandoCon: (m) => `buscando con ${m}…`,
+      tokRecall: (n) => `~${n} tok`,
+      tokRecallTit: "Estimación de los tokens de este resultado (lo que cruzaría al agente por MCP). Siempre es aproximada.",
       errorLeer: "No se pudo leer la memoria:\n\n",
       issueTitle: "Reportar un problema (GitHub)",
       tejer: "Tejer el grafo de vecinos (densifica el mapa)",
@@ -95,6 +102,11 @@
     },
     en: {
       filtrar: "Filter by text…", comoBuscar: "How to search",
+      filtrarTipo: "Filter by type", ordenar: "Sort",
+      tipoTodos: "all types", ordReciente: "recent", ordImp: "importance",
+      ordUsos: "uses", ordFuerza: "strength",
+      vecindario: "neighborhood", vecindarioTit: "Show only the chosen node and its neighbors N hops away (more legible than the whole graph)",
+      saltos: (n) => `${n} hop${n > 1 ? "s" : ""}`, elegirNodo: "Pick a node to see its neighborhood",
       optText: "text", optRecall: "recall (agent)", optRecallAuto: "recall auto", optRecallNav: "recall nav", optMuse: "muse (eureka)",
       pausar: "Pause the memory ('don't remember' mode)", reanudar: "Resume the memory",
       refrescar: "Refresh", cambiarBD: "Change database", todosContextos: "all contexts",
@@ -155,6 +167,8 @@
       phRecall: "Type a query and press Enter (recall, like the agent)…",
       phMuse: "Type a seed and press Enter (muse: eureka connections)…",
       buscandoCon: (m) => `searching with ${m}…`,
+      tokRecall: (n) => `~${n} tok`,
+      tokRecallTit: "Estimated tokens for this result (what would cross to the agent over MCP). Always approximate.",
       errorLeer: "Couldn't read the memory:\n\n",
       issueTitle: "Report a problem (GitHub)",
       tejer: "Weave the neighbor graph (densifies the map)",
@@ -188,6 +202,9 @@
   let ACTIVE = null;     // Set de namespaces activos (chips); null = todos
   let VIEW = "list";
   let PAUSED = false;    // modo 'no recordar'
+  let NBHD = false;      // Mapa: modo vecindario (solo el nodo elegido + N saltos)
+  let HOPS = 2;          // saltos del vecindario
+  let MAPFOCO = null;    // id del nodo centro del vecindario
 
   // --- utilidades -----------------------------------------------------------
   const norm = (s) => String(s || "").toLowerCase()
@@ -207,6 +224,30 @@
   }
   const nsColor = (ns) => `hsl(${hue(ns)} 60% 55%)`;
 
+  // Color por ESTADO COGNITIVO del recuerdo (el diferenciador: Obsidian colorea por
+  // carpeta; aquí el color cuenta la VIDA de la memoria). Prioridad: dormido/reemplazado
+  // mandan sobre el tipo; el átomo (fragmento de un documento) va en verde como su arista.
+  const EST_COL = {
+    episodic: "#5cc8e8",     // cian — hipocampo, fresco
+    semantic: "#d9a648",     // oro — córtex, conocimiento consolidado
+    atom: "#78be8c",         // verde — fragmento → fuente (igual que la arista átomo)
+    superseded: "#c98a8a",   // rojo apagado — verdad cerrada
+    dormant: "#7a7f8a",      // gris — latente
+  };
+  const EST_LBL = {
+    es: { episodic: "episódico", semantic: "semántico", atom: "átomo",
+      superseded: "reemplazado", dormant: "latente" },
+    en: { episodic: "episodic", semantic: "semantic", atom: "atom",
+      superseded: "superseded", dormant: "dormant" },
+  };
+  function estadoNodo(m, atomSet) {
+    if (m.dormant) return "dormant";
+    if (m.superseded) return "superseded";
+    if (atomSet && atomSet.has(m.id)) return "atom";
+    if (m.kind === "semantic" || m.consolidated) return "semantic";
+    return "episodic";
+  }
+
   function fecha(ts) {
     if (!ts) return L.guion;
     const d = (Date.now() / 1000 - ts) / 86400;
@@ -224,10 +265,23 @@
     return (m.strength || 0) < 0.4 && edad > 7 && (m.importance || 0) < 0.8;
   }
 
-  // Memorias visibles: filtro por chips de namespace + (si modo texto) por texto.
+  // átomos = destino de una arista type='atom'. Se calcula una vez por filtro/pintado.
+  function atomSetGlobal() {
+    const s = new Set();
+    for (const e of EDGES) if (e.type === "atom") s.add(e.dst);
+    return s;
+  }
+
+  // Memorias visibles: chips de namespace + filtro por tipo (estado cognitivo) +
+  // (si modo texto) texto. El tipo usa la MISMA clasificación que el color del Mapa.
   function visibles() {
     let base = HITS !== null ? HITS : MEM;
     if (ACTIVE) base = base.filter((m) => ACTIVE.has(m.namespace));
+    const kind = ($("kind") && $("kind").value) || "";
+    if (kind) {
+      const atomSet = atomSetGlobal();
+      base = base.filter((m) => estadoNodo(m, atomSet) === kind);
+    }
     const q = norm($("q").value.trim());
     if (q && $("mode").value === "text") {
       base = base.filter((m) => norm(m.text).includes(q)
@@ -235,6 +289,15 @@
     }
     return base;
   }
+
+  // Orden de la LISTA (client-side). En resultados de recall NO se reordena: el orden
+  // es la relevancia que decidió el motor, y pisarla engañaría sobre qué priorizó.
+  const ORDEN = {
+    recent: (a, b) => (b.last_access || 0) - (a.last_access || 0),
+    importance: (a, b) => (b.importance || 0) - (a.importance || 0),
+    uses: (a, b) => (b.access_count || 0) - (a.access_count || 0),
+    strength: (a, b) => (b.strength || 0) - (a.strength || 0),
+  };
 
   // --- etiquetas estáticas: se aplican según el idioma al arrancar ----------
   function aplicarIdioma() {
@@ -246,6 +309,23 @@
     opts[2].textContent = L.optRecallAuto;
     opts[3].textContent = L.optRecallNav;
     opts[4].textContent = L.optMuse;
+    const ksel = $("kind");
+    if (ksel) {
+      ksel.title = L.filtrarTipo;
+      const klbl = EST_LBL[lang];
+      ksel.options[0].textContent = L.tipoTodos;
+      for (const o of ksel.options) if (o.value && klbl[o.value]) o.textContent = klbl[o.value];
+    }
+    const ssel = $("sort");
+    if (ssel) {
+      ssel.title = L.ordenar;
+      const st = { recent: L.ordReciente, importance: L.ordImp, uses: L.ordUsos, strength: L.ordFuerza };
+      for (const o of ssel.options) if (st[o.value]) o.textContent = st[o.value];
+    }
+    const nl = $("nbhd-label"); if (nl) nl.textContent = L.vecindario;
+    const nb = $("nbhd"); if (nb) nb.parentElement.title = L.vecindarioTit;
+    const hp = $("hops");
+    if (hp) for (const o of hp.options) o.textContent = L.saltos(Number(o.value));
     $("refresh").title = L.refrescar;
     $("choose-db").title = L.cambiarBD;
     $("weave").title = L.tejer;
@@ -295,8 +375,19 @@
   // --- cabecera / contador --------------------------------------------------
   function cabecera(n) {
     const total = (HITS !== null ? HITS : MEM).length;
-    $("scope").textContent = HITS !== null
-      ? `${$("mode").value} · ${SCOPE}` : SCOPE;
+    const sc = $("scope");
+    if (HITS !== null) {
+      // Coste del payload que cruzaría al agente por MCP. Estimación honesta (~4 char/tok),
+      // etiquetada como aproximada: el tokenizador exacto de Claude no es público.
+      const tok = Math.max(0, Math.round(JSON.stringify(HITS).length / 4));
+      sc.textContent = `${$("mode").value} · ${SCOPE}`;
+      sc.title = "";
+      const tk = document.createElement("span");
+      tk.className = "toktag"; tk.textContent = " · " + L.tokRecall(tok); tk.title = L.tokRecallTit;
+      sc.appendChild(tk);
+    } else {
+      sc.textContent = SCOPE; sc.title = "";
+    }
     $("count").textContent = n === total ? `${total}` : L.deTotal(n, total);
   }
 
@@ -387,20 +478,16 @@
     }
   }
 
-  // Los átomos son el 'dst' de los enlaces type='atom' (un átomo cuelga de su fuente).
-  function atomHijos() {
-    const s = new Set();
-    for (const e of EDGES) if (e.type === "atom") s.add(e.dst);
-    return s;
-  }
-
   function renderList(items) {
     // Al NAVEGAR (no en resultados de recall), ocultar los átomos: un trozo suelto
     // ("', consultable por rol.") no es un recuerdo. Se muestra la FUENTE coherente; el
     // átomo sigue existiendo para el recall preciso y se ve en el Mapa (enlace verde).
+    // Y se aplica el ORDEN elegido (la relevancia del recall no se toca).
     if (HITS === null) {
-      const hijos = atomHijos();
+      const hijos = atomSetGlobal();
       if (hijos.size) items = items.filter((m) => !hijos.has(m.id));
+      const cmp = ORDEN[($("sort") && $("sort").value) || "recent"];
+      if (cmp) items = [...items].sort(cmp);
     }
     const c = $("view-list");
     c.innerHTML = "";
@@ -417,8 +504,56 @@
 
   const firmaNodos = (items) => items.map((m) => m.id).sort((a, b) => a - b).join(",");
 
+  // átomos = destino de una arista type='atom' (src=fuente, dst=átomo). Se colorean aparte.
+  const atomosDe = (aristas) => new Set(aristas.filter((e) => e.type === "atom").map((e) => e.dst));
+
+  // Vecindario a N saltos de un nodo (BFS sobre las aristas visibles, en ambos sentidos).
+  // Es la clave de legibilidad: con 222 nodos, ver solo un barrio se lee; el todo no.
+  function vecindarioIds(focoId, items, hops) {
+    const idset = new Set(items.map((m) => m.id));
+    if (!idset.has(focoId)) return idset;   // el foco ya no está: no filtrar
+    const ady = new Map();
+    const une = (a, b) => { if (!ady.has(a)) ady.set(a, []); ady.get(a).push(b); };
+    for (const e of EDGES) {
+      if (!idset.has(e.src) || !idset.has(e.dst)) continue;
+      une(e.src, e.dst); une(e.dst, e.src);
+    }
+    const vistos = new Set([focoId]);
+    let frente = [focoId];
+    for (let h = 0; h < hops; h++) {
+      const sig = [];
+      for (const id of frente) for (const v of (ady.get(id) || [])) {
+        if (!vistos.has(v)) { vistos.add(v); sig.push(v); }
+      }
+      frente = sig;
+    }
+    return vistos;
+  }
+
+  // Nodo con más conexiones (para arrancar el vecindario sin que el usuario elija).
+  function nodoHub(items) {
+    const grado = new Map();
+    const idset = new Set(items.map((m) => m.id));
+    for (const e of EDGES) {
+      if (!idset.has(e.src) || !idset.has(e.dst)) continue;
+      grado.set(e.src, (grado.get(e.src) || 0) + 1);
+      grado.set(e.dst, (grado.get(e.dst) || 0) + 1);
+    }
+    let mejor = null, max = -1;
+    for (const [id, g] of grado) if (g > max) { max = g; mejor = id; }
+    return mejor != null ? mejor : (items[0] && items[0].id);
+  }
+
   function renderGraph(items) {
     const canvas = $("graph-canvas");
+    // MODO VECINDARIO: reduce a un barrio legible en vez de la maraña completa.
+    if (NBHD) {
+      if (MAPFOCO == null || !items.some((m) => m.id === MAPFOCO)) MAPFOCO = nodoHub(items);
+      if (MAPFOCO != null) {
+        const barrio = vecindarioIds(MAPFOCO, items, HOPS);
+        items = items.filter((m) => barrio.has(m.id));
+      }
+    }
     const vis = new Set(items.map((m) => m.id));
     const aristas = EDGES.filter((e) => vis.has(e.src) && vis.has(e.dst));
     const sig = firmaNodos(items);
@@ -428,7 +563,7 @@
     if (G && G.sig === sig) {
       const byId = new Map(items.map((m) => [m.id, m]));
       for (const n of G.nodos) n.m = byId.get(n.id) || n.m;
-      G.aristas = aristas;
+      G.aristas = aristas; G.atomSet = atomosDe(aristas);
       leyenda(items); ajustarCanvas(canvas); dibujarGrafo();
       return;
     }
@@ -436,34 +571,51 @@
     // Conjunto NUEVO: construir sembrando desde las posiciones guardadas (los nodos
     // que ya existían se quedan donde estaban; solo los nuevos entran por el círculo).
     if (G) cancelAnimationFrame(G.raf);
+    const camPrev = G ? { scale: G.scale, ox: G.ox, oy: G.oy, touched: G.camTouched } : null;
     const nodos = items.map((m) => ({ m, id: m.id }));
     const idx = new Map(nodos.map((n, i) => [n.id, i]));
+    let nuevos = 0;
     const R = 180;
     nodos.forEach((n, i) => {
       const g = GPOS.get(n.id);
       if (g) { n.x = g.x; n.y = g.y; } else {
+        nuevos++;
         const a = (i / Math.max(1, nodos.length)) * Math.PI * 2;
         n.x = Math.cos(a) * R; n.y = Math.sin(a) * R;
       }
       n.vx = 0; n.vy = 0;
     });
+    // RECALENTAMIENTO PROPORCIONAL: si casi todo ya tenía sitio (una recarga con un par
+    // de nodos nuevos), apenas se agita; solo un layout desde cero se calienta del todo.
+    // Así el mapa deja de "no parar de moverse" cuando el agente escribe de fondo.
+    const alpha0 = nuevos === 0 ? 0.12 : Math.min(1, 0.3 + nuevos / nodos.length);
+    // Auto-encuadre la primera vez (o si el usuario nunca movió la cámara): centra el
+    // grafo en vez de dejarlo amontonado en una esquina.
+    const camTouched = camPrev ? camPrev.touched : false;
     G = { canvas, ctx: canvas.getContext("2d"), nodos, idx, aristas, sig,
-      scale: (G && G.scale) || 1, ox: (G && G.ox) || 0, oy: (G && G.oy) || 0,
-      sel: null, drag: null, alpha: 1, raf: 0 };
+      atomSet: atomosDe(aristas),
+      scale: (camPrev && camPrev.scale) || 1, ox: (camPrev && camPrev.ox) || 0, oy: (camPrev && camPrev.oy) || 0,
+      sel: null, hover: null, drag: null, alpha: alpha0, raf: 0,
+      camTouched, fitPending: !camTouched };
     leyenda(items);
     ajustarCanvas(canvas);
-    correrSim();
+    correrSim(alpha0);
     engancharGrafo();
   }
 
   function leyenda(items) {
-    const nss = [...new Set(items.map((m) => m.namespace))].sort();
+    // Leyenda por ESTADO (el color de los nodos): solo los estados presentes, para no
+    // llenar de ruido. Los namespaces siguen en los chips de arriba (son un filtro).
+    const atomSet = G ? G.atomSet : new Set();
+    const presentes = [...new Set(items.map((m) => estadoNodo(m, atomSet)))];
+    const orden = ["episodic", "semantic", "atom", "superseded", "dormant"];
+    const lbl = EST_LBL[lang];
     const l = $("graph-legend");
-    l.innerHTML = nss.map((ns) =>
-      `<div class="k"><span class="dot" style="background:${nsColor(ns)}"></span>${esc(ns)}</div>`).join("")
+    l.innerHTML = orden.filter((k) => presentes.includes(k)).map((k) =>
+      `<div class="k"><span class="dot" style="background:${EST_COL[k]}"></span>${esc(lbl[k])}</div>`).join("")
       + `<div class="k"><span class="ln" style="border-color:var(--vscode-foreground);opacity:.5"></span>${L.leyAsociacion}</div>`
       + `<div class="k"><span class="ln" style="border-color:var(--vscode-textLink-foreground);border-top-style:dashed"></span>${L.leyPuente}</div>`
-      + `<div class="k"><span class="ln" style="border-color:rgba(120,190,140,.9)"></span>${L.leyAtomo}</div>`;
+      + `<div class="k"><span class="ln" style="border-color:${EST_COL.atom}"></span>${L.leyAtomo}</div>`;
   }
 
   function ajustarCanvas(c) {
@@ -473,17 +625,24 @@
     if (G) { G.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); G.w = r.width; G.h = r.height; }
   }
 
-  function correrSim() {
+  function correrSim(alpha0) {
     if (!G) return;
     cancelAnimationFrame(G.raf);
-    G.alpha = 1;
+    if (alpha0 != null) G.alpha = alpha0;
     const paso = () => {
       // Se detiene si no estamos en el mapa o si el panel no se ve: cero CPU en reposo.
-      if (!G || VIEW !== "graph" || document.hidden) return;
+      if (!G || VIEW !== "graph" || document.hidden) { G.raf = 0; return; }
       if (!G.drag) tick();
+      G.alpha *= 0.94;   // enfría más rápido: el mapa se asienta antes y deja de vibrar
+      // al ASENTARSE: encuadrar una vez (si el usuario no ha tocado la cámara) y CONGELAR.
+      if (G.alpha <= 0.03 && !G.drag) {
+        if (G.fitPending && !G.camTouched) { G.fitPending = false; encuadrar(); }
+        else dibujarGrafo();
+        G.raf = 0;                       // congelado: ni un frame más hasta que algo lo pida
+        return;
+      }
       dibujarGrafo();
-      G.alpha *= 0.97;
-      if (G.alpha > 0.02 || G.drag) G.raf = requestAnimationFrame(paso);
+      G.raf = requestAnimationFrame(paso);
     };
     G.raf = requestAnimationFrame(paso);
   }
@@ -498,12 +657,17 @@
         if (i === j) continue;
         const nj = N[j];
         let dx = ni.x - nj.x, dy = ni.y - nj.y;
-        let d2 = dx * dx + dy * dy || 0.01;
-        const f = K / d2;
-        const d = Math.sqrt(d2);
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 25) { d2 = 25; if (dx === 0 && dy === 0) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; } }
+        const f = Math.min(K / d2, 400);   // cap: dos nodos casi encima no generan una fuerza infinita
+        const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
         fx += (dx / d) * f; fy += (dy / d) * f;
       }
-      fx += -ni.x * 0.02; fy += -ni.y * 0.02;   // gravedad al centro
+      // gravedad al centro, MÁS FUERTE cuanto más lejos: evita que los nodos poco
+      // conectados salgan disparados fuera de la vista (los "puntos dispares" lejanos).
+      const dist = Math.hypot(ni.x, ni.y);
+      const g = 0.03 + (dist > 700 ? (dist - 700) * 0.0004 : 0);
+      fx += -ni.x * g; fy += -ni.y * g;
       ni.fx = fx; ni.fy = fy;
     }
     for (const e of E) {                          // muelles por arista
@@ -521,16 +685,26 @@
     }
     for (const n of N) {
       if (n === (G.drag && G.drag.node)) continue;
-      n.vx = (n.vx + n.fx * a) * 0.85; n.vy = (n.vy + n.fy * a) * 0.85;
-      n.x += n.vx; n.y += n.vy;
+      let vx = (n.vx + n.fx * a) * 0.85, vy = (n.vy + n.fy * a) * 0.85;
+      if (!isFinite(vx)) vx = 0; if (!isFinite(vy)) vy = 0;   // nunca dejar que NaN contamine
+      const sp = Math.hypot(vx, vy);                          // límite de velocidad: sin latigazos
+      if (sp > 40) { vx *= 40 / sp; vy *= 40 / sp; }
+      n.vx = vx; n.vy = vy;
+      n.x += vx; n.y += vy;
+      const rad = Math.hypot(n.x, n.y);                       // frontera dura: nada se escapa del lienzo
+      if (rad > 1600) { n.x *= 1600 / rad; n.y *= 1600 / rad; n.vx = 0; n.vy = 0; }
       GPOS.set(n.id, { x: n.x, y: n.y });   // recordar dónde quedó, para el próximo refresco
     }
   }
 
   function toScreen(n) { return { x: G.w / 2 + G.ox + n.x * G.scale, y: G.h / 2 + G.oy + n.y * G.scale }; }
 
+  const radioNodo = (n) => (4 + (n.m.importance || 0.3) * 7) * Math.max(0.6, Math.min(1.6, G.scale));
+
   function dibujarGrafo() {
     const { ctx, w, h } = G;
+    // el NODO en foco (hover manda sobre selección) rige el resaltado de vecinos.
+    const foco = G.hover || G.sel;
     ctx.clearRect(0, 0, w, h);
     // aristas
     for (const e of G.aristas) {
@@ -546,24 +720,68 @@
           : (knn ? "rgba(140,140,140,.13)" : "rgba(140,140,140,.45)");
       ctx.lineWidth = puente ? 1.2 : atomo ? 1.5 : (knn ? 0.5 : Math.min(2.5, 0.5 + (e.weight || 0.5) * 1.5));
       if (puente) ctx.setLineDash([4, 4]); else ctx.setLineDash([]);
-      const resaltar = G.sel && (e.src === G.sel || e.dst === G.sel);
-      ctx.globalAlpha = G.sel && !resaltar ? 0.15 : 1;
+      const resaltar = foco && (e.src === foco || e.dst === foco);
+      ctx.globalAlpha = foco && !resaltar ? 0.12 : 1;
       ctx.stroke(); ctx.globalAlpha = 1;
     }
     ctx.setLineDash([]);
-    // nodos
+    // nodos — círculo con GLOW suave del color de su estado (look "constelación")
+    // ETIQUETAS: solo el nodo en foco y sus vecinos directos (estilo Obsidian: el texto
+    // aparece al posar el ratón, no todo a la vez —222 textos era ilegible—).
+    const etiquetar = [];
     for (const n of G.nodos) {
       const p = toScreen(n);
-      const r = (4 + (n.m.importance || 0.3) * 7) * Math.max(0.6, Math.min(1.6, G.scale));
-      const atenua = G.sel && G.sel !== n.id && !vecino(G.sel, n.id);
-      ctx.globalAlpha = atenua ? 0.25 : 1;
+      const r = radioNodo(n);
+      const enFoco = foco && (foco === n.id || vecino(foco, n.id));
+      const atenua = foco && !enFoco;
+      const col = EST_COL[estadoNodo(n.m, G.atomSet)];
+      ctx.globalAlpha = atenua ? 0.18 : 1;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = (enFoco ? 16 : 7) * Math.max(0.6, Math.min(1.4, G.scale));
       ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = nsColor(n.m.namespace);
-      if (n.m.dormant) { ctx.globalAlpha *= 0.4; }
+      ctx.fillStyle = col;
       ctx.fill();
-      if (n.id === G.sel) { ctx.lineWidth = 2; ctx.strokeStyle = getVar("--vscode-focusBorder"); ctx.stroke(); }
+      ctx.shadowBlur = 0;
+      if (n.id === foco) { ctx.lineWidth = 2; ctx.strokeStyle = getVar("--vscode-focusBorder"); ctx.stroke(); }
       ctx.globalAlpha = 1;
+      if (enFoco) etiquetar.push({ n, p, r, principal: n.id === foco });
     }
+    // etiquetas encima de todo, con halo para que se lean sobre cualquier tema
+    if (etiquetar.length) {
+      ctx.font = "11px " + (getVar("--vscode-font-family") || "sans-serif");
+      ctx.textBaseline = "middle";
+      for (const { n, p, r } of etiquetar) {
+        const txt = (n.m.text || "").replace(/\s+/g, " ").trim().slice(0, 26)
+          + ((n.m.text || "").length > 26 ? "…" : "");
+        if (!txt) continue;
+        const x = p.x + r + 4, y = p.y;
+        ctx.lineWidth = 3; ctx.strokeStyle = getVar("--vscode-editor-background");
+        ctx.globalAlpha = 0.9; ctx.strokeText(txt, x, y); ctx.globalAlpha = 1;
+        ctx.fillStyle = getVar("--vscode-foreground");
+        ctx.fillText(txt, x, y);
+      }
+    }
+  }
+
+  // Encuadra el GRUESO de los nodos en el lienzo (zoom-to-fit). Usa percentiles 5–95
+  // en vez de min/max: así un nodo suelto y lejano no encoge todo el mapa a un punto.
+  function encuadrar() {
+    if (!G || !G.nodos.length) return;
+    const xs = G.nodos.map((n) => n.x).filter(isFinite).sort((a, b) => a - b);
+    const ys = G.nodos.map((n) => n.y).filter(isFinite).sort((a, b) => a - b);
+    if (!xs.length || !ys.length) { G.scale = 1; G.ox = 0; G.oy = 0; dibujarGrafo(); return; }
+    const q = (arr, p) => arr[Math.min(arr.length - 1, Math.max(0, Math.floor(p * (arr.length - 1))))];
+    const minX = q(xs, 0.05), maxX = q(xs, 0.95), minY = q(ys, 0.05), maxY = q(ys, 0.95);
+    const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+    const pad = 60;
+    let scale = Math.min((G.w - pad * 2) / bw, (G.h - pad * 2) / bh);
+    if (!isFinite(scale) || scale <= 0) scale = 1;
+    G.scale = Math.max(0.2, Math.min(2.5, scale));
+    G.ox = -((minX + maxX) / 2) * G.scale;
+    G.oy = -((minY + maxY) / 2) * G.scale;
+    if (!isFinite(G.ox)) G.ox = 0;
+    if (!isFinite(G.oy)) G.oy = 0;
+    dibujarGrafo();
   }
 
   function vecino(a, b) {
@@ -590,21 +808,37 @@
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       const n = nodoEn(mx, my);
       if (n) {
-        G.sel = n.id; G.drag = { node: n, dx: 0, dy: 0 }; detalle(n.m);
+        G.sel = n.id; detalle(n.m);
+        // en modo vecindario, clicar un nodo recentra el barrio en él.
+        if (NBHD) { MAPFOCO = n.id; renderGraph(visibles()); return; }
+        G.drag = { node: n, dx: 0, dy: 0 };
         correrSim();
       } else { G.drag = { pan: true, sx: mx - G.ox, sy: my - G.oy }; G.sel = null; $("graph-detail").classList.add("hidden"); }
       c.setPointerCapture(e.pointerId);
     };
     c.onpointermove = (e) => {
-      if (!G.drag) return;
       const rect = c.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      if (G.drag.pan) { G.ox = mx - G.drag.sx; G.oy = my - G.drag.sy; dibujarGrafo(); }
-      else { const n = G.drag.node; n.x = (mx - G.w / 2 - G.ox) / G.scale; n.y = (my - G.h / 2 - G.oy) / G.scale; n.vx = n.vy = 0; GPOS.set(n.id, { x: n.x, y: n.y }); dibujarGrafo(); }
+      if (G.drag) {
+        if (G.drag.pan) { G.camTouched = true; G.ox = mx - G.drag.sx; G.oy = my - G.drag.sy; dibujarGrafo(); }
+        else { const n = G.drag.node; n.x = (mx - G.w / 2 - G.ox) / G.scale; n.y = (my - G.h / 2 - G.oy) / G.scale; n.vx = n.vy = 0; GPOS.set(n.id, { x: n.x, y: n.y }); dibujarGrafo(); }
+        return;
+      }
+      // HOVER (sin arrastrar): ilumina el nodo y sus vecinos, atenúa el resto.
+      const n = nodoEn(mx, my);
+      const id = n ? n.id : null;
+      c.style.cursor = n ? "pointer" : "default";
+      if (id !== G.hover) { G.hover = id; if (!G.raf || G.alpha <= 0.02) dibujarGrafo(); }
     };
-    c.onpointerup = () => { G.drag = null; correrSim(); };
+    c.onpointerleave = () => { if (G.hover) { G.hover = null; dibujarGrafo(); } };
+    c.onpointerup = () => { const drag = G.drag; G.drag = null; correrSim(drag && !drag.pan ? 0.15 : null); };
+    c.ondblclick = (e) => {
+      const rect = c.getBoundingClientRect();
+      if (!nodoEn(e.clientX - rect.left, e.clientY - rect.top)) encuadrar();
+    };
     c.onwheel = (e) => {
       e.preventDefault();
+      G.camTouched = true;
       const f = e.deltaY < 0 ? 1.1 : 0.9;
       G.scale = Math.max(0.2, Math.min(4, G.scale * f));
       dibujarGrafo();
@@ -713,8 +947,11 @@
     if (!s) { c.innerHTML = `<p class="hint">${L.consultandoEstado}</p>`; return; }
     const db = s.db || {}, mcp = s.mcp || {}, log = s.log || {}, st = s.stats || {};
     const schemaOk = db.schema === db.schema_expected;
+    // El hueco del semáforo SIEMPRE se reserva (aunque la fila no tenga estado), para
+    // que todas las etiquetas alineen en la misma columna y no queden dentadas.
     const fila = (label, val, ok) =>
-      `<div class="strow">${ok === undefined ? "" : semaforo(ok)}`
+      `<div class="strow"><span class="sem ${ok === undefined ? "none" : ok ? "ok" : "no"}">`
+      + `${ok === undefined ? "" : ok ? "●" : "○"}</span>`
       + `<span class="slabel">${label}</span><span class="sval">${val}</span></div>`;
     c.innerHTML =
       `<div class="scard"><h3>${L.hCLI}</h3>`
@@ -792,14 +1029,15 @@
     const s = d.summary || {}, serie = d.series || [];
     const media = s.media_por_inyeccion || 0, presup = s.presupuesto_hook || 350;
     const usoPct = Math.min(100, Math.round((media / presup) * 100));
-    const maxTok = Math.max(1, ...serie.map((x) => x.tok));
-    // mini-gráfico: últimas ~48 inyecciones como barras
-    const barras = serie.slice(-48).map((x) => {
+    const ult = serie.slice(-48);
+    const maxTok = Math.max(1, ...ult.map((x) => x.tok));
+    // mini-gráfico: últimas ~48 inyecciones como barras. El valor se lee arriba al pasar
+    // el ratón (data-*), porque escribirlo en cada barra sería ilegible.
+    const barras = ult.map((x, i) => {
       const h = Math.round((x.tok / maxTok) * 100);
       const over = x.tok > presup;
-      return `<span class="tbar" style="height:${Math.max(3, h)}%;`
-        + `background:${over ? "var(--sem-no,#e06c75)" : "var(--vscode-textLink-foreground)"}" `
-        + `title="${x.ts} · ${x.tok} tok (${esc(x.etiqueta || "")})"></span>`;
+      return `<span class="tbar" data-i="${i}" style="height:${Math.max(3, h)}%;`
+        + `background:${over ? "var(--sem-no,#e06c75)" : "var(--vscode-textLink-foreground)"}"></span>`;
     }).join("");
     c.innerHTML =
       `<div class="hero">`
@@ -821,9 +1059,21 @@
       + `</div>`
       + (serie.length
           ? `<div class="scard"><h3>${L.tHistoria(serie.length)}</h3>`
+            + `<div id="tok-readout" class="tok-readout">&nbsp;</div>`
             + `<div class="chart">${barras}</div></div>`
           : "")
       + `<p class="hint">${L.tEstimacion(esc(s.metodo || ""))}</p>`;
+    // Lector del valor de cada barra al pasar el ratón (delegación en el contenedor).
+    const chart = c.querySelector(".chart"), ro = $("tok-readout");
+    if (chart && ro) {
+      chart.addEventListener("pointermove", (e) => {
+        const b = e.target.closest(".tbar");
+        if (!b) { ro.innerHTML = "&nbsp;"; return; }
+        const x = ult[+b.dataset.i]; if (!x) return;
+        ro.textContent = `${x.tok} ${L.tTok} · ${esc(x.etiqueta || "")} · ${x.ts}`;
+      });
+      chart.addEventListener("pointerleave", () => { ro.innerHTML = "&nbsp;"; });
+    }
     c.querySelectorAll("button[data-budget]").forEach((b) => {
       b.onclick = () => {
         const op = b.dataset.budget;
@@ -974,6 +1224,7 @@
       PAUSED = !!msg.paused; pintarPausa();
       const w = $("weave"); if (w) w.disabled = false;   // re-activar tras tejer
       pintarChips();
+      if (relanzarBusqueda) { relanzarBusqueda = false; lanzarBusquedaAgente(); return; }
       if (PIDE[VIEW]) PIDE[VIEW]();   // estado/tokens/registro se re-piden en cada refresco
       else repintar();
     } else if (msg.type === "search-result") {
@@ -1008,7 +1259,26 @@
     actualizarModo(true);   // cambia el placeholder y enfoca la caja
     if ($("mode").value === "text") repintar(); else lanzarBusquedaAgente();
   });
-  $("refresh").onclick = () => { $("q").value = ""; HITS = null; vscode.postMessage({ type: "refresh" }); };
+  $("kind").addEventListener("change", () => repintar());
+  $("sort").addEventListener("change", () => { if (VIEW === "list") repintar(); });
+  $("nbhd").addEventListener("change", () => {
+    NBHD = $("nbhd").checked;
+    if (NBHD && MAPFOCO == null && G && G.sel) MAPFOCO = G.sel;
+    if (!NBHD) MAPFOCO = null;
+    if (VIEW === "graph") renderGraph(visibles());
+  });
+  $("hops").addEventListener("change", () => {
+    HOPS = Number($("hops").value) || 2;
+    if (NBHD && VIEW === "graph") renderGraph(visibles());
+  });
+  // Refrescar = recargar de disco, SIN borrar la búsqueda. Si había una búsqueda de
+  // agente en curso, se relanza al llegar los datos (bandera). Limpiar la caja es otra
+  // cosa distinta (se hace vaciándola a mano), no lo que espera un botón de refresco.
+  let relanzarBusqueda = false;
+  $("refresh").onclick = () => {
+    relanzarBusqueda = ($("mode").value !== "text" && !!$("q").value.trim());
+    vscode.postMessage({ type: "refresh" });
+  };
   $("choose-db").addEventListener("click", () =>
     vscode.postMessage({ type: "choose-db" }));
   $("all").addEventListener("change", () => {

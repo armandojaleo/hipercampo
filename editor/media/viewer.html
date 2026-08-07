@@ -9,7 +9,7 @@
 </head>
 <body>
   <header>
-    <div class="row">
+    <div class="row search">
       <input id="q" type="search" placeholder="Filter by text…" autocomplete="off">
       <select id="mode" title="How to search">
         <option value="text">text</option>
@@ -18,39 +18,65 @@
         <option value="recall-nav">recall nav</option>
         <option value="muse">muse (eureka)</option>
       </select>
-      <button id="pause" title="Pause the memory ('don't remember' mode)">⏸</button>
-      <button id="choose-db" title="Change database">📂</button>
-      <button id="weave" title="Weave the neighbor graph (densifies the map)">🕸</button>
-      <button id="refresh" title="Refresh">↻</button>
-      <button id="issue" title="Report a problem (GitHub)">🐛</button>
     </div>
     <div id="paused-banner" class="banner hidden">
       ⏸ Memory <b>paused</b>: no new memories are written or reinforced (reading still works).
     </div>
     <div class="row meta">
-      <label><input type="checkbox" id="all"> <span id="all-label">all contexts</span></label>
-      <span id="chips" class="chips"></span>
+      <label class="ctl"><input type="checkbox" id="all"> <span id="all-label">all contexts</span></label>
+      <select id="kind" class="mini" title="Filter by type">
+        <option value="">all types</option>
+        <option value="episodic">episodic</option>
+        <option value="semantic">semantic</option>
+        <option value="atom">atom</option>
+        <option value="superseded">superseded</option>
+        <option value="dormant">dormant</option>
+      </select>
+      <select id="sort" class="mini" title="Sort">
+        <option value="recent">recent</option>
+        <option value="importance">importance</option>
+        <option value="uses">uses</option>
+        <option value="strength">strength</option>
+      </select>
       <span id="scope" class="scope"></span>
       <span id="count" class="count"></span>
     </div>
+    <div id="chips" class="chips-row"></div>
   </header>
 
   <nav id="tabs">
-    <button class="tab active" data-view="list">List</button>
-    <button class="tab" data-view="graph">Map</button>
-    <button class="tab" data-view="timeline">Timeline</button>
-    <button class="tab" data-view="axes">Axes</button>
-    <button class="tab" data-view="ideas">Ideas</button>
-    <button class="tab" data-view="facts">Facts</button>
-    <button class="tab" data-view="tokens">Tokens</button>
-    <button class="tab" data-view="log">Log</button>
-    <button class="tab" data-view="status">Status</button>
+    <div class="tabstrip">
+      <button class="tab active" data-view="list">List</button>
+      <button class="tab" data-view="graph">Map</button>
+      <button class="tab" data-view="timeline">Timeline</button>
+      <button class="tab" data-view="axes">Axes</button>
+      <button class="tab" data-view="ideas">Ideas</button>
+      <button class="tab" data-view="facts">Facts</button>
+      <button class="tab" data-view="tokens">Tokens</button>
+      <button class="tab" data-view="log">Log</button>
+      <button class="tab" data-view="status">Status</button>
+    </div>
+    <span class="tools" role="toolbar">
+      <button id="pause" title="Pause the memory ('don't remember' mode)">⏸</button>
+      <button id="weave" title="Weave the neighbor graph (densifies the map)">🕸</button>
+      <button id="refresh" title="Refresh">↻</button>
+      <button id="choose-db" title="Change database">📂</button>
+      <button id="issue" title="Report a problem (GitHub)">🐛</button>
+    </span>
   </nav>
 
   <main>
     <section id="view-list" class="view active"></section>
     <section id="view-graph" class="view">
       <canvas id="graph-canvas"></canvas>
+      <div id="map-ctrl" class="map-ctrl">
+        <label class="ctl"><input type="checkbox" id="nbhd"> <span id="nbhd-label">neighborhood</span></label>
+        <select id="hops" class="mini" title="Hops">
+          <option value="1">1 hop</option>
+          <option value="2" selected>2 hops</option>
+          <option value="3">3 hops</option>
+        </select>
+      </div>
       <div id="graph-legend" class="legend"></div>
       <div id="graph-detail" class="detail hidden"></div>
     </section>

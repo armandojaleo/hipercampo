@@ -44,7 +44,15 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 #pause.on { background: #e0813f; color: #1a1a1a; }
 .banner { margin-top: 8px; padding: 6px 10px; border-radius: 4px; font-size: .88em; background: color-mix(in srgb, #e0813f 20%, transparent); border: 1px solid color-mix(in srgb, #e0813f 50%, transparent); }
 
-.chips { display: flex; gap: 5px; flex-wrap: wrap; }
+select.mini { padding: 3px 8px; font-size: .82em; }
+
+.row.search { gap: 8px; }
+.row.meta { gap: 14px; }
+.ctl { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+/* chips de contexto en su PROPIA fila, con aire y ajuste de línea. */
+.chips-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.chips-row:empty { margin-top: 0; }
 .chip {
   padding: 1px 8px;
   border-radius: 999px;
@@ -58,22 +66,42 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 .chip.on { opacity: 1; background: color-mix(in srgb, var(--chip) 22%, transparent); }
 
 .scope { font-style: italic; }
+.toktag { font-style: normal; opacity: .75; cursor: help; }
 .count { margin-left: auto; }
 
-/* pestañas ------------------------------------------------------------------ */
+/* pestañas + acciones -------------------------------------------------------- */
+/* IA: la nav agrupa lo que OPERA la herramienta — las pestañas (qué vista) y las
+   acciones (pausa/tejer/refrescar/BD/bug), a la derecha. La cabecera de arriba es
+   solo CONSULTA (buscar + filtrar): no se mezclan botones de función con la búsqueda. */
 #tabs {
+  display: flex;
+  align-items: stretch;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
+}
+.tabstrip {
   display: flex;
   gap: 2px;
   padding: 0 10px;
-  background: var(--vscode-editor-background);
-  border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
-  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;   /* Firefox/Chromium: barra fina, no un pegote */
+  scrollbar-width: thin;
 }
-#tabs::-webkit-scrollbar { height: 4px; }
-#tabs::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(128,128,128,.4)); border-radius: 2px; }
+.tabstrip::-webkit-scrollbar { height: 4px; }
+.tabstrip::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(128,128,128,.4)); border-radius: 2px; }
+#tabs .tools {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding: 4px 8px;
+  border-left: 1px solid var(--vscode-panel-border, rgba(128,128,128,.3));
+}
+#tabs .tools button { background: transparent; color: var(--vscode-foreground); padding: 5px 7px; opacity: .8; }
+#tabs .tools button:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,.15)); opacity: 1; }
+#tabs .tools #pause.on { background: #e0813f; color: #1a1a1a; opacity: 1; }
 .tab {
   flex: 0 0 auto;          /* no encoger: si no caben, la barra se desliza */
   white-space: nowrap;
@@ -123,6 +151,9 @@ main { flex: 1; position: relative; overflow: hidden; }
 
 /* canvas (mapa / ejes) ------------------------------------------------------ */
 canvas { display: block; width: 100%; height: 100%; }
+.map-ctrl { position: absolute; top: 10px; left: 12px; z-index: 2; display: flex; gap: 8px; align-items: center; padding: 5px 9px; font-size: .82em; background: var(--vscode-editorWidget-background, rgba(30,30,30,.85)); border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.3)); border-radius: 6px; }
+.map-ctrl .ctl { cursor: pointer; }
+
 .legend { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; font-size: .8em; background: var(--vscode-editorWidget-background, rgba(30,30,30,.85)); border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.3)); border-radius: 6px; pointer-events: none; }
 .legend .k { display: flex; gap: 6px; align-items: center; }
 .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
@@ -173,7 +204,9 @@ canvas { display: block; width: 100%; height: 100%; }
 .gmark { position: absolute; top: -2px; bottom: -2px; right: 0; width: 2px; background: var(--vscode-descriptionForeground); }
 
 .chart { display: flex; align-items: flex-end; gap: 2px; height: 90px; padding-top: 6px; }
-.tbar { flex: 1; min-width: 2px; border-radius: 2px 2px 0 0; align-self: flex-end; }
+.tbar { flex: 1; min-width: 2px; border-radius: 2px 2px 0 0; align-self: flex-end; cursor: crosshair; }
+.tbar:hover { outline: 1px solid var(--vscode-focusBorder); }
+.tok-readout { font-size: .85em; color: var(--vscode-descriptionForeground); min-height: 1.2em; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
 
 /* registro ------------------------------------------------------------------ */
 #view-log { font-family: var(--vscode-editor-font-family, monospace); font-size: .86em; }
