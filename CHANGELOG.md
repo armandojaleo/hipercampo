@@ -5,6 +5,24 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Changed
+- **Viewer redesign (extension v0.9.15) — constellation map, clearer information
+  architecture, and a stable simulation.** Map nodes are now colored by cognitive
+  state (episodic / semantic / atom / superseded / dormant) with a soft glow;
+  hovering a node highlights it and its neighbors and reveals labels only on focus
+  (not all at once). A new **neighborhood mode** shows the chosen node plus N hops
+  instead of the whole graph, so large memories stay legible, and clicking a node
+  re-centers the neighborhood. The force simulation is hardened against divergence
+  (repulsion cap, velocity/position clamps, NaN guards) with a fail-safe zoom-to-fit,
+  fixing nodes that could fly off and vanish — verified by replaying the real graph
+  through the physics with zero non-finite coordinates.
+- **Viewer information architecture.** Querying (search + type/sort filters + context
+  chips on their own row) is separated from operating (pause, weave, refresh, change
+  database, report issue moved into the tab bar). Refresh no longer clears the search
+  box. The List gains sort and type filters (client-side); recall/muse show the
+  estimated MCP payload token cost of the current result. Status rows align on a
+  reserved status-dot column; token history bars reveal their value on hover.
+
 ## [0.1.0b13] — 2026-08-06
 
 ### Added

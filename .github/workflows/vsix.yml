@@ -38,4 +38,4 @@ jobs:
           if [ -z "$VSCE_PAT" ]; then
             echo "::error::falta el secreto VSCE_PAT (ver editor/PUBLISHING.md)"; exit 1
           fi
-          npx --yes @vscode/vsce publish -p "$VSCE_PAT"
+          npx --yes @vscode/vsce@3.9.2 publish -p "$VSCE_PAT"

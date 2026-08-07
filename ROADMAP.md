@@ -47,8 +47,13 @@ La beta b13 está cerrada y publicada en PyPI tras CI multiplataforma y benchmar
 5. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,
    memoria y coste navegable; faltan datasets externos estándar.
 6. 🟡 Selección de namespace y UX estable de la extensión: localización EN/ES, icono,
-   manifiesto y contrato de CI ya están hechos; faltan capturas y validación manual del
-   VSIX en ambos idiomas antes de etiquetarla como producto estable.
+   manifiesto y contrato de CI ya están hechos. **Rediseño del visor (v0.9.15):** Mapa
+   "constelación" (color por estado cognitivo, glow, hover de vecinos, etiquetas solo en
+   foco, **modo vecindario** a N saltos), IA separada (buscar/filtrar vs operar),
+   simulación blindada contra divergencia (probada con el grafo real, cero NaN), Lista con
+   orden y filtro por tipo, coste de tokens por recall, y arreglos de Status/Tokens.
+   Faltan **capturas** y **validación manual del VSIX en ambos idiomas** antes de
+   etiquetarla como producto estable.
 
 ## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
 
