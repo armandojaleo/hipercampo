@@ -1,8 +1,8 @@
 {
-  "ext.displayName": "hipercampo — visor de memoria",
-  "ext.description": "Explora la memoria de hipercampo desde VS Code: mapa, tiempo, hechos, ideas, coste de tokens y salud (local-first, sin red).",
-  "cmd.showMemories": "hipercampo: ver memorias",
-  "cmd.refresh": "hipercampo: refrescar memorias",
+  "ext.displayName": "Hipercampo — visor de memoria",
+  "ext.description": "Explora la memoria de Hipercampo desde VS Code: mapa, tiempo, hechos, ideas, coste de tokens y salud (local-first, sin red).",
+  "cmd.showMemories": "Hipercampo: ver memorias",
+  "cmd.refresh": "Hipercampo: refrescar memorias",
   "view.home": "Memoria",
   "config.command": "Ejecutable de hipercampo. Si no está en el PATH, pon la ruta completa, o «python -m hipercampo.cli».",
   "config.dbPath": "Ruta del fichero .db (HIPERCAMPO_DB). Vacío = el que hipercampo use por defecto.",

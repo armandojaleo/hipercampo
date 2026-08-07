@@ -32,7 +32,7 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     backupCreated: "Backup created.",
     logDisabled: "The log is disabled (HIPERCAMPO_LOG=0): there is no file to open.",
     graphWoven: (links) => `Graph woven: ${links} new links on the map.`,
-    panelTitle: "hipercampo — memory",
+    panelTitle: "Hipercampo — memory",
     statusTooltip: "Hipercampo: view memories",
   },
   es: {
@@ -51,7 +51,7 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     backupCreated: "Copia creada.",
     logDisabled: "El registro está desactivado (HIPERCAMPO_LOG=0): no hay fichero que abrir.",
     graphWoven: (links) => `Grafo tejido: ${links} enlaces nuevos en el mapa.`,
-    panelTitle: "hipercampo — memoria",
+    panelTitle: "Hipercampo — memoria",
     statusTooltip: "Hipercampo: ver memorias",
   },
 };

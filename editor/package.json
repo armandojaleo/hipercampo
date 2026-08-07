@@ -51,7 +51,7 @@
       "activitybar": [
         {
           "id": "hipercampoView",
-          "title": "hipercampo",
+          "title": "Hipercampo",
           "icon": "media/brain.svg"
         }
       ]
@@ -75,7 +75,7 @@
       ]
     },
     "configuration": {
-      "title": "hipercampo",
+      "title": "Hipercampo",
       "properties": {
         "hipercampo.command": {
           "type": "string",

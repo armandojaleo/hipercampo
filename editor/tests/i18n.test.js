@@ -15,8 +15,8 @@ assert.deepEqual(Object.keys(spanish).sort(), Object.keys(english).sort(),
   "package metadata must expose the same keys in English and Spanish");
 assert.deepEqual(Object.keys(hostMessages("es")).sort(), Object.keys(hostMessages("en")).sort(),
   "host dialogs must expose the same keys in English and Spanish");
-assert.equal(hostMessages("en").panelTitle, "hipercampo — memory");
-assert.equal(hostMessages("es-ES").panelTitle, "hipercampo — memoria");
+assert.equal(hostMessages("en").panelTitle, "Hipercampo — memory");
+assert.equal(hostMessages("es-ES").panelTitle, "Hipercampo — memoria");
 assert.equal(hostMessages("fr").panelTitle, hostMessages("en").panelTitle,
   "unsupported locales must fall back to English");
 assert.match(hostMessages("en").purgePrompt(7), /irreversible/);
