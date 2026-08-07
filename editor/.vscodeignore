@@ -1,6 +1,7 @@
 .vscode/**
 src/**
 tests/**
+tools/**
 PUBLISHING*.md
 node_modules/**
 tsconfig.json

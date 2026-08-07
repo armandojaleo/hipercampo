@@ -23,24 +23,45 @@ const { execFileSync } = require("child_process");
 
 const MEDIA = path.join(__dirname, "..", "media");
 
-// --- datos de muestra (no dependen de ninguna BD): cubren los estados del Mapa -------
+// --- datos de muestra (no dependen de ninguna BD; GENÉRICOS, sin nada privado) --------
+// Cubren los cinco estados del Mapa y los tres tipos de arista, y son suficientes para
+// que la constelación se lea como tal en las capturas del Marketplace.
+const now = Date.now() / 1000;
+const N = (id, text, kind, ns, imp, conf, str, days, uses, extra) =>
+  Object.assign({ id, text, kind, namespace: ns, importance: imp, confidence: conf,
+    strength: str, last_access: now - days * 86400, access_count: uses }, extra || {});
 const SAMPLE = {
   nodes: [
-    { id: 1, text: "The payment API key starts with hcdemo_9f", kind: "episodic", namespace: "demo", importance: 0.9, confidence: 0.95, strength: 0.8, last_access: Date.now() / 1000 - 3600, access_count: 4 },
-    { id: 2, text: "Production server is hosted in Frankfurt", kind: "semantic", namespace: "demo", importance: 0.7, confidence: 0.9, strength: 0.6, last_access: Date.now() / 1000 - 86400, access_count: 9, consolidated: 1 },
-    { id: 3, text: "Analytics DB is a ClickHouse in the east region", kind: "semantic", namespace: "infra", importance: 0.6, confidence: 0.8, strength: 0.5, last_access: Date.now() / 1000 - 172800, access_count: 3 },
-    { id: 4, text: "Old note: server was in Dublin", kind: "episodic", namespace: "demo", importance: 0.4, confidence: 0.5, strength: 0.2, last_access: Date.now() / 1000 - 2592000, access_count: 1, superseded: 1 },
-    { id: 5, text: "Rarely used detail about the SSL cert", kind: "episodic", namespace: "infra", importance: 0.3, confidence: 0.4, strength: 0.15, last_access: Date.now() / 1000 - 5184000, access_count: 0, dormant: 1 },
-    { id: 6, text: "the SSL cert of the domain expires on Dec 15", kind: "episodic", namespace: "infra", importance: 0.8, confidence: 0.9, strength: 0.7, last_access: Date.now() / 1000 - 7200, access_count: 2 },
-    { id: 7, text: "atom: expires Dec 15", kind: "episodic", namespace: "infra", importance: 0.5, confidence: 0.7, strength: 0.5, last_access: Date.now() / 1000 - 7200, access_count: 1 },
+    N(1, "The payment API key starts with demo_9f", "episodic", "app", 0.9, 0.95, 0.8, 0.04, 4),
+    N(2, "Production server is hosted in Frankfurt", "semantic", "app", 0.7, 0.9, 0.6, 1, 9, { consolidated: 1 }),
+    N(3, "Analytics DB is a ClickHouse in the east region", "semantic", "infra", 0.6, 0.8, 0.5, 2, 3),
+    N(4, "Old note: the server used to be in Dublin", "episodic", "app", 0.4, 0.5, 0.2, 30, 1, { superseded: 1 }),
+    N(5, "A rarely used detail about the SSL cert", "episodic", "infra", 0.3, 0.4, 0.15, 60, 0, { dormant: 1 }),
+    N(6, "The SSL cert of the domain expires on Dec 15", "episodic", "infra", 0.8, 0.9, 0.7, 0.08, 2),
+    N(7, "expires Dec 15", "episodic", "infra", 0.5, 0.7, 0.5, 0.08, 1),
+    N(8, "The nightly data pipeline runs at 03:00", "semantic", "infra", 0.6, 0.85, 0.55, 1.5, 5, { consolidated: 1 }),
+    N(9, "Security lead is on the platform team", "semantic", "app", 0.65, 0.8, 0.5, 3, 4),
+    N(10, "Feature flags live in the config service", "episodic", "app", 0.55, 0.7, 0.45, 0.5, 3),
+    N(11, "Rollback command is deploy --revert", "episodic", "infra", 0.7, 0.9, 0.6, 0.2, 6),
+    N(12, "The staging env mirrors production weekly", "semantic", "infra", 0.5, 0.75, 0.4, 4, 2),
+    N(13, "Design note: keep the map legible at scale", "episodic", "notes", 0.6, 0.6, 0.5, 0.3, 2),
+    N(14, "Idea: color nodes by cognitive state", "episodic", "notes", 0.7, 0.7, 0.6, 0.1, 3),
+    N(15, "runs at 03:00", "episodic", "infra", 0.45, 0.7, 0.45, 1.5, 1),
+    N(16, "Old deploy step, replaced by the pipeline", "episodic", "infra", 0.35, 0.5, 0.2, 45, 0, { superseded: 1 }),
+    N(17, "Backups are verified every Sunday", "semantic", "infra", 0.55, 0.8, 0.45, 5, 2),
+    N(18, "A seldom-touched runbook for incidents", "episodic", "notes", 0.3, 0.5, 0.15, 90, 0, { dormant: 1 }),
   ],
   edges: [
-    { src: 1, dst: 2, type: "assoc", weight: 0.6 },
-    { src: 2, dst: 3, type: "assoc", weight: 0.5 },
-    { src: 2, dst: 4, type: "dream", status: "proposed", weight: 0.3 },
-    { src: 3, dst: 5, type: "knn", weight: 0.4 },
-    { src: 6, dst: 7, type: "atom", weight: 0.9 },
-    { src: 1, dst: 6, type: "assoc", weight: 0.4 },
+    { src: 1, dst: 2, type: "assoc", weight: 0.6 }, { src: 2, dst: 3, type: "assoc", weight: 0.5 },
+    { src: 2, dst: 4, type: "dream", status: "proposed", weight: 0.3 }, { src: 3, dst: 5, type: "knn", weight: 0.4 },
+    { src: 6, dst: 7, type: "atom", weight: 0.9 }, { src: 1, dst: 6, type: "assoc", weight: 0.4 },
+    { src: 8, dst: 15, type: "atom", weight: 0.9 }, { src: 3, dst: 8, type: "assoc", weight: 0.5 },
+    { src: 8, dst: 11, type: "assoc", weight: 0.45 }, { src: 8, dst: 16, type: "dream", status: "proposed", weight: 0.3 },
+    { src: 9, dst: 2, type: "assoc", weight: 0.4 }, { src: 10, dst: 11, type: "knn", weight: 0.35 },
+    { src: 11, dst: 12, type: "assoc", weight: 0.5 }, { src: 12, dst: 17, type: "assoc", weight: 0.4 },
+    { src: 13, dst: 14, type: "assoc", weight: 0.7 }, { src: 14, dst: 10, type: "knn", weight: 0.3 },
+    { src: 17, dst: 18, type: "knn", weight: 0.3 }, { src: 6, dst: 12, type: "assoc", weight: 0.35 },
+    { src: 9, dst: 10, type: "assoc", weight: 0.4 }, { src: 1, dst: 9, type: "knn", weight: 0.3 },
   ],
 };
 
