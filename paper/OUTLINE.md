@@ -50,13 +50,34 @@ replaced, what it is forgetting). We report reproducible benchmarks and honest l
 | Honest false-recall at scale (0.17 lexical / 0.10 semantic at N=500) | ✅ done | `scripts/calibrate.py`, README |
 | Baselines: beats BM25 (typos), competitive with embeddings (MRR) | ✅ done | `scripts/baselines.py` |
 | **LongMemEval full (500 instances) + head-to-head vs Mem0/Letta/Zep/RAG/reranker** | 🟡 pending | adapter ready (`scripts/context_efficiency.py --longmemeval`) |
-| **Longitudinal experiment (100k–1M events / simulated months)** | ⚪ pending | design generator + metrics first |
+| **Longitudinal experiment**: generator + metrics + first result (modest scale) | 🟢 done (v1) | `scripts/longitudinal.py` |
+| Longitudinal at 100k–1M events / refined footprint | ⚪ pending | scale up `scripts/longitudinal.py` |
 | **Real-use A/B (~3 months, agent with vs without hipercampo)** | ⚪ pending | dogfooding |
 
 ## Longitudinal experiment — metrics to define first (measure before believing)
 Events: preference changes, contradictions, expiring facts, repetitive noise, exceptional
 events, resurfacing. Metrics: *useful memory / MB*, *useful memory / token*, false recall,
 contradiction rate, temporal correctness, forgetting quality, resurfacing quality.
+
+**First result (v1, `scripts/longitudinal.py`, 1844 events, 120 entities, 6 simulated
+months, seed 1), hipercampo vs a naive "store-everything + top-k recall" baseline:**
+
+| metric | hipercampo | naive |
+| --- | ---: | ---: |
+| contradiction rate (answering a closed truth) | **0.000** | 0.708 |
+| current-value correctness | **1.000** | 0.292 |
+| temporal correctness (value valid at time *t*) | **0.733** | n/a (no temporal model) |
+| noise forgotten / valuable kept | 0.844 / 1.000 | 0.000 / 1.000 |
+| awake ratio (signal kept lean) | 0.50 | 1.00 (cluttered) |
+| total DB footprint | ~41 MB | ~81 MB |
+
+Honest caveats: (1) modest scale — the headline number at 100k–1M is future work;
+(2) *false recall* on fully-novel queries is 0.000 for both (not a differentiator when
+there is zero lexical overlap; a near-miss variant is the interesting test);
+(3) *bytes-per-useful* was dropped as misleading — forgetting makes memories **dormant, not
+deleted**, so they stay on disk; total footprint and awake-ratio are the honest metrics;
+(4) temporal correctness < 1.0 reflects VSA cross-entity confusion among historically-valid
+facts at query time — a real, reportable limit, not a bug.
 
 ## Venue plan
 - **arXiv preprint** now, on the ✅ rows + reproducibility.
