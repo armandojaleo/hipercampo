@@ -248,10 +248,12 @@ def main():
           f"· {cfg['entities']} entidades · {cfg['noise']} ruido")
     print(f"{'métrica':<26}{'hipercampo':>14}{'naive':>12}")
     print("-" * 52)
+    def s(x):
+        return "n/a" if x is None else (f"{x:.3f}" if isinstance(x, float) else str(x))
+
     def row(name, k, sub=None):
         fv = f[k] if sub is None else f[k][sub]
         nvv = nv[k] if sub is None else nv[k][sub]
-        s = lambda x: "n/a" if x is None else (f"{x:.3f}" if isinstance(x, float) else str(x))
         print(f"{name:<26}{s(fv):>14}{s(nvv):>12}")
     row("temporal correctness", "temporal_correctness")
     row("current correctness", "current_correctness")
