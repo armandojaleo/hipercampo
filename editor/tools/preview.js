@@ -44,14 +44,35 @@ const SAMPLE = {
   ],
 };
 
+// Paleta VS Code Dark+ para las variables de tema (el standalone no hereda el tema real;
+// esto da capturas oscuras coherentes con el branding del Marketplace).
+const DARK = {
+  "editor-background": "#1e1e1e", "foreground": "#cccccc", "descriptionForeground": "#9d9d9d",
+  "focusBorder": "#007fd4", "panel-border": "#2b2b2b", "editorWidget-background": "#252526",
+  "input-background": "#3c3c3c", "input-foreground": "#cccccc", "input-border": "#3c3c3c",
+  "button-background": "#0e639c", "button-foreground": "#ffffff", "button-hoverBackground": "#1177bb",
+  "badge-background": "#4d4d4d", "badge-foreground": "#ffffff", "textLink-foreground": "#3794ff",
+  "errorForeground": "#f48771", "toolbar-hoverBackground": "rgba(90,93,94,.31)",
+  "scrollbarSlider-background": "rgba(121,121,121,.4)", "charts-purple": "#b180d7",
+  "textBlockQuote-background": "#222222", "inputValidation-errorBackground": "#5a1d1d",
+  "font-family": "-apple-system, system-ui, sans-serif", "editor-font-family": "monospace",
+  "font-size": "13px",
+};
+function themeStyle(theme) {
+  if (theme !== "dark") return "";
+  const vars = Object.entries(DARK).map(([k, v]) => `--vscode-${k}:${v};`).join("");
+  return `<style>:root{${vars}} html,body{background:#1e1e1e;}</style>`;
+}
+
 function parseArgs(argv) {
-  const a = { lang: "en", view: "list", out: path.join(__dirname, "preview-out"), shot: true, all: false, data: null };
+  const a = { lang: "en", view: "list", out: path.join(__dirname, "preview-out"), shot: true, all: false, data: null, theme: "light" };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--lang") a.lang = argv[++i];
     else if (k === "--view") a.view = argv[++i];
     else if (k === "--out") a.out = argv[++i];
     else if (k === "--data") a.data = argv[++i];
+    else if (k === "--theme") a.theme = argv[++i];
     else if (k === "--no-shot") a.shot = false;
     else if (k === "--all") a.all = true;
   }
@@ -74,7 +95,7 @@ function findBrowser() {
   return cands.find((p) => fs.existsSync(p)) || null;
 }
 
-function buildStandalone(lang, view, data) {
+function buildStandalone(lang, view, data, theme) {
   const html = fs.readFileSync(path.join(MEDIA, "viewer.html"), "utf8");
   const css = fs.readFileSync(path.join(MEDIA, "viewer.css"), "utf8");
   const js = fs.readFileSync(path.join(MEDIA, "viewer.js"), "utf8");
@@ -86,7 +107,7 @@ function buildStandalone(lang, view, data) {
   return html
     .replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, "")
     .replace(/%LANG%/g, lang)
-    .replace('<link rel="stylesheet" href="%STYLE%">', "<style>\n" + css + "\n</style>")
+    .replace('<link rel="stylesheet" href="%STYLE%">', "<style>\n" + css + "\n</style>\n" + themeStyle(theme))
     .replace(/<script nonce="%NONCE%" src="%SCRIPT%"><\/script>/,
       "<script>" + stub + "</script>\n<script>" + js + "</script>\n<script>" + feed + "</script>");
 }
@@ -109,12 +130,13 @@ function main() {
   const browser = a.shot ? findBrowser() : null;
   if (a.shot && !browser) console.warn("· sin navegador (Chrome/Edge); genero HTML sin captura. Fuerza con CHROME_BIN.");
   for (const [lang, view] of combos) {
-    const page = buildStandalone(lang, view, data);
-    const htmlFile = path.join(a.out, `viewer_${lang}_${view}.html`);
+    const page = buildStandalone(lang, view, data, a.theme);
+    const tag = `${lang}_${view}${a.theme === "dark" ? "_dark" : ""}`;
+    const htmlFile = path.join(a.out, `viewer_${tag}.html`);
     fs.writeFileSync(htmlFile, page, "utf8");
     let line = "· " + path.relative(process.cwd(), htmlFile);
     if (browser) {
-      const pngFile = path.join(a.out, `viewer_${lang}_${view}.png`);
+      const pngFile = path.join(a.out, `viewer_${tag}.png`);
       try { shoot(browser, htmlFile, pngFile); line += "  →  " + path.relative(process.cwd(), pngFile); }
       catch (e) { line += "  (captura falló: " + (e.message || e) + ")"; }
     }
