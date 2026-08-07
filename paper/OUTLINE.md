@@ -68,6 +68,7 @@ months, seed 1), hipercampo vs a naive "store-everything + top-k recall" baselin
 | current-value correctness | **1.000** | 0.292 |
 | temporal correctness (value valid at time *t*) | **0.733** | n/a (no temporal model) |
 | noise forgotten / valuable kept | 0.844 / 1.000 | 0.000 / 1.000 |
+| resurfacing (dormant memory returns on its cue via `muse`) | **1.000** | n/a (never forgets) |
 | awake ratio (signal kept lean) | 0.50 | 1.00 (cluttered) |
 | total DB footprint | ~41 MB | ~81 MB |
 

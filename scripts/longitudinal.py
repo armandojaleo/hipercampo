@@ -73,6 +73,12 @@ def build_stream(rng, cfg):
         t = BASE_EPOCH + rng.uniform(0, horizon)
         events.append((t, "rare", f"rare{j} incidente critico {rng.randint(0, 9999)}"))
 
+    # 4) RESURFACING: recuerdos de bajo valor plantados PRONTO (se olvidan), cada uno con
+    # una PISTA única. Al final se lanza esa pista: ¿los devuelve muse aunque estén latentes?
+    for j in range(cfg["resurf"]):
+        t = BASE_EPOCH + rng.uniform(0, horizon * 0.1)
+        events.append((t, "resurf", f"resurf{j} zzq{j}"))
+
     events.sort(key=lambda e: e[0])
 
     # PROBES temporales: (entidad, t) en un instante aleatorio; valor esperado = el vigente en t.
@@ -123,6 +129,8 @@ def run_world(events, cfg, horizon, mode):
                     hc.remember(f"{subj} {pred} {val}", importance=0.6, confidence=0.7)
             elif kind == "noise":
                 hc.remember(payload, importance=0.15, confidence=0.3)
+            elif kind == "resurf":
+                hc.remember(payload, importance=0.2, confidence=0.3)
             else:                              # rare
                 hc.remember(payload, importance=0.9, confidence=0.9)
             # ciclos mensuales de olvido (solo el mundo cognitivo)
@@ -198,6 +206,25 @@ def measure(hc, path, mode, gt, probes, absent, horizon):
         "valuable_kept_rate": round(rk / len(rare), 3) if rare else None,
     }
 
+    # --- resurfacing: recuerdos olvidados que vuelven cuando aparece su pista (muse) ---
+    # Solo el mundo que OLVIDA tiene que resurgir; el naive nunca los perdió (n/a).
+    if mode == "full":
+        resurf = [r for r in rows if r["text"].startswith("resurf")]
+        dormidos = [r for r in resurf if r["dormant"]]
+        base = dormidos or resurf                      # entre los que se olvidaron (o todos)
+        vueltos = 0
+        for r in base:
+            cue = r["text"].split()[1]                 # la pista única (zzqN)
+            got = hc.muse(cue, k=3)
+            if any(cue in h.get("text", "") for h in got):
+                vueltos += 1
+        out["resurfacing"] = {
+            "dormant_rate": round(len(dormidos) / len(resurf), 3) if resurf else None,
+            "resurfaced_rate": round(vueltos / len(base), 3) if base else None,
+        }
+    else:
+        out["resurfacing"] = {"dormant_rate": None, "resurfaced_rate": None}
+
     # --- huella: bytes totales en disco + señal/ruido (despiertos / total). NO se usa
     # "bytes por útil": olvidar ADORMECE (no borra), así que los latentes siguen en disco
     # y esa ratio penalizaría precisamente al que sabe olvidar. El total sí es comparable.
@@ -231,6 +258,7 @@ def main():
     ap.add_argument("--entities", type=int, default=120)
     ap.add_argument("--noise", type=int, default=1500)
     ap.add_argument("--rare", type=int, default=40)
+    ap.add_argument("--resurf", type=int, default=25)
     ap.add_argument("--months", type=int, default=6)
     ap.add_argument("--max-changes", type=int, default=4)
     ap.add_argument("--probes", type=int, default=300)
@@ -238,8 +266,9 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    cfg = {"entities": a.entities, "noise": a.noise, "rare": a.rare, "months": a.months,
-           "max_changes": a.max_changes, "probes": a.probes, "absent": a.absent, "seed": a.seed}
+    cfg = {"entities": a.entities, "noise": a.noise, "rare": a.rare, "resurf": a.resurf,
+           "months": a.months, "max_changes": a.max_changes, "probes": a.probes,
+           "absent": a.absent, "seed": a.seed}
     report = run(cfg)
     if a.json:
         print(json.dumps(report, ensure_ascii=False, indent=2)); return
@@ -261,6 +290,7 @@ def main():
     row("false recall", "false_recall", None, "↓", "responder lo que no sabe")
     row("ruido olvidado", "forgetting", "noise_dormant_rate", "↑", "suelta la morralla")
     row("valioso conservado", "forgetting", "valuable_kept_rate", "↑", "no pierde lo importante")
+    row("resurfacing", "resurfacing", "resurfaced_rate", "↑", "lo olvidado vuelve con su pista")
     row("awake ratio", "footprint", "awake_ratio", "", "fracción despierta (señal limpia)")
     row("db bytes", "footprint", "db_bytes", "↓", "huella en disco")
     print("-" * 62)
