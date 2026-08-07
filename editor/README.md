@@ -7,9 +7,9 @@ the `hipercampo` CLI, which already enforces contexts, migrations and isolation.
 The extension follows the language configured in VS Code. English is the fallback and
 Spanish is fully localized. [Leer en español](README.es.md).
 
-![The associative graph, colored by cognitive state](media/screenshots/map-dark.png)
+![The associative graph, colored by cognitive state](https://raw.githubusercontent.com/armandojaleo/hipercampo/main/editor/media/screenshots/map-dark.png)
 
-![The memory list with importance, reliability, strength and uses](media/screenshots/list-dark.png)
+![The memory list with importance, reliability, strength and uses](https://raw.githubusercontent.com/armandojaleo/hipercampo/main/editor/media/screenshots/list-dark.png)
 
 ## Open the viewer
 
