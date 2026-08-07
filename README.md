@@ -294,6 +294,21 @@ That would be a **separate project with funding behind it** — serious infrastr
 security audits, SLAs. If that's your conversation, open an issue. The core here
 will remain free, local and MIT either way.
 
+## Feedback (this is a beta)
+
+hipercampo is **local-first with no telemetry** — nothing phones home, by design. That
+also means we can't see how it runs for you, so **your feedback is the only signal we
+get**, and it's what decides when the beta becomes stable.
+
+- **Share your experience:** open a [Beta feedback issue](https://github.com/armandojaleo/hipercampo/issues/new?template=beta_feedback.yml)
+  — what you use it for, what worked, what rubbed. Praise and friction both help.
+- **Something broken?** File a [bug report](https://github.com/armandojaleo/hipercampo/issues/new?template=bug_report.yml).
+  The VS Code viewer has a 🐛 button that opens one for you.
+- **Want to help?** Pull requests are welcome; the quality gates run in CI.
+
+No account-tracking, no analytics — just issues, PRs, and stars. That's the whole
+adoption signal, and we'd rather earn it honestly.
+
 ## Acknowledgments
 
 This project is **built with Claude and Codex, for every agent that needs memory** —

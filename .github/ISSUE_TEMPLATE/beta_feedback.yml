@@ -1,0 +1,50 @@
+name: "💬 Beta feedback / Experiencia"
+description: "How is the beta working for you? · ¿Qué tal te funciona la beta?"
+labels: ["feedback", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        hipercampo is local-first with **no telemetry**: we can't see how it runs for you,
+        so your words here are the only signal we get. Anything helps — praise, friction,
+        confusion, a wish. *Español o English, both fine.*
+        hipercampo es local-first y **sin telemetría**: no vemos cómo te va, así que esto es
+        la única señal. Todo suma: lo que gustó, lo que rozó, lo que confunde, un deseo.
+
+  - type: textarea
+    id: uso
+    attributes:
+      label: "What are you using it for? · ¿Para qué lo usas?"
+      placeholder: "Memory for a Claude Code agent across sessions on a Python project…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: bien
+    attributes:
+      label: "What worked well? · ¿Qué funcionó bien?"
+      placeholder: "The map's neighborhood mode; recall finding a buried note…"
+
+  - type: textarea
+    id: roza
+    attributes:
+      label: "What was confusing or annoying? · ¿Qué confundió o molestó?"
+      placeholder: "I couldn't tell whether it had abstained or found nothing…"
+
+  - type: textarea
+    id: deseo
+    attributes:
+      label: "One thing you'd change · Una cosa que cambiarías"
+
+  - type: input
+    id: entorno
+    attributes:
+      label: "Environment · Entorno"
+      placeholder: "Windows 11 · Python 3.13 · Claude Code + VS Code viewer 0.9.15"
+
+  - type: checkboxes
+    id: comprobaciones
+    attributes:
+      label: "Checks"
+      options:
+        - label: "No personal data or secrets in this report · Sin datos personales ni secretos"
