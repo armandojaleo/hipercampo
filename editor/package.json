@@ -102,6 +102,7 @@
   "scripts": {
     "compile": "tsc -p ./",
     "test": "npm run compile && node tests/i18n.test.js",
+    "preview": "node tools/preview.js --all",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm test"
   },
