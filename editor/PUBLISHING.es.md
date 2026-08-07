@@ -14,10 +14,14 @@ generado con `npx @vscode/vsce package` ya sirve para instalar a mano.
    está en `editor/package.json` → `"publisher"`). Si eliges otro ID, cámbialo también
    ahí.
 
-2. **Crear un Personal Access Token (PAT).** En <https://dev.azure.com> → *User
-   settings* → *Personal Access Tokens* → *New Token*:
-   - Organization: **All accessible organizations**.
-   - Scopes: **Marketplace → Manage**.
+2. **(Solo para CLI/CI) Crear un Personal Access Token (PAT).** Para una beta puedes
+   saltarte esto y **subir el `.vsix` a mano** en la página del publisher (*+ New
+   extension → Visual Studio Code*). Si aun así quieres token: en <https://dev.azure.com>
+   → *User settings* → *Personal Access Tokens* → *New Token*:
+   - Organization: **tu organización `armandojaleo`** (con ámbito de la org; **no** uses
+     "All accessible organizations": esos PAT globales se retiran y dejan de funcionar el
+     2026-12-01).
+   - Scopes: **Show all scopes → Marketplace → Manage**.
    - Copia el token (no se vuelve a mostrar).
 
 3. **Guardar el token como secreto del repo.** En GitHub → *Settings* → *Secrets and
