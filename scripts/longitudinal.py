@@ -246,23 +246,29 @@ def main():
     f, nv = report["full"], report["naive"]
     print(f"LONGITUDINAL · {report['events']} eventos · {cfg['months']} meses simulados "
           f"· {cfg['entities']} entidades · {cfg['noise']} ruido")
-    print(f"{'métrica':<26}{'hipercampo':>14}{'naive':>12}")
-    print("-" * 52)
+    print("-" * 62)
     def s(x):
         return "n/a" if x is None else (f"{x:.3f}" if isinstance(x, float) else str(x))
 
-    def row(name, k, sub=None):
+    def row(name, k, sub=None, mejor="?", nota=""):
         fv = f[k] if sub is None else f[k][sub]
         nvv = nv[k] if sub is None else nv[k][sub]
-        print(f"{name:<26}{s(fv):>14}{s(nvv):>12}")
-    row("temporal correctness", "temporal_correctness")
-    row("current correctness", "current_correctness")
-    row("contradiction rate", "contradiction_rate")
-    row("false recall", "false_recall")
-    row("noise forgotten", "forgetting", "noise_dormant_rate")
-    row("valuable kept", "forgetting", "valuable_kept_rate")
-    row("db bytes", "footprint", "db_bytes")
-    row("awake ratio", "footprint", "awake_ratio")
+        print(f"{name:<24}{s(fv):>12}{s(nvv):>10}   {mejor:<4} {nota}")
+    print(f"{'':<24}{'hiper':>12}{'naive':>10}        qué significa")
+    row("contradicción", "contradiction_rate", None, "↓", "responder algo YA CADUCADO")
+    row("acierto actual", "current_correctness", None, "↑", "sabe qué es verdad AHORA")
+    row("acierto temporal", "temporal_correctness", None, "↑", "qué era verdad EN EL PASADO")
+    row("false recall", "false_recall", None, "↓", "responder lo que no sabe")
+    row("ruido olvidado", "forgetting", "noise_dormant_rate", "↑", "suelta la morralla")
+    row("valioso conservado", "forgetting", "valuable_kept_rate", "↑", "no pierde lo importante")
+    row("awake ratio", "footprint", "awake_ratio", "", "fracción despierta (señal limpia)")
+    row("db bytes", "footprint", "db_bytes", "↓", "huella en disco")
+    print("-" * 62)
+    verdict = (f"Titular: hipercampo contradice {f['contradiction_rate']:.0%} vs "
+               f"{nv['contradiction_rate']:.0%} del naive; sabe el 'ahora' "
+               f"{f['current_correctness']:.0%} vs {nv['current_correctness']:.0%}, "
+               f"y responde el pasado (el naive no puede).")
+    print(verdict)
 
 
 if __name__ == "__main__":
