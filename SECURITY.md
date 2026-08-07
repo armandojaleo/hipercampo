@@ -140,6 +140,15 @@ falta.
 - **Deps mínimas y de licencia clara** (`numpy` BSD, `mcp` MIT).
 - **Sin ejecución de código de terceros en caliente:** el núcleo no usa `eval`,
   `exec`, `pickle`, `subprocess` ni red (ver arriba).
+- **Visor (extensión VS Code), modelo de seguridad:** llama al CLI con `execFile`
+  (argv, **sin shell** → el texto de las consultas no inyecta comandos); el webview
+  tiene CSP estricta (`default-src 'none'`, scripts solo por **nonce criptográfico**,
+  sin red) y **escapa todo** el contenido de la memoria antes de pintarlo (sin XSS
+  almacenado, aunque un agente guarde HTML/JS). Es **solo lectura** a SQLite (via CLI).
+  **Workspace Trust:** los settings que ejecutan código o leen ficheros arbitrarios
+  (`hipercampo.command`, `hipercampo.dbPath`) están en `restrictedConfigurations`, así
+  que un workspace **no confiable** (un repo con `.vscode/settings.json` hostil) **no**
+  puede redirigir el ejecutable — solo cuenta tu config de usuario.
 
 ### Cómo VERIFICAR una release (para quien instala)
 

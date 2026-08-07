@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { execFile } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
+import * as crypto from "crypto";
 import { hostMessages } from "./i18n";
 
 /**
@@ -341,7 +342,7 @@ class Controller {
 }
 
 function html(webview: vscode.Webview, ctx: vscode.ExtensionContext): string {
-  const nonce = String(Math.random()).slice(2);
+  const nonce = crypto.randomBytes(16).toString("base64");
   const uri = (f: string) =>
     webview.asWebviewUri(vscode.Uri.file(path.join(ctx.extensionPath, "media", f)));
   const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; `
