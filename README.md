@@ -1,6 +1,8 @@
 # 🧠 hipercampo
 
 [![CI](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml/badge.svg)](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/hipercampo)](https://pypi.org/project/hipercampo/)
+[![Downloads](https://static.pepy.tech/badge/hipercampo)](https://pepy.tech/project/hipercampo)
 
 🌍 **Español: [README.es.md](README.es.md)** · You are reading the English version.
 
