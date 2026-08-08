@@ -1,20 +1,20 @@
 """
-CLI de hipercampo — para usarlo desde el terminal y, sobre todo, desde HOOKS
-(modo "sináptico": la memoria se dispara sola en cada turno de la conversación).
+hipercampo CLI — for use from the terminal and, above all, from HOOKS
+("synaptic" mode: the memory fires on its own on every turn of the conversation).
 
-    hipercampo serve                 # arranca el servidor MCP (stdio)
-    hipercampo assist "texto"        # ¿qué toca hacer en este momento? (para hooks)
-    hipercampo recall "consulta"     # recuperar
-    hipercampo remember "texto"      # guardar (respeta el veto por sorpresa)
-    hipercampo muse "tema"           # inspiración: conexiones indirectas y latentes
-    hipercampo sleep                 # consolidar + olvidar + soñar
-    hipercampo stats                 # estado de la memoria
-    hipercampo backup [destino]      # copia de seguridad consistente
-    hipercampo servers               # qué servidores MCP hay vivos y desde cuándo
-    hipercampo restart               # reiniciarlos tras actualizar (el cliente los relanza)
-    hipercampo log [-f] [-g texto]   # qué ha decidido y por qué (en vivo con -f)
-    hipercampo identity              # qué se ha aprendido trabajando
-    hipercampo doctor                # diagnóstico: ruta, permisos, versión, deps
+    hipercampo serve                 # starts the MCP server (stdio)
+    hipercampo assist "text"         # what's needed right now? (for hooks)
+    hipercampo recall "query"        # retrieve
+    hipercampo remember "text"       # store (respects the surprise veto)
+    hipercampo muse "topic"          # inspiration: indirect and dormant connections
+    hipercampo sleep                 # consolidate + forget + dream
+    hipercampo stats                 # memory status
+    hipercampo backup [dest]         # consistent backup
+    hipercampo servers               # which MCP servers are alive and since when
+    hipercampo restart               # terminate them after an upgrade (client relaunches)
+    hipercampo log [-f] [-g text]    # what it decided and why (live with -f)
+    hipercampo identity              # what's been learned while working
+    hipercampo doctor                # diagnosis: path, permissions, version, deps
     hipercampo version
 
 Variables: HIPERCAMPO_DB, HIPERCAMPO_NAMESPACE, HIPERCAMPO_SEMANTIC,
@@ -27,20 +27,61 @@ import os
 import re
 import sys
 import time
+from contextlib import contextmanager
 from typing import Any
 
-from . import audit, budget
+from .support import audit, budget
 
-try:                                                  # salida UTF-8 en Windows
+try:                                                  # UTF-8 output on Windows
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
 except Exception:
     pass
 
 
+def _ns(args=None) -> str:
+    """The context to act on: --namespace if given, otherwise the one from the environment."""
+    return (getattr(args, "namespace", None)
+            or os.environ.get("HIPERCAMPO_NAMESPACE", "default"))
+
+
 def _hc():
-    from .config import db_path
-    from .memory import Hipercampo
-    return Hipercampo(db_path(), namespace=os.environ.get("HIPERCAMPO_NAMESPACE", "default"))
+    from .support.config import db_path
+    from .cycle.memory import Hipercampo
+    return Hipercampo(db_path(), namespace=_ns())
+
+
+@contextmanager
+def _store(namespace: str):
+    """Opens a Store and CLOSES it no matter what.
+
+    Half a dozen commands used to repeat the same `try/finally`, and
+    forgetting it leaves a live descriptor —on Windows, it also locks the
+    .db. With this, closing no longer depends on remembering to."""
+    from .support.config import db_path
+    from .storage.store import Store
+    s = Store(db_path(), namespace=namespace)
+    try:
+        yield s
+    finally:
+        s.close()
+
+
+def _contexts() -> list[str]:
+    """Every context that exists in the file, sorted."""
+    with _store("default") as s:
+        return sorted({m["namespace"] for m in s.dump(all_namespaces=True)})
+
+
+def _ids(raw: str) -> list[int]:
+    """Turns '3,7,9' into [3, 7, 9]. Raises ValueError if anything isn't an id."""
+    return [int(x) for x in raw.split(",") if x.strip()]
+
+
+def _nav_mode(args) -> bool | str:
+    """--nav-auto overrides --nav: 'auto' decides on its own whether to navigate or scan."""
+    if getattr(args, "nav_auto", False):
+        return "auto"
+    return getattr(args, "nav", False)
 
 
 def _print(obj, plain=False):
@@ -56,25 +97,27 @@ def _print(obj, plain=False):
 
 
 def cmd_hook(_args) -> int:
-    """Modo SINÁPTICO: pensado para el hook UserPromptSubmit de Claude Code.
+    """SYNAPTIC mode: built for Claude Code's UserPromptSubmit hook.
 
-    Lee el JSON del hook por stdin, decide qué toca (assist) y devuelve el contexto
-    a inyectar en el turno. Si no hay nada relevante, no inyecta nada (se calla)."""
-    # El JSON del hook SIEMPRE viene en UTF-8. Leer `sys.stdin` como texto usa la
-    # codificación local (en Windows, cp1252) y convierte «¿añadelo?» en «Â¿aÃ±adelo?»:
-    # la memoria acababa guardando y registrando el texto ya roto. Se leen bytes.
+    Reads the hook's JSON from stdin, decides what's needed (assist), and
+    returns the context to inject for the turn. If nothing's relevant, it
+    injects nothing (stays quiet)."""
+    # The hook's JSON is ALWAYS UTF-8. Reading `sys.stdin` as text uses the
+    # local encoding (on Windows, cp1252) and turns "¿add it?" into garbled
+    # bytes: the memory would end up storing and logging already-broken
+    # text. Bytes are read instead.
     try:
-        crudo = sys.stdin.buffer.read()
-    except (AttributeError, ValueError):          # stdin sustituido (tests)
-        crudo = sys.stdin.read()
-    if isinstance(crudo, bytes):
-        crudo = crudo.decode("utf-8", "replace")
+        raw = sys.stdin.buffer.read()
+    except (AttributeError, ValueError):          # stdin replaced (tests)
+        raw = sys.stdin.read()
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", "replace")
     try:
-        payload = json.loads(crudo)
+        payload = json.loads(raw)
     except Exception:
         payload = {}
-    # Al ARRANCAR una sesión no hay pregunta que responder: lo que toca es
-    # recordar quién se es trabajando, para no empezar de cero.
+    # At session START there's no question to answer: what's needed is to
+    # recall who's working, so the session doesn't start from scratch.
     if payload.get("hook_event_name") == "SessionStart":
         try:
             hc = _hc()
@@ -88,29 +131,29 @@ def cmd_hook(_args) -> int:
         if not r.get("n"):
             print("{}")
             return 0
-        # La identidad se paga UNA vez por sesión, así que su presupuesto es más
-        # generoso que el de cada turno; pero techo tiene, o crece sin freno según
-        # se van aprendiendo reglas.
-        cabecera = "[memoria · identidad de trabajo] aprendido en sesiones anteriores:"
-        lineas, gasto = budget.ajustar([cabecera] + r["texto"].splitlines(),
+        # Identity is paid for ONCE per session, so its budget is more
+        # generous than a single turn's; but it still has a ceiling, or it
+        # would grow unbounded as rules get learned.
+        header = "[memory - working identity] learned in past sessions:"
+        lines, spent = budget.fit_budget([header] + r["text"].splitlines(),
                                        budget.IDENTITY_BUDGET)
-        audit.log("tokens", f"identidad {gasto['tokens']} tok"
-                  + (f" (de {gasto['original']})" if gasto.get("original") else ""))
+        audit.log("tokens", f"identity {spent['tokens']} tok"
+                  + (f" (of {spent['original']})" if spent.get("original") else ""))
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
-                "additionalContext": "\n".join(lineas)},
+                "additionalContext": "\n".join(lines)},
             "suppressOutput": True}, ensure_ascii=False))
         return 0
 
     prompt = ""
-    for clave in ("prompt", "user_prompt", "userPrompt", "message", "input"):
-        v = payload.get(clave)
+    for key in ("prompt", "user_prompt", "userPrompt", "message", "input"):
+        v = payload.get(key)
         if isinstance(v, str) and v.strip():
             prompt = v.strip()
             break
-    # El IDE puede colar bloques propios (<ide_opened_file>, <system-reminder>…):
-    # no son texto del usuario, así que no deben decidir qué recuerda hipercampo.
+    # The IDE can slip in its own blocks (<ide_opened_file>, <system-reminder>…):
+    # they aren't the user's text, so they shouldn't decide what hipercampo remembers.
     prompt = re.sub(r"<[a-zA-Z_-]+>.*?</[a-zA-Z_-]+>", " ", prompt, flags=re.S).strip()
     if not prompt:
         print("{}")
@@ -122,234 +165,226 @@ def cmd_hook(_args) -> int:
         finally:
             hc.close()
     except Exception as e:
-        print(json.dumps({"systemMessage": f"hipercampo no pudo responder: {e}"}))
+        print(json.dumps({"systemMessage": f"hipercampo couldn't respond: {e}"}))
         return 0
 
-    accion = r.get("action")
-    if accion in (None, "nothing"):
-        print("{}")                      # nada relevante: no molestar
+    action = r.get("action")
+    if action in (None, "nothing"):
+        print("{}")                      # nothing relevant: don't interrupt
         return 0
 
-    lineas = [f"[memoria · {accion}] {r.get('why', '')}"]
+    lines = [f"[memory - {action}] {r.get('why', '')}"]
     for h in r.get("result") or []:
-        lineas.append(f"- {h.get('text', '')}")
-    if r.get("sugerencia"):
-        lineas.append(f"(sugerencia: {r['sugerencia']})")
-        if r.get("candidato"):
-            lineas.append(f"(candidato #{r['candidato']['id']}: {r['candidato']['text']})")
+        lines.append(f"- {h.get('text', '')}")
+    if r.get("suggestion"):
+        lines.append(f"(suggestion: {r['suggestion']})")
+        if r.get("candidate"):
+            lines.append(f"(candidate #{r['candidate']['id']}: {r['candidate']['text']})")
 
-    # PRESUPUESTO. Sin techo, el coste crece con la memoria: un recuerdo
-    # consolidado puede ocupar media pantalla y entrar entero en cada turno. Se
-    # recorta a lo relevante, y el recorte se DICE (nunca un silencio).
-    lineas, gasto = budget.ajustar(lineas)
+    # BUDGET. With no ceiling, cost grows with the memory: a consolidated
+    # memory can take up half a screen and go in whole on every turn. It's
+    # trimmed to what's relevant, and the trim is STATED (never a silence).
+    lines, spent = budget.fit_budget(lines)
 
-    # Si NADA cabía, lo que queda es una cabecera y un aviso de que falta algo: 46
-    # tokens (medido) para no aportar un solo dato. Peor que callarse, porque se
-    # paga igual y encima el modelo no sabe qué pedir. Se calla, que es gratis.
-    # Ojo: "cuerpo" no es solo recuerdos —una sugerencia de guardar también lo es—,
-    # así que se descarta la cabecera y el aviso, y se mira si queda algo.
-    aviso = budget._aviso(gasto.get("omitidas", 0), gasto.get("presupuesto", 0))
-    if not [ln for ln in lineas[1:] if ln != aviso]:
-        audit.log("tokens", "0 tok: nada cabía en el presupuesto, me callo",
-                  presupuesto=gasto.get("presupuesto"), original=gasto.get("original"))
+    # If NOTHING fit, what's left is a header and a notice that something's
+    # missing: 46 tokens (measured) to contribute not a single fact. Worse
+    # than staying quiet, because it costs the same and the model doesn't
+    # even know what to ask for. So it stays quiet, which is free.
+    # Note: "body" isn't just memories —a save suggestion counts too—, so
+    # the header and the notice are dropped and what's left is checked.
+    notice = budget._notice(spent.get("omitted", 0), spent.get("budget", 0))
+    if not [ln for ln in lines[1:] if ln != notice]:
+        audit.log("tokens", "0 tok: nothing fit in the budget, staying quiet",
+                  budget=spent.get("budget"), original=spent.get("original"))
         print("{}")
         return 0
 
-    audit.log("tokens", f"inyectados {gasto['tokens']} tok"
-              + (f" (de {gasto['original']}, presupuesto {gasto['presupuesto']})"
-                 if gasto.get("original") else ""))
+    audit.log("tokens", f"injected {spent['tokens']} tok"
+              + (f" (of {spent['original']}, budget {spent['budget']})"
+                 if spent.get("original") else ""))
     print(json.dumps({
         "hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                               "additionalContext": "\n".join(lineas)},
+                               "additionalContext": "\n".join(lines)},
         "suppressOutput": True}, ensure_ascii=False))
     return 0
 
 
 def _describe(p: dict) -> str:
-    cuando = (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(p["arranque"]))
-              if p.get("arranque") else "?")
-    edad = ""
-    if p.get("arranque"):
-        mins = (time.time() - p["arranque"]) / 60
-        edad = f" ({mins/60:.1f} h)" if mins >= 90 else f" ({mins:.0f} min)"
-    linea = f"  pid {p['pid']:<7} arrancado {cuando}{edad}"
+    when = (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(p["started_at"]))
+              if p.get("started_at") else "?")
+    age = ""
+    if p.get("started_at"):
+        mins = (time.time() - p["started_at"]) / 60
+        age = f" ({mins/60:.1f} h)" if mins >= 90 else f" ({mins:.0f} min)"
+    line = f"  pid {p['pid']:<7} started {when}{age}"
     if p.get("db"):
-        linea += f"\n{'':14}BD {p['db']}"
-    return linea
+        line += f"\n{'':14}DB {p['db']}"
+    return line
 
 
 def cmd_servers(_args) -> int:
-    """Qué servidores hay vivos. Sirve para ver de un vistazo si alguno lleva
-    demasiado tiempo en pie (= código viejo) o si se han acumulado huérfanos."""
+    """Which servers are alive. Useful for a quick glance at whether one's
+    been up too long (= stale code) or orphans have piled up."""
     from . import __version__
-    from .procs import listar
-    procesos = listar()
-    if not procesos:
-        print("No hay ningún servidor MCP de hipercampo en marcha.")
-        print("(el cliente lo arranca solo la primera vez que usa una herramienta)")
+    from .support.procs import list_servers
+    procs = list_servers()
+    if not procs:
+        print("No hipercampo MCP server is running.")
+        print("(the client starts one on its own the first time it uses a tool)")
         return 0
-    print(f"hipercampo {__version__} instalado · {len(procesos)} servidor(es) en marcha:")
-    for p in procesos:
+    print(f"hipercampo {__version__} installed - {len(procs)} server(s) running:")
+    for p in procs:
         print(_describe(p))
-    print("\nEl proceso carga el código al arrancar: si has actualizado hipercampo "
-          "después\nde esa hora, ese servidor sigue sirviendo la versión anterior. "
-          "`hipercampo restart`\nlos termina y el cliente los vuelve a levantar solo.")
+    print("\nThe process loads its code at startup: if you've upgraded hipercampo "
+          "since\nthat time, that server is still serving the old version. "
+          "`hipercampo restart`\nterminates them and the client spins new ones up on its own.")
     return 0
 
 
 def cmd_restart(args) -> int:
-    """Termina los servidores para que el cliente los levante con el código actual."""
-    from .procs import listar, terminar
-    procesos = listar()
-    if not procesos:
-        print("No hay ningún servidor en marcha: no hay nada que reiniciar.")
-        print("El cliente arrancará uno nuevo (ya con el código actual) al usarlo.")
+    """Terminates the servers so the client relaunches them with the current code."""
+    from .support.procs import list_servers, terminate
+    procs = list_servers()
+    if not procs:
+        print("No server is running: nothing to restart.")
+        print("The client will start a new one (already with the current code) when it's used.")
         return 0
-    objetivo = getattr(args, "pids", None)
-    if objetivo:                                       # cerrar solo los pedidos
+    target = getattr(args, "pids", None)
+    if target:                                       # close only the ones requested
         try:
-            quiero = {int(x) for x in objetivo.split(",") if x.strip()}
+            wanted = {int(x) for x in target.split(",") if x.strip()}
         except ValueError:
-            print("--pids debe ser una lista de números separados por comas.", file=sys.stderr)
+            print("--pids must be a comma-separated list of numbers.", file=sys.stderr)
             return 2
-        procesos = [p for p in procesos if p["pid"] in quiero]
-        if not procesos:
-            print("Ninguno de esos pids es un servidor de hipercampo en marcha.")
+        procs = [p for p in procs if p["pid"] in wanted]
+        if not procs:
+            print("None of those pids are a running hipercampo server.")
             return 0
-    print(f"{len(procesos)} servidor(es) en marcha:")
-    for p in procesos:
+    print(f"{len(procs)} server(s) running:")
+    for p in procs:
         print(_describe(p))
     if args.dry_run:
-        print("\n(--dry-run: no se ha tocado nada)")
+        print("\n(--dry-run: nothing was touched)")
         return 0
 
-    estado = terminar([p["pid"] for p in procesos])
+    status = terminate([p["pid"] for p in procs])
     print()
-    for pid, que in estado.items():
-        print(f"  pid {pid:<7} {que}")
-    quedan = [p for p in listar() if p["pid"] in estado]
-    if quedan:
-        print("\nNO se pudieron cerrar: " + ", ".join(str(p["pid"]) for p in quedan))
-        print("Quizá pertenecen a otro usuario; ciérralos a mano o reinicia el cliente.")
+    for pid, outcome in status.items():
+        print(f"  pid {pid:<7} {outcome}")
+    left = [p for p in list_servers() if p["pid"] in status]
+    if left:
+        print("\nCOULD NOT close: " + ", ".join(str(p["pid"]) for p in left))
+        print("They may belong to another user; close them by hand or restart the client.")
         return 1
-    print("\nListo. NO hace falta arrancarlos: el cliente MCP levanta uno nuevo, con el\n"
-          "código actual, la próxima vez que use una herramienta de hipercampo.")
+    print("\nDone. NO need to start them: the MCP client spins up a new one, with the\n"
+          "current code, the next time it uses a hipercampo tool.")
     return 0
 
 
 def cmd_identity(_args) -> int:
-    """Qué se ha aprendido trabajando (lo que sobrevive a cerrar la sesión)."""
+    """What's been learned while working (what survives closing the session)."""
     hc = _hc()
     try:
         r = hc.identity()
         if not r.get("n"):
-            print("Todavía no hay identidad de trabajo aprendida.")
-            print("Se construye con `hc_learn` cuando algo enseña cómo trabajar mejor.")
+            print("No working identity has been learned yet.")
+            print("It's built with `hc_learn` when something teaches how to work better.")
             return 0
-        print(f"# identidad de trabajo · {r['n']} cosa(s) aprendidas\n")
-        print(r["texto"])
+        print(f"# working identity - {r['n']} thing(s) learned\n")
+        print(r["text"])
         return 0
     finally:
         hc.close()
 
 
 def cmd_list(args) -> int:
-    """Vuelca las memorias: JSON para el visor de VS Code, o una tabla legible."""
+    """Dumps the memories: JSON for the VS Code viewer, or a readable table."""
     import time as _t
 
-    from .config import db_path
-    from .store import Store
-    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
-    s = Store(db_path(), namespace=ns)
-    try:
-        filas = s.dump(all_namespaces=args.all_namespaces,
+    from .support.config import db_path
+    ns = _ns(args)
+    with _store(ns) as s:
+        rows = s.dump(all_namespaces=args.all_namespaces,
                        include_dormant=args.include_dormant,
                        kind=args.kind, limit=args.limit, order=args.sort)
-    finally:
-        s.close()
 
     if args.json:
         print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
                           "db": os.path.abspath(db_path()),
-                          "count": len(filas), "memories": filas},
+                          "count": len(rows), "memories": rows},
                          ensure_ascii=False, default=str))
         return 0
 
-    if not filas:
-        print("No hay memorias que mostrar en este criterio.")
+    if not rows:
+        print("No memories match this criteria.")
         return 0
-    ahora = _t.time()
-    print(f"{len(filas)} memoria(s)"
-          + (" · todo el fichero" if args.all_namespaces else f" · contexto «{ns}»") + "\n")
-    for m in filas:
-        edad_d = (ahora - m["last_access"]) / 86400
-        marcas = "".join(c for c, on in (("💤", m["dormant"]), ("📦", m["consolidated"]),
-                                         ("↩", m["superseded"])) if on)
-        cab = f"#{m['id']} [{m['kind']}]"
+    now = _t.time()
+    print(f"{len(rows)} memory(ies)"
+          + (" - whole file" if args.all_namespaces else f" - context «{ns}»") + "\n")
+    for m in rows:
+        age_d = (now - m["last_access"]) / 86400
+        marks = "".join(c for c, on in (("\U0001f4a4", m["dormant"]),
+                                        ("\U0001f4e6", m["consolidated"]),
+                                        ("↩", m["superseded"])) if on)
+        head = f"#{m['id']} [{m['kind']}]"
         if args.all_namespaces:
-            cab += f" ⟨{m['namespace']}⟩"
-        texto = m["text"].replace("\n", " ")
-        if len(texto) > 100:
-            texto = texto[:97] + "…"
-        print(f"{cab} {marcas}")
-        print(f"   {texto}")
-        print(f"   imp {m['importance']:.2f} · fiab {m['confidence']:.2f} · "
-              f"fuerza {m['strength']:.2f} · usos {m['access_count']} · "
-              f"visto hace {edad_d:.0f}d")
+            head += f" ⟨{m['namespace']}⟩"
+        text = m["text"].replace("\n", " ")
+        if len(text) > 100:
+            text = text[:97] + "…"
+        print(f"{head} {marks}")
+        print(f"   {text}")
+        print(f"   imp {m['importance']:.2f} - conf {m['confidence']:.2f} - "
+              f"strength {m['strength']:.2f} - uses {m['access_count']} - "
+              f"seen {age_d:.0f}d ago")
     return 0
 
 
 def cmd_graph(args) -> int:
-    """Vuelca el grafo asociativo (nodos + aristas) en JSON para el mapa del visor."""
-    from .config import db_path, paused
-    from .store import Store
-    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
-    s = Store(db_path(), namespace=ns)
-    try:
-        nodos = s.dump(all_namespaces=args.all_namespaces, include_dormant=True)
-        aristas = s.links_dump(all_namespaces=args.all_namespaces)
-    finally:
-        s.close()
-    # Solo aristas cuyos DOS extremos están entre los nodos mostrados (no colgar).
-    ids = {n["id"] for n in nodos}
-    aristas = [e for e in aristas if e["src"] in ids and e["dst"] in ids]
+    """Dumps the association graph (nodes + edges) as JSON for the viewer's map."""
+    from .support.config import db_path, paused
+    ns = _ns(args)
+    with _store(ns) as s:
+        nodes = s.dump(all_namespaces=args.all_namespaces, include_dormant=True)
+        edges = s.links_dump(all_namespaces=args.all_namespaces)
+    # Only edges whose BOTH ends are among the shown nodes (no dangling ones).
+    ids = {n["id"] for n in nodes}
+    edges = [e for e in edges if e["src"] in ids and e["dst"] in ids]
     print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
                       "db": os.path.abspath(db_path()), "paused": paused(),
-                      "nodes": nodos, "edges": aristas}, ensure_ascii=False, default=str))
+                      "nodes": nodes, "edges": edges}, ensure_ascii=False, default=str))
     return 0
 
 
 def cmd_dream(args) -> int:
-    """Propone PUENTES entre recuerdos que comparten un asociado común pero no están
-    conectados: ideas —hipótesis— que la memoria sugiere. En DRY-RUN: solo las muestra,
-    no las persiste ni contamina la evidencia (esa es la regla del sueño)."""
-    tope = max(1, int(getattr(args, "max", 8)))
+    """Proposes BRIDGES between memories that share a common associate but
+    aren't connected: ideas —hypotheses— the memory suggests. In DRY-RUN:
+    just shows them, doesn't persist or contaminate the evidence (that's
+    sleep's rule)."""
+    cap = max(1, int(getattr(args, "max", 8)))
     if getattr(args, "all_namespaces", False):
-        from .config import db_path
-        from .memory import Hipercampo
-        from .store import Store
-        base = Store(db_path(), namespace="default")
-        nss = sorted({m["namespace"] for m in base.dump(all_namespaces=True)})
-        base.close()
-        puentes: list[dict] = []
+        from .support.config import db_path
+        from .cycle.memory import Hipercampo
+        nss = _contexts()
+        bridges: list[dict] = []
         diagnostics: dict[str, dict] = {}
         for ns in nss:
             hc = Hipercampo(db_path(), namespace=ns)
             try:
-                dream = hc.dream(max_bridges=tope, dry_run=True)
+                dream = hc.dream(max_bridges=cap, dry_run=True)
                 diagnostics[ns] = dream.get("diagnostic", {}) if isinstance(dream, dict) else {}
-                bridges = dream.get("bridges", []) if isinstance(dream, dict) else []
-                if isinstance(bridges, list):
-                    for b in bridges:
-                        puentes.append({**b, "context": ns})
+                found = dream.get("bridges", []) if isinstance(dream, dict) else []
+                if isinstance(found, list):
+                    for b in found:
+                        bridges.append({**b, "context": ns})
             finally:
                 hc.close()
-        puentes.sort(key=lambda b: b.get("similarity", 0), reverse=True)
-        d = {"bridges": puentes[:tope], "dry_run": True, "diagnostic": {"contexts": diagnostics}}
+        bridges.sort(key=lambda b: b.get("similarity", 0), reverse=True)
+        d = {"bridges": bridges[:cap], "dry_run": True, "diagnostic": {"contexts": diagnostics}}
     else:
         hc = _hc()
         try:
-            d = hc.dream(max_bridges=tope, dry_run=True)
+            d = hc.dream(max_bridges=cap, dry_run=True)
         finally:
             hc.close()
     if getattr(args, "json", False):
@@ -357,180 +392,159 @@ def cmd_dream(args) -> int:
     else:
         bridges = d.get("bridges", [])
         for b in bridges if isinstance(bridges, list) else []:
-            print(f"· {b['hypothesis']}")
+            print(f"- {b['hypothesis']}")
         if not bridges:
-            print("Sin ideas nuevas por ahora (nada que conectar).")
+            print("No new ideas for now (nothing to connect).")
     return 0
 
 
 def cmd_dormant(args) -> int:
-    """Adormece (o despierta con --wake) recuerdos por id. Escritura: solo el propio
-    contexto. Es el «olvidar» reversible del visor, distinto de purgar (físico)."""
-    from .config import db_path
-    from .store import Store
-    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
+    """Makes memories dormant (or wakes them with --wake) by id. Writes:
+    only the own context. It's the viewer's reversible "forget", distinct
+    from purging (physical)."""
+    ns = _ns(args)
     try:
-        ids = [int(x) for x in args.ids.split(",") if x.strip()]
+        ids = _ids(args.ids)
     except ValueError:
-        print("--ids debe ser una lista de números separados por comas.", file=sys.stderr)
+        print("--ids must be a comma-separated list of numbers.", file=sys.stderr)
         return 2
-    s = Store(db_path(), namespace=ns)
-    try:
+    with _store(ns) as s:
         s.set_dormant(ids, dormant=not args.wake)
-    finally:
-        s.close()
-    accion = "despiertos" if args.wake else "adormecidos"
-    print(json.dumps({accion: ids, "namespace": ns}, ensure_ascii=False))
+    key = "awakened" if args.wake else "dormant"
+    print(json.dumps({key: ids, "namespace": ns}, ensure_ascii=False))
     return 0
 
 
 def cmd_budget(args) -> int:
-    """Ver o fijar el presupuesto de tokens del hook (lo que la memoria inyecta por
-    turno). Se persiste junto al .db y el hook lo respeta al turno siguiente, sin
-    reiniciar nada. La variable HIPERCAMPO_HOOK_BUDGET, si está, manda por encima."""
-    from . import config
+    """Views or sets the hook's token budget (what the memory injects per
+    turn). Persisted next to the .db and honored by the hook on the next
+    turn, without restarting anything. The HIPERCAMPO_HOOK_BUDGET variable,
+    if set, overrides this."""
+    from .support import config
     if getattr(args, "reset", False):
         config.set_hook_budget(None)
     elif args.set is not None:
         config.set_hook_budget(max(0, int(args.set)))
     env = (os.environ.get("HIPERCAMPO_HOOK_BUDGET") or "").strip()
-    persistido = config.hook_budget_persisted()
+    persisted = config.hook_budget_persisted()
     if env.isdigit():
-        efectivo, fuente = int(env), "entorno"
-    elif persistido is not None:
-        efectivo, fuente = persistido, "guardado"
+        effective, source = int(env), "environment"
+    elif persisted is not None:
+        effective, source = persisted, "saved"
     else:
-        efectivo, fuente = 350, "por defecto"
-    print(json.dumps({"hook_budget": efectivo, "fuente": fuente,
-                      "guardado": persistido, "por_defecto": 350}, ensure_ascii=False))
+        effective, source = 350, "default"
+    print(json.dumps({"hook_budget": effective, "source": source,
+                      "saved": persisted, "default": 350}, ensure_ascii=False))
     return 0
 
 
 def cmd_facts(args) -> int:
-    """Vuelca los hechos estructurados (SUJETO/PREDICADO/OBJETO/TIEMPO/FUENTE) del
-    contexto — el diferenciador VSA, hasta ahora invisible. Sin el blob hv. Con
-    --all-namespaces, agrega de TODOS los contextos (etiquetando cada uno)."""
+    """Dumps the structured facts (SUBJECT/PREDICATE/OBJECT/TIME/SOURCE) of
+    the context — the VSA differentiator, invisible until now. No hv blob.
+    With --all-namespaces, aggregates from ALL contexts (each one tagged)."""
     import json as _json
-    from .config import db_path
-    from .store import Store
-    solo_vig = getattr(args, "current", False)
+    current_only = getattr(args, "current", False)
 
-    def _hechos_de(ns):
-        s = Store(db_path(), namespace=ns)
-        try:
-            out = []
-            for r in s.all_facts(only_current=solo_vig):
-                out.append({"id": r["id"], "fields": _json.loads(r["fields"]),
-                            "source": r["source"], "valid_from": r["valid_from"],
-                            "valid_to": r["valid_to"], "vigente": r["valid_to"] is None,
-                            "context": ns})
-            return out
-        finally:
-            s.close()
+    def _facts_of(ns):
+        with _store(ns) as s:
+            return [{"id": r["id"], "fields": _json.loads(r["fields"]),
+                     "source": r["source"], "valid_from": r["valid_from"],
+                     "valid_to": r["valid_to"], "current": r["valid_to"] is None,
+                     "context": ns}
+                    for r in s.all_facts(only_current=current_only)]
 
     if getattr(args, "all_namespaces", False):
-        base = Store(db_path(), namespace="default")
-        nss = sorted({m["namespace"] for m in base.dump(all_namespaces=True)})
-        base.close()
-        hechos = [h for ns in nss for h in _hechos_de(ns)]
+        facts = [h for ns in _contexts() for h in _facts_of(ns)]
         ns = "*"
     else:
-        ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
-        hechos = _hechos_de(ns)
+        ns = _ns(args)
+        facts = _facts_of(ns)
     if getattr(args, "json", False):
-        print(_json.dumps({"count": len(hechos), "namespace": ns, "facts": hechos},
+        print(_json.dumps({"count": len(facts), "namespace": ns, "facts": facts},
                           ensure_ascii=False, default=str))
     else:
-        for h in hechos:
-            marca = "" if h["vigente"] else " (cerrado)"
-            campos = " · ".join(f"{k}={v}" for k, v in h["fields"].items())
-            print(f"#{h['id']}{marca}  {campos}")
-        if not hechos:
-            print("Sin hechos estructurados en este contexto (usa hc_remember_fact).")
+        for h in facts:
+            mark = "" if h["current"] else " (closed)"
+            fields = " - ".join(f"{k}={v}" for k, v in h["fields"].items())
+            print(f"#{h['id']}{mark}  {fields}")
+        if not facts:
+            print("No structured facts in this context (use hc_remember_fact).")
     return 0
 
 
 def cmd_reindex(args) -> int:
-    """Teje el grafo de vecinos (mapa denso + mejor recall). Con --all-namespaces teje
-    CADA contexto por dentro, sin cruzarlos (el aislamiento se respeta)."""
-    from .config import db_path
-    from .store import Store
+    """Weaves the neighbor graph (denser map + better recall). With
+    --all-namespaces weaves EACH context on its own, without crossing them
+    (isolation is respected)."""
     M = max(2, int(args.neighbors))
     if getattr(args, "all_namespaces", False):
-        base = Store(db_path(), namespace="default")
-        nss = sorted({m["namespace"] for m in base.dump(all_namespaces=True)})
-        base.close()
+        nss = _contexts()
         total = 0
         for ns in nss:
-            s = Store(db_path(), namespace=ns)
-            try:
+            with _store(ns) as s:
                 total += s.reindex_navgraph(M=M)
-            finally:
-                s.close()
-        print(json.dumps({"enlaces_tejidos": total, "contextos": nss}, ensure_ascii=False))
+        print(json.dumps({"links_woven": total, "contexts": nss}, ensure_ascii=False))
         return 0
-    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
-    s = Store(db_path(), namespace=ns)
-    try:
+    ns = _ns(args)
+    with _store(ns) as s:
         n = s.reindex_navgraph(M=M)
-    finally:
-        s.close()
-    print(json.dumps({"enlaces_tejidos": n, "namespace": ns}, ensure_ascii=False))
+    print(json.dumps({"links_woven": n, "namespace": ns}, ensure_ascii=False))
     return 0
 
 
 def cmd_reclassify(args) -> int:
-    """Mueve recuerdos PROPIOS a otro contexto (curación del dueño). Escritura: solo
-    el contexto origen; no toca lo enlazado ni lo ajeno. Recoloca los enlaces."""
-    from .config import db_path
-    from .store import Store
-    ns = args.namespace or os.environ.get("HIPERCAMPO_NAMESPACE", "default")
-    destino = (args.to or "").strip()
-    if not destino:
-        print("Falta --to (contexto destino).", file=sys.stderr); return 2
+    """Moves OWN memories to another context (owner curation). Writes:
+    only the source context; doesn't touch linked or unrelated ones.
+    Relocates the links."""
+    ns = _ns(args)
+    dest = (args.to or "").strip()
+    if not dest:
+        print("Missing --to (destination context).", file=sys.stderr); return 2
     try:
-        ids = [int(x) for x in args.ids.split(",") if x.strip()]
+        ids = _ids(args.ids)
     except ValueError:
-        print("--ids debe ser una lista de números separados por comas.", file=sys.stderr)
+        print("--ids must be a comma-separated list of numbers.", file=sys.stderr)
         return 2
-    s = Store(db_path(), namespace=ns)
-    try:
-        movidos = s.reclassify(ids, destino)
-    finally:
-        s.close()
-    print(json.dumps({"movidos": movidos, "de": ns, "a": destino}, ensure_ascii=False))
+    with _store(ns) as s:
+        moved = s.reclassify(ids, dest)
+    print(json.dumps({"moved": moved, "from": ns, "to": dest}, ensure_ascii=False))
     return 0
 
 
 def cmd_purge(args) -> int:
-    """Borrado FÍSICO y seguro. Irreversible: se enseña primero qué se va a borrar
-    (ensayo) y se pide confirmación, salvo --yes. Es lo contrario del olvido normal,
-    que solo adormece; esto quita el texto del fichero y recupera el espacio."""
-    if (args.ids is None) == (args.older_than is None):   # 0 días es válido, no "falta"
-        print("Elige UNO: --ids 3,7,9  o  --older-than DÍAS.", file=sys.stderr)
+    """PHYSICAL, secure deletion. Irreversible: shows what would be deleted
+    first (dry run) and asks for confirmation, unless --yes. It's the
+    opposite of normal forgetting, which only makes dormant; this removes
+    the text from the file and reclaims the space."""
+    if (args.ids is None) == (args.older_than is None):   # 0 days is valid, not "missing"
+        print("Choose ONE: --ids 3,7,9  or  --older-than DAYS.", file=sys.stderr)
         return 2
-    ids = [int(x) for x in args.ids.split(",")] if args.ids else None
+    try:
+        ids = _ids(args.ids) if args.ids else None
+    except ValueError:
+        print("--ids must be a comma-separated list of numbers.", file=sys.stderr)
+        return 2
     if getattr(args, "namespace", None):
-        os.environ["HIPERCAMPO_NAMESPACE"] = args.namespace   # acotar a ese contexto
+        os.environ["HIPERCAMPO_NAMESPACE"] = args.namespace   # scope to that context
     hc = _hc()
     try:
-        ensayo = hc.purge(older_than_days=args.older_than, ids=ids, dry_run=True)
-        if "error" in ensayo:
-            print(ensayo["error"], file=sys.stderr); return 2
-        objetivo = ensayo["ids"]
-        if not objetivo:
-            print("Nada coincide con ese criterio: no hay nada que purgar.")
+        dry = hc.purge(older_than_days=args.older_than, ids=ids, dry_run=True)
+        if "error" in dry:
+            print(dry["error"], file=sys.stderr); return 2
+        target = dry["ids"]
+        if not target:
+            print("Nothing matches that criteria: nothing to purge.")
             return 0
-        print(f"Se BORRARÁN FÍSICAMENTE {len(objetivo)} recuerdo(s): "
-              f"{', '.join(map(str, objetivo))}")
-        print("Esto es irreversible (no es el olvido, que solo adormece).")
+        print(f"{len(target)} memory(ies) will be PHYSICALLY DELETED: "
+              f"{', '.join(map(str, target))}")
+        print("This is irreversible (not the same as forgetting, which only makes dormant).")
         if not args.yes:
             try:
-                if input("¿Seguro? escribe 'si' para continuar: ").strip().lower() not in (
+                if input("Sure? type 'yes' to continue: ").strip().lower() not in (
                         "si", "sí", "s", "yes", "y"):
-                    print("Cancelado."); return 0
+                    print("Cancelled."); return 0
             except EOFError:
-                print("\nSin confirmación (usa --yes para no interactivo). Cancelado.")
+                print("\nNo confirmation (use --yes for non-interactive). Cancelled.")
                 return 1
         r = hc.purge(older_than_days=args.older_than, ids=ids, vacuum=not args.no_vacuum)
         _print(r)
@@ -540,160 +554,164 @@ def cmd_purge(args) -> int:
 
 
 def cmd_log(args) -> int:
-    """Qué ha decidido hipercampo: el registro, con filtros y en vivo."""
+    """What hipercampo has decided: the log, with filters and live tailing."""
     import time as _t
 
-    from . import audit
-    from .config import db_path
+    from .support import audit
+    from .support.config import db_path
     audit.set_logfile(db_path())
-    ruta = audit.logfile()
+    path = audit.logfile()
     if getattr(args, "ruta", False):
-        print(ruta or "(registro desactivado: HIPERCAMPO_LOG=0)")
+        print(path or "(log disabled: HIPERCAMPO_LOG=0)")
         return 0
-    if not ruta:
-        # Log desactivado (HIPERCAMPO_LOG=0). Para el visor NO es un error: es un
-        # registro vacío, y así la pestaña Registro lo enseña con elegancia en vez
-        # de romperse. Para el humano, un aviso claro.
+    if not path:
+        # Log disabled (HIPERCAMPO_LOG=0). For the viewer this ISN'T an
+        # error: it's an empty log, so the Log tab shows it gracefully
+        # instead of breaking. For a human, a clear notice.
         if getattr(args, "json", False):
             print(json.dumps({"path": None, "enabled": False, "entries": []},
                              ensure_ascii=False))
             return 0
-        print("El registro está desactivado (HIPERCAMPO_LOG=0).")
+        print("The log is disabled (HIPERCAMPO_LOG=0).")
         return 1
 
-    accion = "ERROR" if args.errores else args.accion
+    action = "ERROR" if args.errores else args.accion
 
-    def leer(n):
-        return audit.tail(n, contiene=args.grep, solo_hoy=args.hoy, accion=accion)
+    def read(n):
+        return audit.tail(n, contains=args.grep, today_only=args.hoy, action=action)
 
-    if getattr(args, "json", False):        # salida estructurada para el visor
-        entradas = [_entrada_log(ln) for ln in leer(args.n if args.n else 200)]
-        print(json.dumps({"path": ruta, "entries": entradas},
+    if getattr(args, "json", False):        # structured output for the viewer
+        entries = [_log_entry(ln) for ln in read(args.n if args.n else 200)]
+        print(json.dumps({"path": path, "entries": entries},
                          ensure_ascii=False, default=str))
         return 0
 
-    filtros = " · ".join(f for f in (
-        f"acción={accion}" if accion else "",
-        f"contiene «{args.grep}»" if args.grep else "",
-        "solo hoy" if args.hoy else "") if f)
-    print(f"# {ruta}{' · ' + filtros if filtros else ''}")
+    filters = " - ".join(f for f in (
+        f"action={action}" if action else "",
+        f"contains «{args.grep}»" if args.grep else "",
+        "today only" if args.hoy else "") if f)
+    print(f"# {path}{' - ' + filters if filters else ''}")
 
-    lineas = leer(args.n)
-    if not lineas:
-        print("(nada coincide con el filtro)" if filtros else "(sin actividad todavía)")
+    lines = read(args.n)
+    if not lines:
+        print("(nothing matches the filter)" if filters else "(no activity yet)")
         if not args.follow:
-            print("\nAcciones vistas en el registro: "
-                  + (", ".join(audit.acciones()) or "ninguna"))
+            print("\nActions seen in the log: "
+                  + (", ".join(audit.actions()) or "none"))
             return 0
     else:
-        print("\n".join(lineas))
+        print("\n".join(lines))
 
     if not args.follow:
         return 0
-    print("\n-- en vivo (Ctrl+C para salir) --", flush=True)
-    vistas = set(lineas)
+    print("\n-- live (Ctrl+C to exit) --", flush=True)
+    seen = set(lines)
     try:
         while True:
             _t.sleep(1.0)
-            for ln in leer(200):
-                if ln not in vistas:
+            for ln in read(200):
+                if ln not in seen:
                     print(ln, flush=True)
-                    vistas.add(ln)
+                    seen.add(ln)
     except KeyboardInterrupt:
-        print("\n-- fin --")
+        print("\n-- end --")
     return 0
 
 
-def _entrada_log(ln: str) -> dict:
-    """Parte una línea del registro en {ts, accion, mensaje} (best-effort).
-    Formato: 'YYYY-MM-DD HH:MM:SS accion    mensaje'."""
+def _log_entry(ln: str) -> dict:
+    """Splits a log line into {ts, action, message} (best-effort).
+    Format: 'YYYY-MM-DD HH:MM:SS action    message'."""
     ts = ln[:19]
-    resto = ln[20:] if len(ln) > 20 else ""
-    partes = resto.split(" ", 1)
-    accion = partes[0] if partes else ""
-    mensaje = partes[1].strip() if len(partes) > 1 else ""
-    return {"ts": ts, "accion": accion, "mensaje": mensaje, "raw": ln}
+    rest = ln[20:] if len(ln) > 20 else ""
+    parts = rest.split(" ", 1)
+    action = parts[0] if parts else ""
+    message = parts[1].strip() if len(parts) > 1 else ""
+    return {"ts": ts, "action": action, "message": message, "raw": ln}
 
 
 def cmd_pause(args) -> int:
-    """Pausa o reanuda la memoria (modo 'no recordar'). En pausa no se graban recuerdos
-    nuevos ni se refuerzan los existentes; LEER sigue funcionando y no se borra nada."""
-    from .config import set_paused
-    quiere = not (args.cmd == "resume" or getattr(args, "off", False))
-    estado = set_paused(quiere)
-    forzado = os.environ.get("HIPERCAMPO_PAUSED", "") not in ("", "0", "false", "False")
-    salida: dict[str, Any] = {"paused": estado}
-    if forzado and not quiere:
-        salida["aviso"] = ("HIPERCAMPO_PAUSED está fijada en el entorno y manda por "
-                           "encima del interruptor: sigue en pausa hasta quitarla.")
-    print(json.dumps(salida, ensure_ascii=False))
+    """Pauses or resumes the memory ('do not record' mode). While paused, no
+    new memories are recorded and existing ones aren't reinforced; READING
+    keeps working and nothing is deleted."""
+    from .support.config import set_paused
+    want = not (args.cmd == "resume" or getattr(args, "off", False))
+    state = set_paused(want)
+    forced = os.environ.get("HIPERCAMPO_PAUSED", "") not in ("", "0", "false", "False")
+    out: dict[str, Any] = {"paused": state}
+    if forced and not want:
+        out["notice"] = ("HIPERCAMPO_PAUSED is set in the environment and overrides "
+                           "the switch: it stays paused until that's removed.")
+    print(json.dumps(out, ensure_ascii=False))
     return 0
 
 
 def cmd_tokens(_args) -> int:
-    """La FACTURA de tokens, en JSON: el rasgo de la casa hecho visible. Cuánto ha
-    costado la memoria, cuánto se ahorró el presupuesto, y una serie temporal para
-    dibujarla. Siempre es ESTIMACIÓN y se dice (el tokenizador de Claude no es público)."""
-    from . import audit, budget
-    from .config import db_path
+    """The token BILL, in JSON: the house's signature trait made visible.
+    How much the memory has cost, how much the budget saved, and a time
+    series to chart it. Always an ESTIMATE and stated as such (Claude's
+    tokenizer isn't public)."""
+    from .support import audit, budget
+    from .support.config import db_path
     audit.set_logfile(db_path())
-    resumen = audit.coste_tokens()
-    resumen["presupuesto_hook"] = budget.HOOK_BUDGET
-    resumen["presupuesto_identidad"] = budget.IDENTITY_BUDGET
-    resumen["estimado"] = True
-    resumen["metodo"] = budget.metodo()
-    # serie temporal: cada inyección con su coste (para el gráfico del visor)
-    serie = []
-    for e in (_entrada_log(ln) for ln in audit.tail(0, accion="tokens")):
-        m = re.search(r"(\d+) tok", e["mensaje"])
+    summary = audit.token_cost()
+    summary["hook_budget"] = budget.HOOK_BUDGET
+    summary["identity_budget"] = budget.IDENTITY_BUDGET
+    summary["estimated"] = True
+    summary["method"] = budget.method()
+    # time series: each injection with its cost (for the viewer's chart)
+    series = []
+    for e in (_log_entry(ln) for ln in audit.tail(0, action="tokens")):
+        m = re.search(r"(\d+) tok", e["message"])
         if m:
-            serie.append({"ts": e["ts"], "tok": int(m.group(1)),
-                          "etiqueta": e["mensaje"].split(" ", 1)[0]})
-    print(json.dumps({"summary": resumen, "series": serie[-200:]},
+            series.append({"ts": e["ts"], "tok": int(m.group(1)),
+                          "label": e["message"].split(" ", 1)[0]})
+    print(json.dumps({"summary": summary, "series": series[-200:]},
                      ensure_ascii=False, default=str))
     return 0
 
 
 def cmd_status(_args) -> int:
-    """Estado de salud en JSON para el visor: CLI, base de datos, servidor MCP y
-    registro. Es el 'panel de control' de la memoria, sin adornos: dice qué vive."""
-    from . import __version__, audit
-    from .config import db_path, paused
-    from .procs import listar
-    ruta = os.path.abspath(db_path())
+    """Health status as JSON for the viewer: CLI, database, MCP server and
+    log. It's the memory's 'control panel', unadorned: says what's alive."""
+    from . import __version__
+    from .support import audit
+    from .support.config import db_path, paused
+    from .support.procs import list_servers
+    path = os.path.abspath(db_path())
     out: dict[str, Any] = {"version": __version__, "python": sys.version.split()[0],
-                           "paused": paused(), "db": {"path": ruta}}
+                           "paused": paused(), "db": {"path": path}}
 
     try:
-        out["db"]["exists"] = os.path.isfile(ruta)
-        out["db"]["size"] = os.path.getsize(ruta) if os.path.isfile(ruta) else 0
-        carpeta = os.path.dirname(ruta) or "."
-        out["db"]["writable"] = os.access(carpeta, os.W_OK)
+        out["db"]["exists"] = os.path.isfile(path)
+        out["db"]["size"] = os.path.getsize(path) if os.path.isfile(path) else 0
+        folder = os.path.dirname(path) or "."
+        out["db"]["writable"] = os.access(folder, os.W_OK)
     except OSError as e:
         out["db"]["error"] = str(e)
 
     try:
         hc = _hc()
         try:
-            salud = hc.store.health(full=False)
+            health = hc.store.health(full=False)
             out["db"]["schema"] = hc.store.db.execute("PRAGMA user_version").fetchone()[0]
-            out["db"]["schema_expected"] = hc.store.SCHEMA_VERSION
-            out["db"]["healthy"] = bool(salud.get("sana"))
-            out["db"]["integrity"] = salud.get("integridad")
-            # Recuento de TODO el fichero (no solo el contexto actual), para que
-            # cuadre con lo que enseña el visor ("todos los contextos").
-            todos = hc.store.dump(all_namespaces=True, include_dormant=True)
-            por_ctx: dict[str, int] = {}
-            for m in todos:
-                por_ctx[m["namespace"]] = por_ctx.get(m["namespace"], 0) + 1
+            from .storage import migrations
+            out["db"]["schema_expected"] = migrations.SCHEMA_VERSION
+            out["db"]["healthy"] = bool(health.get("healthy"))
+            out["db"]["integrity"] = health.get("integrity")
+            # Count of the WHOLE file (not just the current context), so it
+            # matches what the viewer shows ("all contexts").
+            everything = hc.store.dump(all_namespaces=True, include_dormant=True)
+            by_ctx: dict[str, int] = {}
+            for m in everything:
+                by_ctx[m["namespace"]] = by_ctx.get(m["namespace"], 0) + 1
             out["stats"] = {
-                "total": len(todos),
-                "episodicos_activos": sum(1 for m in todos if m["kind"] == "episodic"
+                "total": len(everything),
+                "active_episodic": sum(1 for m in everything if m["kind"] == "episodic"
                                           and not m["dormant"] and not m["consolidated"]),
-                "semanticos": sum(1 for m in todos if m["kind"] == "semantic"),
-                "latentes": sum(1 for m in todos if m["dormant"]),
-                "archivados": sum(1 for m in todos if m["consolidated"]),
-                "por_contexto": por_ctx,
+                "semantic": sum(1 for m in everything if m["kind"] == "semantic"),
+                "dormant": sum(1 for m in everything if m["dormant"]),
+                "archived": sum(1 for m in everything if m["consolidated"]),
+                "by_context": by_ctx,
                 "tokens": hc.stats().get("tokens"),
             }
         finally:
@@ -701,11 +719,11 @@ def cmd_status(_args) -> int:
     except Exception as e:
         out["db"]["error"] = str(e)
 
-    # Servidor MCP: en marcha o no (el cliente lo arranca al usar una herramienta).
+    # MCP server: running or not (the client starts it when a tool is used).
     try:
-        from .store import Store
-        procesos = listar()
-        for p in procesos:                        # ¿sirve código VIEJO tras actualizar?
+        from .storage.store import Store
+        procs = list_servers()
+        for p in procs:                        # is it serving OLD code after an upgrade?
             p["version"] = None
             p["stale"] = False
             if p.get("db") and p.get("namespace"):
@@ -721,12 +739,12 @@ def cmd_status(_args) -> int:
                         p["stale"] = ver != __version__
                 except Exception:
                     pass
-        out["mcp"] = {"running": len(procesos), "servers": procesos,
+        out["mcp"] = {"running": len(procs), "servers": procs,
                       "installed": __version__}
     except Exception as e:
         out["mcp"] = {"error": str(e)}
 
-    # Registro (hooks y decisiones): activo, ruta y última actividad (señal de vida).
+    # Log (hooks and decisions): enabled, path and last activity (a sign of life).
     audit.set_logfile(db_path())
     log = audit.logfile()
     reg: dict[str, Any] = {"enabled": bool(log), "path": log}
@@ -740,145 +758,158 @@ def cmd_status(_args) -> int:
 
 
 def cmd_doctor(_args) -> int:
-    """Diagnóstico rápido: ¿está todo en su sitio para funcionar?"""
+    """Quick diagnosis: is everything in place to work?"""
     from . import __version__
-    from .config import db_path
-    ruta = db_path()
+    from .support.config import db_path
+    path = db_path()
     print(f"hipercampo {__version__}")
     print(f"python     {sys.version.split()[0]}")
-    print(f"BD         {os.path.abspath(ruta)}")
-    carpeta = os.path.dirname(os.path.abspath(ruta)) or "."
-    print(f"carpeta    {'existe' if os.path.isdir(carpeta) else 'NO existe'}"
-          f" · {'escribible' if os.access(carpeta, os.W_OK) else 'SIN permiso de escritura'}")
+    print(f"DB         {os.path.abspath(path)}")
+    folder = os.path.dirname(os.path.abspath(path)) or "."
+    print(f"folder     {'exists' if os.path.isdir(folder) else 'DOES NOT exist'}"
+          f" - {'writable' if os.access(folder, os.W_OK) else 'NO write permission'}")
     print(f"namespace  {os.environ.get('HIPERCAMPO_NAMESPACE', 'default')}")
-    for mod, etiqueta in (("numpy", "numpy"), ("mcp", "mcp (servidor)"),
-                          ("sentence_transformers", "semántica (opcional)")):
+    for mod, label in (("numpy", "numpy"), ("mcp", "mcp (server)"),
+                          ("sentence_transformers", "semantic (optional)")):
         try:
             __import__(mod)
-            print(f"dep        {etiqueta}: OK")
+            print(f"dep        {label}: OK")
         except Exception:
-            print(f"dep        {etiqueta}: no instalado")
+            print(f"dep        {label}: not installed")
     try:
         hc = _hc()
-        salud = hc.store.health(full=getattr(_args, "full", False))
-        print(f"esquema    version {hc.store.db.execute('PRAGMA user_version').fetchone()[0]}"
-              f" (esperada {hc.store.SCHEMA_VERSION})")
-        print(f"salud      {'SANA' if salud['sana'] else 'CON PROBLEMAS'} · "
-              f"{salud['comprobacion']}={salud['integridad']} · "
-              f"escribible={salud['escribible']}")
-        print("memoria    ", json.dumps(hc.stats(), ensure_ascii=False, default=str))
+        from .storage import migrations
+        health = hc.store.health(full=getattr(_args, "full", False))
+        print(f"schema     version {hc.store.db.execute('PRAGMA user_version').fetchone()[0]}"
+              f" (expected {migrations.SCHEMA_VERSION})")
+        print(f"health     {'HEALTHY' if health['healthy'] else 'HAS ISSUES'} - "
+              f"{health['check']}={health['integrity']} - "
+              f"writable={health['writable']}")
+        print("memory     ", json.dumps(hc.stats(), ensure_ascii=False, default=str))
         hc.close()
         return 0
     except Exception as e:
-        print(f"ERROR abriendo la memoria: {e}")
+        print(f"ERROR opening the memory: {e}")
         return 1
 
 
+# Command -> function. `pause` and `resume` are the same command seen from
+# its two sides, and cmd_pause tells them apart via `args.cmd`.
+_COMMANDS = {
+    "doctor": cmd_doctor, "hook": cmd_hook, "identity": cmd_identity,
+    "servers": cmd_servers, "restart": cmd_restart, "facts": cmd_facts,
+    "reindex": cmd_reindex, "budget": cmd_budget, "reclassify": cmd_reclassify,
+    "dream": cmd_dream, "list": cmd_list, "graph": cmd_graph, "status": cmd_status,
+    "tokens": cmd_tokens, "pause": cmd_pause, "resume": cmd_pause,
+    "dormant": cmd_dormant, "purge": cmd_purge, "log": cmd_log,
+}
+
+
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="hipercampo", description="Memoria viva para agentes")
+    p = argparse.ArgumentParser(prog="hipercampo", description="Live memory for agents")
     sub = p.add_subparsers(dest="cmd")
-    sub.add_parser("serve", help="arranca el servidor MCP (stdio)")
-    sub.add_parser("stats", help="estado de la memoria")
-    sub.add_parser("sleep", help="consolidar + olvidar + soñar")
-    dr = sub.add_parser("doctor", help="diagnóstico del entorno")
+    sub.add_parser("serve", help="start the MCP server (stdio)")
+    sub.add_parser("stats", help="memory status")
+    sub.add_parser("sleep", help="consolidate + forget + dream")
+    dr = sub.add_parser("doctor", help="environment diagnosis")
     dr.add_argument("--full", action="store_true",
-                    help="integrity_check completo (más lento) en vez de quick_check")
-    sub.add_parser("hook", help="modo sináptico: para los hooks de Claude Code")
-    sub.add_parser("identity", help="qué se ha aprendido trabajando")
-    sub.add_parser("servers", help="qué servidores MCP hay en marcha y desde cuándo")
-    rs = sub.add_parser("restart", help="reiniciar los servidores tras actualizar")
+                    help="full integrity_check (slower) instead of quick_check")
+    sub.add_parser("hook", help="synaptic mode: for Claude Code hooks")
+    sub.add_parser("identity", help="what's been learned while working")
+    sub.add_parser("servers", help="which MCP servers are running and since when")
+    rs = sub.add_parser("restart", help="restart the servers after an upgrade")
     rs.add_argument("--dry-run", action="store_true",
-                    help="enseñar qué se cerraría, sin cerrar nada")
-    rs.add_argument("--pids", help="cerrar SOLO estos pids (separados por comas); "
-                                   "por defecto, todos")
-    bg = sub.add_parser("budget", help="ver o fijar el presupuesto de tokens del hook")
-    bg.add_argument("--set", type=int, help="fijar el presupuesto (tokens por turno)")
-    bg.add_argument("--reset", action="store_true", help="volver al de fábrica (350)")
-    sub.add_parser("version", help="versión instalada")
-    for nombre, ayuda in (("assist", "qué toca hacer en este momento (hooks)"),
-                          ("recall", "recuperar"), ("muse", "inspiración"),
-                          ("remember", "guardar")):
-        sp = sub.add_parser(nombre, help=ayuda)
-        sp.add_argument("text", nargs="*", help="texto o consulta")
-        sp.add_argument("--plain", action="store_true", help="salida legible, no JSON")
-        if nombre in ("assist", "recall"):
+                    help="show what would be closed, without closing anything")
+    rs.add_argument("--pids", help="close ONLY these pids (comma-separated); "
+                                   "by default, all of them")
+    bg = sub.add_parser("budget", help="view or set the hook's token budget")
+    bg.add_argument("--set", type=int, help="set the budget (tokens per turn)")
+    bg.add_argument("--reset", action="store_true", help="go back to the factory default (350)")
+    sub.add_parser("version", help="installed version")
+    for name, hlp in (("assist", "what's needed right now (hooks)"),
+                          ("recall", "retrieve"), ("muse", "inspiration"),
+                          ("remember", "store")):
+        sp = sub.add_parser(name, help=hlp)
+        sp.add_argument("text", nargs="*", help="text or query")
+        sp.add_argument("--plain", action="store_true", help="readable output, not JSON")
+        if name in ("assist", "recall"):
             sp.add_argument("--nav", action="store_true",
-                            help="usar el grafo navegable como generador de candidatos")
+                            help="use the navigable graph as a candidate generator")
             sp.add_argument("--nav-auto", action="store_true",
-                            help="decidir automaticamente si navegar o escanear")
+                            help="decide automatically whether to navigate or scan")
             sp.add_argument("--max-scan", type=int,
-                            help="acotar cuántos recuerdos escanear como máximo")
-        if nombre == "remember":
+                            help="cap how many memories to scan at most")
+        if name == "remember":
             sp.add_argument("--importance", type=float, default=0.5)
             sp.add_argument("--confidence", type=float, default=0.5)
-    ft = sub.add_parser("facts", help="ver los HECHOS estructurados (roles) del contexto")
-    ft.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
-    ft.add_argument("--current", action="store_true", help="solo los vigentes (no cerrados)")
-    ft.add_argument("--namespace", help="contexto (por defecto el del entorno)")
+    ft = sub.add_parser("facts", help="view the structured FACTS (roles) of the context")
+    ft.add_argument("--json", action="store_true", help="JSON output (for the viewer)")
+    ft.add_argument("--current", action="store_true", help="only current ones (not closed)")
+    ft.add_argument("--namespace", help="context (defaults to the environment's)")
     ft.add_argument("--all-namespaces", action="store_true",
-                    help="hechos de TODOS los contextos (etiquetados)")
-    ri = sub.add_parser("reindex", help="tejer el grafo de vecinos (mapa denso, mejor recall)")
-    ri.add_argument("--neighbors", type=int, default=12, help="vecinos por recuerdo")
-    ri.add_argument("--namespace", help="contexto (por defecto el del entorno)")
+                    help="facts from ALL contexts (tagged)")
+    ri = sub.add_parser("reindex", help="weave the neighbor graph (denser map, better recall)")
+    ri.add_argument("--neighbors", type=int, default=12, help="neighbors per memory")
+    ri.add_argument("--namespace", help="context (defaults to the environment's)")
     ri.add_argument("--all-namespaces", action="store_true",
-                    help="tejer CADA contexto por dentro (sin cruzarlos)")
-    rc = sub.add_parser("reclassify", help="mover recuerdos PROPIOS a otro contexto (curación)")
-    rc.add_argument("--ids", required=True, help="ids separados por comas")
-    rc.add_argument("--to", required=True, help="contexto destino")
-    rc.add_argument("--namespace", help="contexto origen (por defecto el del entorno)")
-    dm2 = sub.add_parser("dream", help="proponer PUENTES entre recuerdos distantes (ideas)")
-    dm2.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
-    dm2.add_argument("--max", type=int, default=8, help="cuántas hipótesis como mucho")
+                    help="weave EACH context on its own (without crossing them)")
+    rc = sub.add_parser("reclassify", help="move OWN memories to another context (curation)")
+    rc.add_argument("--ids", required=True, help="comma-separated ids")
+    rc.add_argument("--to", required=True, help="destination context")
+    rc.add_argument("--namespace", help="source context (defaults to the environment's)")
+    dm2 = sub.add_parser("dream", help="propose BRIDGES between distant memories (ideas)")
+    dm2.add_argument("--json", action="store_true", help="JSON output (for the viewer)")
+    dm2.add_argument("--max", type=int, default=8, help="how many hypotheses at most")
     dm2.add_argument("--all-namespaces", action="store_true",
-                     help="ideas de TODOS los contextos (cada uno por dentro)")
-    bk = sub.add_parser("backup", help="copia de seguridad consistente")
+                     help="ideas from ALL contexts (each on its own)")
+    bk = sub.add_parser("backup", help="consistent backup")
     bk.add_argument("dest", nargs="?")
-    ls = sub.add_parser("list", help="volcar las memorias (tabla o --json para la UI)")
-    ls.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
+    ls = sub.add_parser("list", help="dump the memories (table or --json for the UI)")
+    ls.add_argument("--json", action="store_true", help="JSON output (for the viewer)")
     ls.add_argument("--all-namespaces", "-A", action="store_true",
-                    help="todo el fichero, no solo el contexto actual")
-    ls.add_argument("--namespace", help="ver un contexto concreto (por defecto: el actual)")
+                    help="the whole file, not just the current context")
+    ls.add_argument("--namespace", help="view a specific context (default: the current one)")
     ls.add_argument("--include-dormant", action="store_true",
-                    help="incluir los latentes (olvidados-pero-no-borrados)")
-    ls.add_argument("--kind", help="filtrar por tipo: episodic, semantic…")
+                    help="include dormant ones (forgotten-but-not-deleted)")
+    ls.add_argument("--kind", help="filter by type: episodic, semantic…")
     ls.add_argument("--sort", default="recent",
                     choices=("recent", "importance", "access", "created"),
-                    help="orden (por defecto: acceso más reciente)")
-    ls.add_argument("--limit", type=int, help="cuántas como mucho")
-    gr = sub.add_parser("graph", help="volcar el grafo (nodos + aristas) para el visor")
+                    help="ordering (default: most recently accessed)")
+    ls.add_argument("--limit", type=int, help="how many at most")
+    gr = sub.add_parser("graph", help="dump the graph (nodes + edges) for the viewer")
     gr.add_argument("--all-namespaces", "-A", action="store_true")
-    gr.add_argument("--namespace", help="contexto (por defecto: el actual)")
+    gr.add_argument("--namespace", help="context (default: the current one)")
     gr.add_argument("--include-dormant", action="store_true", default=True)
-    sub.add_parser("status", help="estado de salud en JSON (CLI, BD, MCP, registro)")
-    pa = sub.add_parser("pause", help="PAUSAR la memoria: deja de grabar (modo 'no recordar')")
-    pa.add_argument("--off", action="store_true", help="reanudar en vez de pausar")
-    sub.add_parser("resume", help="reanudar la memoria tras una pausa")
-    tk = sub.add_parser("tokens", help="factura de tokens en JSON (para el visor)")
+    sub.add_parser("status", help="health status as JSON (CLI, DB, MCP, log)")
+    pa = sub.add_parser("pause", help="PAUSE the memory: stop recording ('do not record' mode)")
+    pa.add_argument("--off", action="store_true", help="resume instead of pausing")
+    sub.add_parser("resume", help="resume the memory after a pause")
+    tk = sub.add_parser("tokens", help="token bill as JSON (for the viewer)")
     tk.add_argument("--json", action="store_true", default=True, help=argparse.SUPPRESS)
-    dm = sub.add_parser("dormant", help="adormecer o despertar recuerdos por id")
-    dm.add_argument("--ids", required=True, help="ids separados por comas")
-    dm.add_argument("--wake", action="store_true", help="despertar en vez de adormecer")
-    dm.add_argument("--namespace", help="contexto (por defecto: el actual)")
-    pg = sub.add_parser("purge", help="borrado FÍSICO y seguro (secretos, RGPD, espacio)")
-    pg.add_argument("--ids", help="ids concretos a borrar, separados por comas")
-    pg.add_argument("--older-than", type=float, metavar="DÍAS",
-                    help="purga los LATENTES sin acceso desde hace más de N días")
+    dm = sub.add_parser("dormant", help="make memories dormant or wake them by id")
+    dm.add_argument("--ids", required=True, help="comma-separated ids")
+    dm.add_argument("--wake", action="store_true", help="wake instead of making dormant")
+    dm.add_argument("--namespace", help="context (default: the current one)")
+    pg = sub.add_parser("purge", help="PHYSICAL, secure deletion (secrets, GDPR, space)")
+    pg.add_argument("--ids", help="specific ids to delete, comma-separated")
+    pg.add_argument("--older-than", type=float, metavar="DAYS",
+                    help="purge DORMANT memories unaccessed for more than N days")
     pg.add_argument("--no-vacuum", action="store_true",
-                    help="no recuperar espacio (más rápido; el texto igual se sobrescribe)")
-    pg.add_argument("--namespace", help="contexto (por defecto: el actual)")
-    pg.add_argument("--yes", action="store_true", help="no pedir confirmación")
-    lg = sub.add_parser("log", help="qué ha decidido hipercampo últimamente")
-    lg.add_argument("-n", type=int, default=20, help="cuántas líneas (0 = todas)")
+                    help="don't reclaim space (faster; the text still gets overwritten)")
+    pg.add_argument("--namespace", help="context (default: the current one)")
+    pg.add_argument("--yes", action="store_true", help="don't ask for confirmation")
+    lg = sub.add_parser("log", help="what hipercampo has decided lately")
+    lg.add_argument("-n", type=int, default=20, help="how many lines (0 = all)")
     lg.add_argument("-f", "--follow", action="store_true",
-                    help="quedarse mirando en vivo (Ctrl+C para salir)")
-    lg.add_argument("-g", "--grep", metavar="TEXTO",
-                    help="solo las líneas que contengan esto (ignora acentos)")
-    lg.add_argument("-a", "--accion", metavar="ACCION",
-                    help="solo esa acción: recall, remember, sleep, dream, ERROR…")
-    lg.add_argument("--hoy", action="store_true", help="solo lo de hoy")
-    lg.add_argument("--errores", action="store_true", help="atajo para --accion ERROR")
-    lg.add_argument("--ruta", action="store_true", help="solo decir dónde está el fichero")
-    lg.add_argument("--json", action="store_true", help="salida JSON (para el visor)")
+                    help="keep watching live (Ctrl+C to exit)")
+    lg.add_argument("-g", "--grep", metavar="TEXT",
+                    help="only lines containing this (ignores accents)")
+    lg.add_argument("-a", "--accion", metavar="ACTION",
+                    help="only that action: recall, remember, sleep, dream, ERROR…")
+    lg.add_argument("--hoy", action="store_true", help="only today's")
+    lg.add_argument("--errores", action="store_true", help="shortcut for --accion ERROR")
+    lg.add_argument("--ruta", action="store_true", help="only say where the file is")
+    lg.add_argument("--json", action="store_true", help="JSON output (for the viewer)")
     args = p.parse_args(argv)
 
     if args.cmd in (None, "version"):
@@ -887,49 +918,20 @@ def main(argv=None) -> int:
         if args.cmd is None:
             p.print_help()
         return 0
+    # Commands that are self-contained (open whatever they need and close
+    # it). Used to be a ladder of twenty `if args.cmd == ...`: a table says
+    # the same thing, and adding a command no longer means touching two
+    # places and forgetting one.
+    if args.cmd in _COMMANDS:
+        return _COMMANDS[args.cmd](args)
     if args.cmd == "serve":
         from .server import main as serve
         serve(); return 0
-    if args.cmd == "doctor":
-        return cmd_doctor(args)
-    if args.cmd == "hook":
-        return cmd_hook(args)
-    if args.cmd == "identity":
-        return cmd_identity(args)
-    if args.cmd == "servers":
-        return cmd_servers(args)
-    if args.cmd == "restart":
-        return cmd_restart(args)
-    if args.cmd == "facts":
-        return cmd_facts(args)
-    if args.cmd == "reindex":
-        return cmd_reindex(args)
-    if args.cmd == "budget":
-        return cmd_budget(args)
-    if args.cmd == "reclassify":
-        return cmd_reclassify(args)
-    if args.cmd == "dream":
-        return cmd_dream(args)
     if args.cmd == "backup":
-        from .backup import backup
-        print("Copia creada en:", backup(args.dest)); return 0
-    if args.cmd == "list":
-        return cmd_list(args)
-    if args.cmd == "graph":
-        return cmd_graph(args)
-    if args.cmd == "status":
-        return cmd_status(args)
-    if args.cmd == "tokens":
-        return cmd_tokens(args)
-    if args.cmd in ("pause", "resume"):
-        return cmd_pause(args)
-    if args.cmd == "dormant":
-        return cmd_dormant(args)
-    if args.cmd == "purge":
-        return cmd_purge(args)
-    if args.cmd == "log":
-        return cmd_log(args)
+        from .storage.backup import backup
+        print("Backup created at:", backup(args.dest)); return 0
 
+    # And the ones that operate on an open memory, which gets closed no matter what.
     hc = _hc()
     try:
         if args.cmd == "stats":
@@ -937,27 +939,19 @@ def main(argv=None) -> int:
         elif args.cmd == "sleep":
             _print(hc.sleep())
         else:
-            texto = " ".join(getattr(args, "text", []) or []).strip()
-            if not texto:
-                print("Falta el texto.", file=sys.stderr); return 2
+            text = " ".join(getattr(args, "text", []) or []).strip()
+            if not text:
+                print("Missing text.", file=sys.stderr); return 2
             if args.cmd == "assist":
-                modo_nav = (
-                    "auto" if getattr(args, "nav_auto", False)
-                    else getattr(args, "nav", False)
-                )
-                _print(hc.assist(texto, max_scan=getattr(args, "max_scan", None),
-                                 nav=modo_nav), plain=args.plain)
+                _print(hc.assist(text, max_scan=getattr(args, "max_scan", None),
+                                 nav=_nav_mode(args)), plain=args.plain)
             elif args.cmd == "recall":
-                modo_nav = (
-                    "auto" if getattr(args, "nav_auto", False)
-                    else getattr(args, "nav", False)
-                )
-                _print(hc.recall(texto, max_scan=getattr(args, "max_scan", None),
-                                 nav=modo_nav), plain=args.plain)
+                _print(hc.recall(text, max_scan=getattr(args, "max_scan", None),
+                                 nav=_nav_mode(args)), plain=args.plain)
             elif args.cmd == "muse":
-                _print(hc.muse(texto), plain=args.plain)
+                _print(hc.muse(text), plain=args.plain)
             elif args.cmd == "remember":
-                _print(hc.remember(texto, args.importance, args.confidence))
+                _print(hc.remember(text, args.importance, args.confidence))
         return 0
     finally:
         hc.close()

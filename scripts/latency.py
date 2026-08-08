@@ -28,8 +28,8 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.encoder import encode_text            # noqa: E402
-from hipercampo.memory import Hipercampo              # noqa: E402
+from hipercampo.core.encoder import encode_text            # noqa: E402
+from hipercampo.cycle.memory import Hipercampo              # noqa: E402
 
 _DB = "data/_latency_bench.db"
 _MAX_SCAN = 2000            # cota que un robot pondría: "lo mejor entre los 2000 más vivos"

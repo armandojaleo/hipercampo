@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hipercampo.budget import es_estimacion, estimate_tokens, metodo  # noqa: E402
+from hipercampo.support.budget import is_estimate, estimate_tokens, method  # noqa: E402
 
 # Prompts representativos de una sesión real: unos deben disparar la memoria y
 # otros NO. Los que no disparan son tan importantes como los que sí: si la
@@ -86,7 +86,7 @@ def main() -> int:
 
     por_turno = sum(f["tokens"] for f in filas) / len(filas)
     informe = {
-        "estimado": es_estimacion(), "metodo": metodo(),
+        "estimado": is_estimate(), "metodo": method(),
         "herramientas": {"n": n_tools, "tokens_por_peticion": t_tools},
         "hook": {"por_turno_medio": round(por_turno),
                  "turnos_que_disparan": f"{disparos}/{len(filas)}",
@@ -102,7 +102,7 @@ def main() -> int:
         print(json.dumps(informe, ensure_ascii=False, indent=2))
         return 0
 
-    aviso = f" (APROXIMADO: {metodo()})"
+    aviso = f" (APROXIMADO: {method()})"
     print(f"\nCOSTE EN TOKENS DE HIPERCAMPO{aviso}\n" + "=" * 60)
     print(f"\n1. Herramientas MCP: {n_tools} · {t_tools} tokens EN CADA PETICIÓN")
     print("   (coste fijo: ocupa ventana de contexto aunque no uses la memoria)")

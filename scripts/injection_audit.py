@@ -22,9 +22,9 @@ except Exception:
     pass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hipercampo import audit, budget                       # noqa: E402
-from hipercampo.config import db_path                       # noqa: E402
-from hipercampo.memory import Hipercampo                   # noqa: E402
+from hipercampo.support import audit, budget                       # noqa: E402
+from hipercampo.support.config import db_path                       # noqa: E402
+from hipercampo.cycle.memory import Hipercampo                   # noqa: E402
 
 # batería etiquetada por el tema esperado (el namespace que DEBERÍA dominar la inyección)
 PROMPTS = [
@@ -44,7 +44,7 @@ PROMPTS = [
 def coste_real():
     """Distribución del coste de inyección del registro auditable real."""
     toks = []
-    for ln in audit.tail(0, accion="tokens"):
+    for ln in audit.tail(0, action="tokens"):
         m = re.search(r"(\d+) tok", ln)
         if m and "inyect" in ln.lower():
             toks.append(int(m.group(1)))
@@ -70,7 +70,7 @@ def audita_relevancia(ns, linked):
             # coste igual que el hook: cabecera + recuerdos, recortado al presupuesto
             lineas = [f"[memoria · {accion}] {r.get('why', '')}"] + \
                      [f"- {h.get('text', '')}" for h in res]
-            _, gasto = budget.ajustar(lineas)
+            _, gasto = budget.fit_budget(lineas)
             nss = [h.get("namespace") for h in res if h.get("namespace")]
             fuera = sum(1 for n in nss if n != tema) if tema not in ("generic",) else 0
             filas.append({"tema": tema, "accion": accion, "n": len(res),

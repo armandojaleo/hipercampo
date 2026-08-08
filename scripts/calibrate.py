@@ -36,8 +36,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np                                       # noqa: E402
 
-from hipercampo import audit, memory                     # noqa: E402
-from hipercampo.memory import Hipercampo                 # noqa: E402
+from hipercampo.support import audit                     # noqa: E402
+from hipercampo.cycle import memory
+from hipercampo.cycle.memory import Hipercampo                 # noqa: E402
 from scripts.stress import CASOS, DISTRACTORES           # noqa: E402
 
 # --- consultas NEGATIVAS ---------------------------------------------------
@@ -125,7 +126,7 @@ def _codigo(i: int) -> str:
 # --- recogida de señales ----------------------------------------------------
 def observar(n_objetivo: int, semantico: bool = False) -> dict:
     """Ejecuta la memoria con la puerta ABIERTA y devuelve las señales crudas."""
-    from hipercampo import encoder
+    from hipercampo.core import encoder
     encoder.set_semantic_hook(None)
     if semantico and not encoder.enable_semantic():
         raise SystemExit("El régimen semántico necesita sentence-transformers instalado.")
@@ -150,7 +151,7 @@ def observar(n_objetivo: int, semantico: bool = False) -> dict:
 
     def sondear(q, objetivo_id=None):
         hits = hc.recall(q, k=len(facts), hops=1, include_history=True)
-        diag = dict(hc.ultima_decision)
+        diag = dict(hc.last_decision)
         # (activación por item, ordenados como los devolvió recall)
         acts = [(h["id"], h["activation"]) for h in hits]
         pos = None
@@ -171,7 +172,7 @@ def observar(n_objetivo: int, semantico: bool = False) -> dict:
     finally:
         memory.GATE_ENABLED = previo
         hc.store.close()
-        from hipercampo import encoder as _enc
+        from hipercampo.core import encoder as _enc
         _enc.set_semantic_hook(None)
     return {"n": n_real, "pedidos": len(facts),
             "positivas": positivas, "negativas": negativas}
@@ -188,7 +189,7 @@ def evaluar(obs: dict, min_item: float, suelo: float, z: float) -> dict:
         # 2) puerta de ABSTENCIÓN, con la misma función que usa recall()
         directa = np.array(sorted((a for _, a in s["acts"]), reverse=True))
         ok, _ = memory.abstention_gate(directa, len(vivos), semantic=False,
-                                       suelo=suelo, zmin=z)
+                                       floor=suelo, zmin=z)
         if not ok:
             return False, None
         ids = [i for i, _ in vivos]
@@ -240,8 +241,8 @@ def main(ns: list[int], semantico: bool = False):
     cab = f"{'N':>7}  {'positivas p5/mediana/p95':>28}  {'negativas p5/mediana/p95':>28}  solape"
     print(cab); print("-" * len(cab))
     for obs in observaciones.values():
-        pos = np.array([s["diag"].get("mejor", 0.0) for _, s in obs["positivas"]])
-        neg = np.array([s["diag"].get("mejor", 0.0) for s in obs["negativas"]])
+        pos = np.array([s["diag"].get("best", 0.0) for _, s in obs["positivas"]])
+        neg = np.array([s["diag"].get("best", 0.0) for s in obs["negativas"]])
         p = np.percentile(pos, [5, 50, 95]); q = np.percentile(neg, [5, 50, 95])
         # fracción de negativas por encima de la positiva mediana: irreducible
         solape = float((neg >= np.median(pos)).mean())
@@ -257,8 +258,8 @@ def main(ns: list[int], semantico: bool = False):
     print(cab); print("-" * len(cab))
     # El rango se DERIVA de lo observado, no se fija a mano: el régimen semántico
     # comprime las activaciones y una rejilla léxica caería entera fuera de escala.
-    _neg = np.array([s["diag"].get("mejor", 0.0) for s in obs["negativas"]])
-    _pos = np.array([s["diag"].get("mejor", 0.0) for _, s in obs["positivas"]])
+    _neg = np.array([s["diag"].get("best", 0.0) for s in obs["negativas"]])
+    _pos = np.array([s["diag"].get("best", 0.0) for _, s in obs["positivas"]])
     lo, hi = float(np.percentile(_neg, 5)), float(np.percentile(_pos, 95))
     suelos = [round(lo + (hi - lo) * i / 9, 3) for i in range(10)]
 

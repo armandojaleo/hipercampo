@@ -23,7 +23,7 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.memory import Hipercampo             # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 # (hecho_a_recordar, pregunta_parafraseada_que_debe_recuperarlo)
 QA = [
@@ -159,7 +159,7 @@ QA_TYPO = [
 if __name__ == "__main__":
     modo_sem = "--semantic" in sys.argv
     if modo_sem:
-        from hipercampo import encoder, semantic
+        from hipercampo.core import encoder, semantic
         print("Activando hook semántico (sentence-transformers)... "
               "(descarga el modelo la 1ª vez)")
         encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())

@@ -38,9 +38,9 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.encoder import encode_text          # noqa: E402
-from hipercampo.store import Store                    # noqa: E402
-from hipercampo.vsa import similarity_batch           # noqa: E402
+from hipercampo.core.encoder import encode_text          # noqa: E402
+from hipercampo.storage.store import Store                    # noqa: E402
+from hipercampo.core.vsa import similarity_batch           # noqa: E402
 
 DB = "data/_nav_real.db"
 MODULOS = ["email", "http", "json", "math", "random", "os", "xml", "unittest",

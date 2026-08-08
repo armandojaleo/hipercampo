@@ -19,7 +19,7 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.memory import Hipercampo             # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 
 def main():
@@ -46,7 +46,7 @@ def main():
     print("Pensando en voz alta: «una memoria que vive de su propia señal»")
     print("→ muse busca conexiones inesperadas (incluye lo latente):\n")
     for idea in hc.muse("una memoria que vive de su propia señal sin pilas", k=3):
-        marca = " ✨resurgido" if idea["resurgido"] else ""
+        marca = " ✨resurgido" if idea["resurfaced"] else ""
         print(f"  • «{idea['text']}»")
         print(f"      via {idea['via']}{marca}")
 

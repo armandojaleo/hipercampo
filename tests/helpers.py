@@ -13,7 +13,13 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# La raíz del repositorio, en UN solo sitio. Los tests viven repartidos en carpetas
+# por capa (core/, storage/, cycle/…), así que un `parent.parent` dentro de un test
+# ya no apunta a la raíz sino a `tests/`: quien necesite una ruta del repositorio
+# (pyproject, docs) importa esto y deja de depender de a qué profundidad esté.
+ROOT = Path(__file__).resolve().parent.parent
+
+sys.path.insert(0, str(ROOT))
 
 # Hermeticidad: los tests no deben depender de la config ambiental de quien los corre.
 # Un desarrollador con HIPERCAMPO_LINKED=* (memoria cross-project) o HIPERCAMPO_PAUSED=1
@@ -23,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 for _v in ("HIPERCAMPO_LINKED", "HIPERCAMPO_PAUSED", "HIPERCAMPO_NAMESPACE", "HIPERCAMPO_DB"):
     os.environ.pop(_v, None)
 
-from hipercampo.memory import Hipercampo             # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 _abierta: Hipercampo | None = None
 _ruta: str | None = None

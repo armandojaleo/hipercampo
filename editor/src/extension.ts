@@ -6,9 +6,9 @@ import * as crypto from "crypto";
 import { hostMessages } from "./i18n";
 
 /**
- * Visor de memoria de hipercampo. No habla SQLite ni conoce el esquema: llama al
- * CLI `hipercampo` (que ya sabe de namespaces y aislamiento) y pinta lo que devuelve.
- * Así el visor no puede corromper nada — es de solo lectura por construcción.
+ * Hipercampo memory viewer. It neither talks to SQLite nor knows the schema: it calls
+ * the `hipercampo` CLI (which already handles namespaces and isolation) and renders
+ * its output. This prevents the viewer from corrupting data: it is read-only by design.
  */
 
 interface Memory {
@@ -31,34 +31,34 @@ function cfg() {
   return vscode.workspace.getConfiguration("hipercampo");
 }
 
-/** Divide "python -m hipercampo.cli" en ejecutable + argumentos base. */
+/** Split "python -m hipercampo.cli" into an executable and base arguments. */
 function split(raw: string): { exe: string; prefix: string[] } {
   const parts = raw.trim().split(/\s+/);
   return { exe: parts[0], prefix: parts.slice(1) };
 }
 
-// Candidatos a probar cuando el comando por defecto no está en el PATH. VS Code
-// lanzado desde el menú (no desde una terminal) no hereda el PATH del shell, así que
-// «hipercampo» a secas suele no encontrarse aunque esté instalado; `python -m
-// hipercampo.cli` sí funciona si el paquete está en ese Python.
+// Candidates to try when the default command is not on PATH. VS Code launched from
+// a menu (rather than a terminal) does not inherit the shell's PATH, so a bare
+// `hipercampo` is often unavailable even when installed; `python -m hipercampo.cli`
+// still works when the package is installed in that Python environment.
 const FALLBACKS = ["python -m hipercampo.cli", "python3 -m hipercampo.cli",
   "py -m hipercampo.cli"];
 
-// El comando que ya se comprobó que funciona; se cachea para no reintentar cada vez.
+// Cache the command known to work so each invocation does not retry every candidate.
 let resolved: string | undefined;
 
 function candidates(): string[] {
   const conf = (cfg().get<string>("command") || "hipercampo").trim();
-  // Si el usuario configuró algo distinto del default, se respeta y no se adivina.
+  // Honor an explicit non-default command without guessing alternatives.
   if (conf && conf !== "hipercampo") return [conf];
   return [conf, ...FALLBACKS];
 }
 
 function childEnv(): NodeJS.ProcessEnv {
-  // OJO: no se pone HIPERCAMPO_LOG=0. La auditoría escribe a stderr y al fichero,
-  // nunca a stdout (execFile los separa), así que el JSON sale limpio igual; y en
-  // cambio LOG=0 anula la RUTA del registro y dejaba la pestaña Registro sin poder
-  // leerlo ("registro desactivado" + código 1 = error en el visor).
+  // Do not set HIPERCAMPO_LOG=0. Auditing writes to stderr and the log file, never to
+  // stdout (execFile keeps them separate), so JSON remains clean. LOG=0 also removes
+  // the log path and would prevent the Log tab from reading it ("log disabled" plus
+  // exit code 1 becomes a viewer error).
   const env: NodeJS.ProcessEnv = { ...process.env };
   const db = (cfg().get<string>("dbPath") || "").trim();
   const ns = (cfg().get<string>("namespace") || "").trim();
@@ -67,8 +67,8 @@ function childEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-/** Lanza un comando concreto. `notFound` distingue "no existe el ejecutable"
- * (probar el siguiente candidato) de un fallo real del comando (que se reporta). */
+/** Run one concrete command. `notFound` distinguishes a missing executable (try the
+ * next candidate) from a genuine command failure (report it). */
 function tryRun(cmd: string, args: string[]): Promise<{ out: string } | { notFound: true } | { fail: string }> {
   const { exe, prefix } = split(cmd);
   return new Promise((res) => {
@@ -81,23 +81,23 @@ function tryRun(cmd: string, args: string[]): Promise<{ out: string } | { notFou
   });
 }
 
-/** Ejecuta el CLI probando el comando cacheado o los candidatos hasta dar con uno
- * que exista. Rechaza con un mensaje legible si ninguno se encuentra o si falla. */
+/** Run the CLI, trying the cached command or candidates until one exists. Reject with
+ * a readable message when none is found or a real invocation fails. */
 async function run(args: string[]): Promise<string> {
-  const orden = resolved ? [resolved, ...candidates()] : candidates();
-  let ultimoFallo = "";
-  for (const cmd of orden) {
+  const commands = resolved ? [resolved, ...candidates()] : candidates();
+  let lastFailure = "";
+  for (const cmd of commands) {
     const r = await tryRun(cmd, args);
     if ("out" in r) { resolved = cmd; return r.out; }
-    if ("fail" in r) ultimoFallo = r.fail;   // existe pero falló: es un error real
+    if ("fail" in r) lastFailure = r.fail;   // The executable exists: this is a real error.
   }
-  if (ultimoFallo) throw new Error(ultimoFallo);
+  if (lastFailure) throw new Error(lastFailure);
   throw new Error(hostMessages(vscode.env.language).commandNotFound);
 }
 
-// --- valor ambiente: la memoria hecha visible en la barra de estado -----------------
-// No hay telemetría; el propio dueño ve la "factura" y el ahorro. Se lee del CLI `tokens`
-// (que a su vez lee el registro auditable), sin contadores nuevos ni escrituras.
+// --- ambient value: make memory visible in the status bar ---------------------------
+// There is no telemetry: owners see their own "bill" and savings. Values come from
+// the `tokens` CLI command (which reads the auditable log), with no new counters or writes.
 let statusItem: vscode.StatusBarItem | undefined;
 
 function kfmt(n: number): string {
@@ -110,34 +110,35 @@ async function refreshValue(): Promise<void> {
   const t = hostMessages(vscode.env.language);
   try {
     const s = (JSON.parse(await run(["tokens"])).summary) || {};
-    const saved = Number(s.ahorrado_por_presupuesto || 0);
-    if (saved > 0 || Number(s.inyecciones || 0) > 0) {
+    const saved = Number(s.saved_by_budget || 0);
+    if (saved > 0 || Number(s.injections || 0) > 0) {
       statusItem.text = `$(database) ${t.statusValue(kfmt(saved))}`;
-      statusItem.tooltip = t.valueTooltip(Number(s.inyecciones || 0), Number(s.total || 0),
-        saved, Number(s.hoy || 0));
+      statusItem.tooltip = t.valueTooltip(Number(s.injections || 0), Number(s.total || 0),
+        saved, Number(s.today || 0));
     } else {
       statusItem.text = "$(database) Hipercampo";
       statusItem.tooltip = t.statusTooltip;
     }
   } catch {
-    // sin CLI o sin registro: se queda como marca simple, sin ruido.
+    // Without the CLI or log, keep a quiet, simple status marker.
     statusItem.text = "$(database) Hipercampo";
     statusItem.tooltip = t.statusTooltip;
   }
 }
 
 async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: string; db?: string; paused?: boolean }> {
-  // El visor SIEMPRE trae todos los contextos; la selección (ver uno, ver todos) es
-  // client-side vía los chips. Así, desmarcar "todos los contextos" nunca vacía la
-  // pantalla por depender del fetch de un namespace que quizá no existe.
+  // The viewer ALWAYS fetches every context; the chips select one or all client-side.
+  // Consequently, clearing "all contexts" never empties the screen by fetching a
+  // namespace that may not exist.
   const out = await run(["graph", "--all-namespaces"]);
   const data = JSON.parse(out);
   const scope = hostMessages(vscode.env.language).allContexts;
   return { memories: data.nodes || [], edges: data.edges || [], scope, db: data.db, paused: !!data.paused };
 }
 
-// Búsqueda "como el agente": recall (directo, sabe abstenerse) o muse (creativo, trae
-// asociados y latentes — la vía «eureka»). Ambos van al namespace del entorno.
+// Search "like the agent": recall (direct and able to abstain) or muse (creative,
+// including associated and dormant memories—the "eureka" path). Both use the
+// environment's namespace.
 async function agentSearch(query: string, mode: "recall" | "recall-auto" | "recall-nav" | "muse"): Promise<Memory[]> {
   const args = mode === "recall-nav" ? ["recall", "--nav", query]
     : mode === "recall-auto" ? ["recall", "--nav-auto", query]
@@ -147,33 +148,33 @@ async function agentSearch(query: string, mode: "recall" | "recall-auto" | "reca
   return Array.isArray(hits) ? hits : [];
 }
 
-// Estado de salud: CLI, base de datos, servidor MCP y registro. Lo que dice si el
-// motor está vivo, no solo qué hay guardado.
+// Health status for the CLI, database, MCP server, and log: whether the engine is
+// alive, not merely what it stores.
 async function fetchStatus(): Promise<any> {
   const out = await run(["status"]);
   return JSON.parse(out);
 }
 
-// El registro de decisiones (recall/remember/sleep/forget/tokens…), estructurado.
+// Structured decision log (recall/remember/sleep/forget/tokens, etc.).
 async function fetchLog(): Promise<any> {
   const out = await run(["log", "-n", "300", "--json"]);
   return JSON.parse(out);
 }
 
-// La factura de tokens: agregado + serie temporal. El rasgo de la casa, visible.
+// The token bill: aggregate plus time series, making this defining feature visible.
 async function fetchTokens(): Promise<any> {
   const out = await run(["tokens"]);
   return JSON.parse(out);
 }
 
-// Ideas: PUENTES que el sueño propone entre recuerdos distantes con un asociado común
-// (hipótesis, no evidencia). dry-run por construcción: solo se muestran, no se graban.
+// Ideas: BRIDGES proposed by dreaming between distant memories with a common associate
+// (hypotheses, not evidence). A dry run by design: displayed but never stored.
 async function fetchIdeas(): Promise<any> {
   const out = await run(["dream", "--json", "--max", "12", "--all-namespaces"]);
   return JSON.parse(out);
 }
 
-// Hechos estructurados (role-records): el diferenciador VSA, de todos los contextos.
+// Structured facts (role records): the VSA differentiator, across every context.
 async function fetchFacts(): Promise<any> {
   const out = await run(["facts", "--json", "--all-namespaces"]);
   return JSON.parse(out);
@@ -194,34 +195,34 @@ async function chooseDatabase(): Promise<boolean> {
   vscode.window.showInformationMessage(text.activeMemory(file));
   return true;
 }
-/** Mueve un recuerdo a otro contexto (curación). Pregunta el destino: uno existente
- * o uno nuevo. Es reversible (se puede volver a mover), así que no pide modal. */
+/** Move a memory to another context (curation). Ask for an existing or new destination.
+ * The operation is reversible, so it does not require a modal confirmation. */
 async function reclassify(id: number, namespace: string | undefined): Promise<boolean> {
-  const origen = namespace || "default";
+  const source = namespace || "default";
   let nss: string[] = [];
   try {
     const data = JSON.parse(await run(["graph", "--all-namespaces"]));
     nss = [...new Set((data.nodes || []).map((n: any) => n.namespace))]
-      .filter((n): n is string => typeof n === "string" && n !== origen).sort();
-  } catch { /* sin lista, se podrá teclear uno nuevo igual */ }
+      .filter((n): n is string => typeof n === "string" && n !== source).sort();
+  } catch { /* A new context can still be entered when the list is unavailable. */ }
   const text = hostMessages(vscode.env.language);
-  const NUEVO = text.newContext;
-  const pick = await vscode.window.showQuickPick([...nss, NUEVO], {
-    placeHolder: text.moveFrom(origen),
+  const NEW_CONTEXT = text.newContext;
+  const pick = await vscode.window.showQuickPick([...nss, NEW_CONTEXT], {
+    placeHolder: text.moveFrom(source),
   });
   if (!pick) return false;
-  let destino: string | undefined = pick;
-  if (pick === NUEVO) {
-    destino = (await vscode.window.showInputBox({
+  let destination: string | undefined = pick;
+  if (pick === NEW_CONTEXT) {
+    destination = (await vscode.window.showInputBox({
       prompt: text.targetContextName,
     }))?.trim();
   }
-  if (!destino) return false;
-  await run(["reclassify", "--ids", String(id), "--to", destino, "--namespace", origen]);
+  if (!destination) return false;
+  await run(["reclassify", "--ids", String(id), "--to", destination, "--namespace", source]);
   return true;
 }
 
-/** Adormece/despierta o purga un recuerdo, tras confirmación. Devuelve true si tocó algo. */
+/** Put a memory to sleep, wake it, or purge it after confirmation. Return true on change. */
 async function mutate(id: number, namespace: string | undefined,
   action: "forget" | "wake" | "purge"): Promise<boolean> {
   const nsArgs = namespace ? ["--namespace", namespace] : [];
@@ -233,7 +234,7 @@ async function mutate(id: number, namespace: string | undefined,
     await run(["dormant", "--ids", String(id), ...nsArgs]);
     return true;
   }
-  // purge: físico e irreversible -> confirmación MODAL antes de nada
+  // Purging is physical and irreversible: require MODAL confirmation first.
   const text = hostMessages(vscode.env.language);
   const ok = await vscode.window.showWarningMessage(
     text.purgePrompt(id), { modal: true }, text.purgeAction);
@@ -242,14 +243,14 @@ async function mutate(id: number, namespace: string | undefined,
   return true;
 }
 
-/** Lógica común a las DOS caras del visor (el panel lateral y la vista de la barra
- * de actividad): pinta el HTML, atiende los mensajes del webview, y se auto-refresca
- * cuando cambia el fichero .db (para que no haya que cerrar y abrir). */
+/** Shared logic for BOTH viewer surfaces (the editor panel and Activity Bar view):
+ * render HTML, handle webview messages, and refresh automatically when the .db file
+ * changes so users do not need to close and reopen it. */
 class Controller {
   private db: string | undefined;
   private watcher: fs.FSWatcher | undefined;
   private pend: NodeJS.Timeout | undefined;
-  private quietUntil = 0;   // ignora eventos del vigilante hasta aquí (ver más abajo)
+  private quietUntil = 0;   // Ignore watcher events until this time (see below).
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(private readonly webview: vscode.Webview,
@@ -261,15 +262,14 @@ class Controller {
 
   private post(m: any) { this.webview.postMessage(m); }
 
-  // CLAVE contra el bucle de CPU: cada comando del visor abre la BD en WAL, y ESO
-  // toca los ficheros -wal/-shm, que el propio vigilante vería como un cambio y
-  // dispararía otra recarga… en bucle. Tras cada operación nuestra silenciamos al
-  // vigilante un rato, para que solo reaccione a cambios EXTERNOS (el agente, otra
-  // sesión), no a los que causamos al leer.
-  private silenciar() { this.quietUntil = Date.now() + 1500; }
+  // Critical CPU-loop guard: every viewer command opens the database in WAL mode,
+  // touching -wal/-shm. The watcher would see that as a change and trigger another
+  // reload forever. Mute it briefly after each operation so it reacts only to EXTERNAL
+  // changes (the agent or another session), not to our own reads.
+  private muteWatcher() { this.quietUntil = Date.now() + 1500; }
 
   private async onMessage(msg: any) {
-    this.silenciar();
+    this.muteWatcher();
     try {
       if (msg.type === "ready" || msg.type === "refresh") {
         await this.load();
@@ -306,7 +306,7 @@ class Controller {
       } else if (msg.type === "backup") {
         const out = (await run(["backup"])).trim();
         vscode.window.showInformationMessage(out || hostMessages(vscode.env.language).backupCreated);
-        this.post({ type: "status", data: await fetchStatus() });   // refrescar tamaños
+        this.post({ type: "status", data: await fetchStatus() });   // Refresh sizes.
       } else if (msg.type === "open-log") {
         if (msg.path) {
           const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(msg.path));
@@ -318,15 +318,15 @@ class Controller {
         if (msg.url) { await vscode.env.openExternal(vscode.Uri.parse(msg.url)); }
       } else if (msg.type === "kill-server") {
         await run(["restart", "--pids", String(msg.pid)]);
-        this.post({ type: "status", data: await fetchStatus() });   // refrescar la lista
+        this.post({ type: "status", data: await fetchStatus() });   // Refresh the list.
       } else if (msg.type === "set-budget") {
         await run(msg.reset ? ["budget", "--reset"] : ["budget", "--set", String(msg.value)]);
         this.post({ type: "tokens", data: await fetchTokens() });
       } else if (msg.type === "reindex") {
         const out = JSON.parse(await run(["reindex", "--neighbors", "4", "--all-namespaces"]));
         vscode.window.showInformationMessage(
-          hostMessages(vscode.env.language).graphWoven(out.enlaces_tejidos ?? 0));
-        await this.load();                              // refresca el mapa, ya denso
+          hostMessages(vscode.env.language).graphWoven(out.links_woven ?? 0));
+        await this.load();                              // Refresh the now-dense map.
       }
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
@@ -334,36 +334,36 @@ class Controller {
   }
 
   async load() {
-    this.silenciar();
+    this.muteWatcher();
     try {
-      // Un solo fetch: `graph` trae nodos, aristas y la RUTA del .db (para vigilarla).
+      // One fetch: `graph` returns nodes, edges, and the .db PATH to watch.
       const { memories, edges, scope, db, paused } = await fetchGraph();
       this.post({ type: "data", memories, edges, scope, paused });
-      if (db && db !== this.db) { this.db = db; this.vigilar(db); }
-      void refreshValue();   // datos frescos -> actualiza también el valor de la barra
+      if (db && db !== this.db) { this.db = db; this.watchDatabase(db); }
+      void refreshValue();   // Fresh data also updates the status-bar value.
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
     } finally {
-      this.silenciar();   // la lectura recién hecha tocó -wal/-shm: no re-disparar por eso
+      this.muteWatcher();   // The read touched -wal/-shm; do not trigger on it again.
     }
   }
 
-  // Vigila el fichero .db: si cambia (lo toca el agente u otra sesión), recarga sola.
-  // Con rebote, porque SQLite en modo WAL dispara varios eventos por una escritura.
-  private vigilar(db: string) {
+  // Watch the .db file and reload when the agent or another session changes it.
+  // Debounce because one SQLite WAL write emits several events.
+  private watchDatabase(db: string) {
     this.watcher?.close();
     try {
       const dir = path.dirname(db);
-      // El tronco del nombre (sin extensión) cubre .db, .db-wal, .db-shm Y el .log,
-      // que viven en la misma carpeta: así el registro en vivo también refresca.
+      // The extensionless stem covers .db, .db-wal, .db-shm, AND .log in the same
+      // directory, so the live log refreshes too.
       const stem = path.basename(db).replace(/\.db$/, "");
       this.watcher = fs.watch(dir, (_ev, fn) => {
         if (!fn || !fn.startsWith(stem)) return;
-        if (Date.now() < this.quietUntil) return;   // fue nuestra propia lectura: ignora
+        if (Date.now() < this.quietUntil) return;   // Ignore our own read.
         clearTimeout(this.pend);
         this.pend = setTimeout(() => { if (Date.now() >= this.quietUntil) this.load(); }, 700);
       });
-    } catch { /* si no se puede vigilar, el botón ↻ sigue estando */ }
+    } catch { /* The ↻ button remains available when watching is unavailable. */ }
   }
 
   dispose() {
@@ -379,8 +379,8 @@ function html(webview: vscode.Webview, ctx: vscode.ExtensionContext): string {
     webview.asWebviewUri(vscode.Uri.file(path.join(ctx.extensionPath, "media", f)));
   const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; `
     + `script-src 'nonce-${nonce}';`;
-  // Idioma del visor = el de VS Code (es/en). La comunidad es bilingüe; por defecto
-  // inglés, español si VS Code está en español. El webview lee document.documentElement.lang.
+  // Viewer language follows VS Code (es/en). This bilingual community defaults to
+  // English and uses Spanish when VS Code does. The webview reads the document lang.
   const lang = vscode.env.language.toLowerCase().startsWith("es") ? "es" : "en";
   let page = fs.readFileSync(path.join(ctx.extensionPath, "media", "viewer.html"), "utf8");
   return page
@@ -391,7 +391,7 @@ function html(webview: vscode.Webview, ctx: vscode.ExtensionContext): string {
     .replace(/%STYLE%/g, String(uri("viewer.css")));
 }
 
-/** El panel ancho, a un lado del editor (bueno para el mapa). */
+/** The wide panel beside the editor, well suited to the map. */
 class Panel {
   private static current: { ctrl: Controller; panel: vscode.WebviewPanel } | undefined;
 
@@ -402,7 +402,7 @@ class Panel {
       { enableScripts: true, retainContextWhenHidden: true });
     const ctrl = new Controller(panel.webview, ctx);
     Panel.current = { ctrl, panel };
-    // Al volver a enfocar el panel, refresca (por si cambió algo mientras no se veía).
+    // Refresh on refocus in case something changed while the panel was hidden.
     panel.onDidChangeViewState((e) => { if (e.webviewPanel.visible) ctrl.load(); });
     panel.onDidDispose(() => { ctrl.dispose(); Panel.current = undefined; });
   }
@@ -410,8 +410,8 @@ class Panel {
   static refresh() { Panel.current?.ctrl.load(); }
 }
 
-/** La MISMA memoria dentro de la barra de actividad (tira izquierda): el icono abre
- * el visor entero ahí, no un mensaje con un botón. */
+/** The SAME memory inside the Activity Bar (left strip): its icon opens the complete
+ * viewer there, rather than a message containing a button. */
 class SidebarProvider implements vscode.WebviewViewProvider {
   constructor(private readonly ctx: vscode.ExtensionContext) {}
   resolveWebviewView(view: vscode.WebviewView) {
@@ -423,15 +423,15 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  // Botón siempre visible en la barra de estado (abajo): un clic abre el panel ancho, y
-  // el propio texto hace VISIBLE EL VALOR (cuánto ahorró la memoria), sin pop-ups.
+  // The always-visible bottom status-bar button opens the wide panel. Its text makes
+  // the VALUE (how much memory saved) visible without pop-ups.
   statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusItem.text = "$(database) Hipercampo";
   statusItem.tooltip = hostMessages(vscode.env.language).statusTooltip;
   statusItem.command = "hipercampo.showMemories";
   statusItem.show();
-  void refreshValue();                               // al arrancar
-  const valueTimer = setInterval(() => void refreshValue(), 60000);   // y en vivo, sin agobiar
+  void refreshValue();                               // At startup.
+  const valueTimer = setInterval(() => void refreshValue(), 60000);   // Live, without noise.
 
   context.subscriptions.push(
     statusItem,
@@ -443,4 +443,4 @@ export function activate(context: vscode.ExtensionContext) {
   );
 }
 
-export function deactivate() { /* nada global que limpiar: cada visor libera lo suyo */ }
+export function deactivate() { /* No global cleanup: each viewer releases its resources. */ }

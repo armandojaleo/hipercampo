@@ -29,7 +29,7 @@ contextos. Es aislamiento **local entre contextos** (proyectos, perfiles, agente
 local-first, un proceso por contexto—. Para separar:
 
 - Un `HIPERCAMPO_NAMESPACE` distinto por contexto (mismo `.db`), o un
-  `HIPERCAMPO_DB` distinto por proyecto. Ambos valen (ver INSTALL.es.md).
+  `HIPERCAMPO_DB` distinto por proyecto. Ambos valen (ver docs/INSTALL.es.md).
 - No hay autenticación: quien pueda hablar con el proceso puede elegir su namespace.
   El aislamiento protege de mezclas accidentales, no de un actor malicioso local.
 
@@ -57,7 +57,7 @@ Conviene no confundir dos cosas que sí garantiza:
 
 ## Salvaguardas integradas (defensa en profundidad)
 
-hipercampo incluye dos escáneres ligeros (`hipercampo/safety.py`), que **avisan, no
+hipercampo incluye dos escáneres ligeros (`hipercampo/support/safety.py`), que **avisan, no
 bloquean**:
 
 - **Aviso de secretos al guardar.** `hc_remember` detecta patrones de credenciales
@@ -116,7 +116,7 @@ falta.
 
 - **Núcleo (`pip install hipercampo`): `numpy` + `mcp`.** El núcleo VSA/almacén solo
   necesita `numpy`; `import hipercampo` **no** arrastra `mcp` (garantizado por
-  `tests/test_core_embebible.py`). Un embebido puede usar el core sin el servidor.
+  `tests/contracts/test_core_embebible.py`). Un embebido puede usar el core sin el servidor.
 - **`mcp` arrastra su árbol** (~14 transitivas: `anyio`, `httpx`, `pydantic`,
   `starlette`, `uvicorn`, `sse-starlette`, `pyjwt`, `python-multipart`, `pywin32`…).
   **Transparencia:** hipercampo usa **solo el servidor STDIO** de `mcp`

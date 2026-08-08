@@ -30,7 +30,7 @@ except Exception:
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.stress import CASOS, DISTRACTORES        # noqa: E402
-from hipercampo.memory import Hipercampo               # noqa: E402
+from hipercampo.cycle.memory import Hipercampo               # noqa: E402
 
 _word = re.compile(r"\w+", re.UNICODE)
 
@@ -136,7 +136,7 @@ def run(semantic=False):
 
     # hipercampo (varias configuraciones) --------------------------------
     def make_hc(ns, hops=1, semantic_hook=False):
-        from hipercampo import encoder
+        from hipercampo.core import encoder
         encoder.set_semantic_hook(None)
         if semantic_hook:
             encoder.enable_semantic()

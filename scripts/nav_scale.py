@@ -15,8 +15,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.store import Store  # noqa: E402
-from hipercampo.vsa import random_hv  # noqa: E402
+from hipercampo.storage.store import Store  # noqa: E402
+from hipercampo.core.vsa import random_hv  # noqa: E402
 
 DB = "data/_nav_scale.db"
 GROUP_SIZE = 100

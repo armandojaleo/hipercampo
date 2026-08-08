@@ -1,15 +1,15 @@
 """
-Caso de uso 1 · Asistente personal con memoria entre sesiones.
-Ejecuta:  python examples/01_personal_assistant.py
+Use case 1 - Personal assistant with memory across sessions.
+Run:  python examples/01_personal_assistant.py
 
-Claude recuerda quién eres y tus preferencias, las actualiza cuando cambian, y
-distingue lo importante de lo trivial. Simula tres "sesiones".
+Claude remembers who you are and your preferences, updates them when they
+change, and tells the important from the trivial apart. Simulates three "sessions".
 """
 
 import sys
 from pathlib import Path
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# UTF-8 output even when redirected (on Windows, cp1252 breaks on «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -17,48 +17,48 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.memory import Hipercampo             # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 DB = "data/ex_assistant.db"
 
 
-def limpiar():
+def cleanup():
     for s in ("", "-wal", "-shm"):
         Path(DB + s).unlink(missing_ok=True)
 
 
 def main():
-    limpiar()
-    hc = Hipercampo(DB, namespace="usuario")
+    cleanup()
+    hc = Hipercampo(DB, namespace="user")
 
-    print("── Sesión 1: te conoce ──")
-    for texto, imp in [("me llamo Ana y soy diseñadora UX", 0.9),
-                       ("prefiero explicaciones visuales con ejemplos", 0.8),
-                       ("uso Figma a diario", 0.6),
-                       ("hoy tengo dolor de cabeza", 0.2)]:
-        r = hc.remember(texto, imp)
-        print(f"  guardado: «{texto}»" if r["stored"] else "  (ya lo sabía)")
+    print("-- Session 1: gets to know you --")
+    for text, imp in [("my name is Ana and I'm a UX designer", 0.9),
+                       ("I prefer visual explanations with examples", 0.8),
+                       ("I use Figma daily", 0.6),
+                       ("I have a headache today", 0.2)]:
+        r = hc.remember(text, imp)
+        print(f"  stored: «{text}»" if r["stored"] else "  (already knew that)")
 
-    print("\n── Sesión 2: un dato cambia ──")
-    r = hc.update("uso Figma a diario", "ahora uso Penpot a diario en vez de Figma")
+    print("\n-- Session 2: a fact changes --")
+    r = hc.update("I use Figma daily", "I now use Penpot daily instead of Figma")
     if r.get("superseded_id"):
-        print(f"  actualizado: Figma → Penpot  "
-              f"(el viejo #{r['superseded_id']} queda como historia)")
+        print(f"  updated: Figma -> Penpot  "
+              f"(the old #{r['superseded_id']} stays as history)")
     else:
-        print("  guardado como dato nuevo (no había match fiable que reemplazar)")
+        print("  stored as a new fact (no reliable match to replace)")
 
-    print("\n── Sesión 3: Claude consulta antes de responder ──")
-    for pregunta in ["¿cómo se llama y a qué se dedica?",
-                     "¿qué herramienta de diseño usa ahora?",
-                     "¿cómo prefiere las explicaciones?"]:
-        hits = hc.recall(pregunta, k=1)
-        resp = hits[0]["text"] if hits else "(no lo sé)"
-        print(f"  P: {pregunta}\n     → {resp}")
+    print("\n-- Session 3: Claude checks before answering --")
+    for question in ["what's their name and what do they do?",
+                     "what design tool do they use now?",
+                     "how do they prefer explanations?"]:
+        hits = hc.recall(question, k=1)
+        resp = hits[0]["text"] if hits else "(don't know)"
+        print(f"  Q: {question}\n     -> {resp}")
 
-    print("\n  Nota: 'Figma' quedó como historia (superado por Penpot); 'dolor de")
-    print("  cabeza' es trivial y se desvanecerá. Lo importante perdura.")
+    print("\n  Note: 'Figma' stayed as history (superseded by Penpot); 'headache'")
+    print("  is trivial and will fade. What matters persists.")
     hc.store.close()
-    limpiar()
+    cleanup()
 
 
 if __name__ == "__main__":

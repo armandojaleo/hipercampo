@@ -27,5 +27,5 @@
       `stress.py` o `baselines.py`)
 - [ ] La documentación refleja el cambio, **incluidas sus limitaciones**
 - [ ] Si uso trabajo de terceros, está declarado con su licencia en
-      [ATTRIBUTION.md](../ATTRIBUTION.md)
+      [ATTRIBUTION.md](../docs/ATTRIBUTION.md)
 - [ ] No introduzco dependencias pesadas en el núcleo (van en un extra opcional)

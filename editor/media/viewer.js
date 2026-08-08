@@ -1,11 +1,11 @@
-// Webview del visor. Sin frameworks ni librerías externas (la CSP bloquea CDNs):
-// DOM + canvas a mano. Habla con la extensión por mensajes.
+// Viewer webview. No frameworks or external libraries (the CSP blocks CDNs):
+// hand-written DOM and canvas code. It communicates with the extension via messages.
 (function () {
   const vscode = acquireVsCodeApi();
   const $ = (id) => document.getElementById(id);
 
-  // --- idioma (es/en) — lo fija la extensión desde vscode.env.language ----------
-  // Comunidad bilingüe: por defecto inglés, español si VS Code está en español.
+  // --- language (es/en), set by the extension from vscode.env.language -----------
+  // Bilingual community: default to English, use Spanish when VS Code does.
   const lang = (document.documentElement.lang || "en").toLowerCase().startsWith("es")
     ? "es" : "en";
   const DICT = {
@@ -194,19 +194,19 @@
   };
   const L = DICT[lang];
 
-  // --- estado ---------------------------------------------------------------
-  let MEM = [];          // nodos (memorias) del último fetch
-  let EDGES = [];        // aristas del grafo
+  // --- state ----------------------------------------------------------------
+  let MEM = [];          // Memory nodes from the latest fetch.
+  let EDGES = [];        // Graph edges.
   let SCOPE = "";
-  let HITS = null;       // resultados de recall/muse (null = no hay búsqueda de agente)
-  let ACTIVE = null;     // Set de namespaces activos (chips); null = todos
+  let HITS = null;       // Recall/muse results; null means no agent search.
+  let ACTIVE = null;     // Set of active namespace chips; null means all.
   let VIEW = "list";
-  let PAUSED = false;    // modo 'no recordar'
-  let NBHD = false;      // Mapa: modo vecindario (solo el nodo elegido + N saltos)
-  let HOPS = 2;          // saltos del vecindario
-  let MAPFOCO = null;    // id del nodo centro del vecindario
+  let PAUSED = false;    // "Don't remember" mode.
+  let NBHD = false;      // Map neighborhood mode: selected node plus N hops.
+  let HOPS = 2;          // Neighborhood hop count.
+  let MAPFOCO = null;    // ID of the neighborhood's center node.
 
-  // --- utilidades -----------------------------------------------------------
+  // --- utilities ------------------------------------------------------------
   const norm = (s) => String(s || "").toLowerCase()
     .normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -216,7 +216,7 @@
     })[c]);
   }
 
-  // Color estable por namespace (mismo proyecto -> mismo tono).
+  // Stable color per namespace: the same project always gets the same hue.
   function hue(ns) {
     let h = 0;
     for (const ch of String(ns || "")) h = (h * 31 + ch.charCodeAt(0)) % 360;
@@ -224,15 +224,15 @@
   }
   const nsColor = (ns) => `hsl(${hue(ns)} 60% 55%)`;
 
-  // Color por ESTADO COGNITIVO del recuerdo (el diferenciador: Obsidian colorea por
-  // carpeta; aquí el color cuenta la VIDA de la memoria). Prioridad: dormido/reemplazado
-  // mandan sobre el tipo; el átomo (fragmento de un documento) va en verde como su arista.
+  // Color by the memory's COGNITIVE STATE (the differentiator: Obsidian colors by
+  // folder; here color tells the memory's LIFE). Priority: dormant/superseded overrides
+  // kind; an atom (document fragment) is green, matching its edge.
   const EST_COL = {
-    episodic: "#5cc8e8",     // cian — hipocampo, fresco
-    semantic: "#d9a648",     // oro — córtex, conocimiento consolidado
-    atom: "#78be8c",         // verde — fragmento → fuente (igual que la arista átomo)
-    superseded: "#c98a8a",   // rojo apagado — verdad cerrada
-    dormant: "#7a7f8a",      // gris — latente
+    episodic: "#5cc8e8",     // Cyan: hippocampus, fresh.
+    semantic: "#d9a648",     // Gold: cortex, consolidated knowledge.
+    atom: "#78be8c",         // Green: fragment → source, matching the atom edge.
+    superseded: "#c98a8a",   // Muted red: closed truth.
+    dormant: "#7a7f8a",      // Gray: dormant.
   };
   const EST_LBL = {
     es: { episodic: "episódico", semantic: "semántico", atom: "átomo",
@@ -257,23 +257,23 @@
     return L.anos((d / 365).toFixed(1));
   }
 
-  // Heurística "pronto latente": débil, viejo y aún despierto. Es aproximada (el
-  // decaimiento real vive en el motor), y se etiqueta como tal en la UI.
+  // "Soon dormant" heuristic: weak, old, and still awake. It is approximate (actual
+  // decay lives in the engine) and is labeled accordingly in the UI.
   function prontoLatente(m) {
     if (m.dormant) return false;
     const edad = (Date.now() / 1000 - (m.last_access || 0)) / 86400;
     return (m.strength || 0) < 0.4 && edad > 7 && (m.importance || 0) < 0.8;
   }
 
-  // átomos = destino de una arista type='atom'. Se calcula una vez por filtro/pintado.
+  // Atoms are destinations of type='atom' edges. Compute once per filter/render pass.
   function atomSetGlobal() {
     const s = new Set();
     for (const e of EDGES) if (e.type === "atom") s.add(e.dst);
     return s;
   }
 
-  // Memorias visibles: chips de namespace + filtro por tipo (estado cognitivo) +
-  // (si modo texto) texto. El tipo usa la MISMA clasificación que el color del Mapa.
+  // Visible memories: namespace chips + kind (cognitive state) filter + text in text
+  // mode. Kind uses the SAME classification as the Map color.
   function visibles() {
     let base = HITS !== null ? HITS : MEM;
     if (ACTIVE) base = base.filter((m) => ACTIVE.has(m.namespace));
@@ -290,8 +290,8 @@
     return base;
   }
 
-  // Orden de la LISTA (client-side). En resultados de recall NO se reordena: el orden
-  // es la relevancia que decidió el motor, y pisarla engañaría sobre qué priorizó.
+  // LIST ordering is client-side. Recall results are NEVER reordered: their order is
+  // the engine's relevance decision, and overriding it would misrepresent its priorities.
   const ORDEN = {
     recent: (a, b) => (b.last_access || 0) - (a.last_access || 0),
     importance: (a, b) => (b.importance || 0) - (a.importance || 0),
@@ -299,7 +299,7 @@
     strength: (a, b) => (b.strength || 0) - (a.strength || 0),
   };
 
-  // --- etiquetas estáticas: se aplican según el idioma al arrancar ----------
+  // --- static labels, applied in the selected language at startup -----------
   function aplicarIdioma() {
     $("q").placeholder = L.filtrar;
     $("mode").title = L.comoBuscar;
@@ -339,10 +339,10 @@
     const emptyPs = $("empty").querySelectorAll("p");
     if (emptyPs[0]) emptyPs[0].textContent = L.vacio;
     if (emptyPs[1]) emptyPs[1].textContent = L.vacioHint;
-    pintarPausa();   // fija el título del botón de pausa según idioma+estado
+    pintarPausa();   // Set the pause-button title from the language and state.
   }
 
-  // --- chips de namespace ---------------------------------------------------
+  // --- namespace chips ------------------------------------------------------
   function pintarChips() {
     const cont = $("chips");
     const todos = [...new Set(MEM.map((m) => m.namespace))].sort();
@@ -356,7 +356,7 @@
       el.textContent = ns;
       el.title = L.chipTitle;
       el.onclick = () => {
-        // Clic = ver SOLO este contexto; volver a pulsarlo (ya aislado) = ver todos.
+        // Click to show ONLY this context; click it again when isolated to show all.
         const soloEste = ACTIVE && ACTIVE.size === 1 && ACTIVE.has(ns);
         ACTIVE = soloEste ? null : new Set([ns]);
         sincronizarAll(todos); pintarChips(); repintar();
@@ -365,20 +365,20 @@
     }
   }
 
-  // El checkbox "todos los contextos" refleja si se ven todos; nunca deja la pantalla
-  // vacía. Marcarlo = ver todos; desmarcarlo = aislar UNO (el primero), no ninguno.
+  // The "all contexts" checkbox reflects whether all are visible and never leaves the
+  // screen empty. Checking shows all; clearing isolates ONE (the first), never none.
   function sincronizarAll(todos) {
     const chk = $("all");
     if (chk) chk.checked = (ACTIVE === null);
   }
 
-  // --- cabecera / contador --------------------------------------------------
+  // --- header / counter -----------------------------------------------------
   function cabecera(n) {
     const total = (HITS !== null ? HITS : MEM).length;
     const sc = $("scope");
     if (HITS !== null) {
-      // Coste del payload que cruzaría al agente por MCP. Estimación honesta (~4 char/tok),
-      // etiquetada como aproximada: el tokenizador exacto de Claude no es público.
+      // Cost of the payload that would cross to the agent over MCP. An honest estimate
+      // (~4 chars/token), labeled approximate because Claude's exact tokenizer is private.
       const tok = Math.max(0, Math.round(JSON.stringify(HITS).length / 4));
       sc.textContent = `${$("mode").value} · ${SCOPE}`;
       sc.title = "";
@@ -391,7 +391,7 @@
     $("count").textContent = n === total ? `${total}` : L.deTotal(n, total);
   }
 
-  // --- repintar la vista activa --------------------------------------------
+  // --- repaint the active view ---------------------------------------------
   function mensajeVacio() {
     const m = $("mode").value;
     if (m !== "text" && HITS === null)
@@ -402,7 +402,7 @@
   }
 
   function repintar() {
-    if (PIDE[VIEW]) return;   // estado/tokens/registro no se pintan desde aquí
+    if (PIDE[VIEW]) return;   // Status/tokens/log are not rendered from here.
     const items = visibles();
     const vacio = items.length === 0;
     $("empty").classList.toggle("hidden", !vacio);
@@ -413,11 +413,11 @@
     else if (VIEW === "graph") renderGraph(items);
     else if (VIEW === "timeline") renderTimeline(items);
     else if (VIEW === "axes") renderAxes(items);
-    else if (VIEW === "status") { /* se pide aparte, ver activarVista */ }
+    else if (VIEW === "status") { /* Requested separately; see activarVista. */ }
   }
 
   // ==========================================================================
-  // LISTA
+  // LIST
   // ==========================================================================
   function metric(label, v) {
     if (v == null) return "";
@@ -479,10 +479,10 @@
   }
 
   function renderList(items) {
-    // Al NAVEGAR (no en resultados de recall), ocultar los átomos: un trozo suelto
-    // ("', consultable por rol.") no es un recuerdo. Se muestra la FUENTE coherente; el
-    // átomo sigue existiendo para el recall preciso y se ve en el Mapa (enlace verde).
-    // Y se aplica el ORDEN elegido (la relevancia del recall no se toca).
+    // While BROWSING (not in recall results), hide atoms: an isolated fragment such as
+    // "', queryable by role." is not a memory. Show its coherent SOURCE instead. The atom
+    // remains available for precise recall and appears on the Map (green edge). Apply the
+    // chosen SORT too; recall relevance remains untouched.
     if (HITS === null) {
       const hijos = atomSetGlobal();
       if (hijos.size) items = items.filter((m) => !hijos.has(m.id));
@@ -497,21 +497,22 @@
   }
 
   // ==========================================================================
-  // MAPA (grafo force-directed en canvas)
+  // MAP (force-directed graph on canvas)
   // ==========================================================================
-  let G = null;             // estado del grafo (nodos con posición, cámara, animación)
-  const GPOS = new Map();   // id -> {x,y} PERSISTENTE entre refrescos (no re-baila)
+  let G = null;             // Graph state: positioned nodes, camera, and animation.
+  const GPOS = new Map();   // id -> {x,y}, PERSISTENT across refreshes (no reshuffling).
 
   const firmaNodos = (items) => items.map((m) => m.id).sort((a, b) => a - b).join(",");
 
-  // átomos = destino de una arista type='atom' (src=fuente, dst=átomo). Se colorean aparte.
+  // Atoms are type='atom' edge targets (src=source, dst=atom). Color them separately.
   const atomosDe = (aristas) => new Set(aristas.filter((e) => e.type === "atom").map((e) => e.dst));
 
-  // Vecindario a N saltos de un nodo (BFS sobre las aristas visibles, en ambos sentidos).
-  // Es la clave de legibilidad: con 222 nodos, ver solo un barrio se lee; el todo no.
+  // A node's N-hop neighborhood (BFS over visible edges in both directions).
+  // This is essential for legibility: a neighborhood of a 222-node graph is readable;
+  // the entire graph is not.
   function vecindarioIds(focoId, items, hops) {
     const idset = new Set(items.map((m) => m.id));
-    if (!idset.has(focoId)) return idset;   // el foco ya no está: no filtrar
+    if (!idset.has(focoId)) return idset;   // The focus is gone: do not filter.
     const ady = new Map();
     const une = (a, b) => { if (!ady.has(a)) ady.set(a, []); ady.get(a).push(b); };
     for (const e of EDGES) {
@@ -530,7 +531,7 @@
     return vistos;
   }
 
-  // Nodo con más conexiones (para arrancar el vecindario sin que el usuario elija).
+  // Most-connected node, used to start a neighborhood before the user selects one.
   function nodoHub(items) {
     const grado = new Map();
     const idset = new Set(items.map((m) => m.id));
@@ -546,7 +547,7 @@
 
   function renderGraph(items) {
     const canvas = $("graph-canvas");
-    // MODO VECINDARIO: reduce a un barrio legible en vez de la maraña completa.
+    // NEIGHBORHOOD MODE: reduce the full tangle to one readable neighborhood.
     if (NBHD) {
       if (MAPFOCO == null || !items.some((m) => m.id === MAPFOCO)) MAPFOCO = nodoHub(items);
       if (MAPFOCO != null) {
@@ -558,8 +559,8 @@
     const aristas = EDGES.filter((e) => vis.has(e.src) && vis.has(e.dst));
     const sig = firmaNodos(items);
 
-    // MISMO conjunto de nodos (caso típico del auto-refresh): NO resembrar ni
-    // resimular —eso es lo que hacía saltar el mapa—; solo refrescar datos y redibujar.
+    // SAME node set (the typical auto-refresh): do NOT reseed or resimulate—that made
+    // the map jump. Refresh data and redraw only.
     if (G && G.sig === sig) {
       const byId = new Map(items.map((m) => [m.id, m]));
       for (const n of G.nodos) n.m = byId.get(n.id) || n.m;
@@ -568,8 +569,8 @@
       return;
     }
 
-    // Conjunto NUEVO: construir sembrando desde las posiciones guardadas (los nodos
-    // que ya existían se quedan donde estaban; solo los nuevos entran por el círculo).
+    // NEW set: seed from saved positions. Existing nodes stay where they were; only new
+    // ones enter around the circle.
     if (G) cancelAnimationFrame(G.raf);
     const camPrev = G ? { scale: G.scale, ox: G.ox, oy: G.oy, touched: G.camTouched } : null;
     const nodos = items.map((m) => ({ m, id: m.id }));
@@ -585,12 +586,12 @@
       }
       n.vx = 0; n.vy = 0;
     });
-    // RECALENTAMIENTO PROPORCIONAL: si casi todo ya tenía sitio (una recarga con un par
-    // de nodos nuevos), apenas se agita; solo un layout desde cero se calienta del todo.
-    // Así el mapa deja de "no parar de moverse" cuando el agente escribe de fondo.
+    // PROPORTIONAL REHEATING: if nearly everything was already positioned (a refresh
+    // with a couple of new nodes), disturb it minimally. Only a fresh layout heats fully.
+    // This stops the map from moving continuously while the agent writes in the background.
     const alpha0 = nuevos === 0 ? 0.12 : Math.min(1, 0.3 + nuevos / nodos.length);
-    // Auto-encuadre la primera vez (o si el usuario nunca movió la cámara): centra el
-    // grafo en vez de dejarlo amontonado en una esquina.
+    // Auto-fit initially (or while the user has never moved the camera), centering the
+    // graph instead of leaving it clustered in a corner.
     const camTouched = camPrev ? camPrev.touched : false;
     G = { canvas, ctx: canvas.getContext("2d"), nodos, idx, aristas, sig,
       atomSet: atomosDe(aristas),
@@ -604,8 +605,8 @@
   }
 
   function leyenda(items) {
-    // Leyenda por ESTADO (el color de los nodos): solo los estados presentes, para no
-    // llenar de ruido. Los namespaces siguen en los chips de arriba (son un filtro).
+    // STATE legend (node colors): include only states that are present to avoid noise.
+    // Namespaces remain in the chips above because they are filters.
     const atomSet = G ? G.atomSet : new Set();
     const presentes = [...new Set(items.map((m) => estadoNodo(m, atomSet)))];
     const orden = ["episodic", "semantic", "atom", "superseded", "dormant"];
@@ -630,15 +631,15 @@
     cancelAnimationFrame(G.raf);
     if (alpha0 != null) G.alpha = alpha0;
     const paso = () => {
-      // Se detiene si no estamos en el mapa o si el panel no se ve: cero CPU en reposo.
+      // Stop outside the map or while its panel is hidden: zero idle CPU usage.
       if (!G || VIEW !== "graph" || document.hidden) { G.raf = 0; return; }
       if (!G.drag) tick();
-      G.alpha *= 0.94;   // enfría más rápido: el mapa se asienta antes y deja de vibrar
-      // al ASENTARSE: encuadrar una vez (si el usuario no ha tocado la cámara) y CONGELAR.
+      G.alpha *= 0.94;   // Cool quickly so the map settles sooner and stops vibrating.
+      // On SETTLE: fit once (unless the user moved the camera), then FREEZE.
       if (G.alpha <= 0.03 && !G.drag) {
         if (G.fitPending && !G.camTouched) { G.fitPending = false; encuadrar(); }
         else dibujarGrafo();
-        G.raf = 0;                       // congelado: ni un frame más hasta que algo lo pida
+        G.raf = 0;                       // Frozen: no more frames until requested.
         return;
       }
       dibujarGrafo();
@@ -649,7 +650,7 @@
 
   function tick() {
     const N = G.nodos, E = G.aristas, a = G.alpha;
-    const K = 6000;   // repulsión
+    const K = 6000;   // Repulsion.
     for (let i = 0; i < N.length; i++) {
       let fx = 0, fy = 0;
       const ni = N[i];
@@ -659,24 +660,24 @@
         let dx = ni.x - nj.x, dy = ni.y - nj.y;
         let d2 = dx * dx + dy * dy;
         if (d2 < 25) { d2 = 25; if (dx === 0 && dy === 0) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; } }
-        const f = Math.min(K / d2, 400);   // cap: dos nodos casi encima no generan una fuerza infinita
+        const f = Math.min(K / d2, 400);   // Cap: overlapping nodes cannot create infinite force.
         const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
         fx += (dx / d) * f; fy += (dy / d) * f;
       }
-      // gravedad al centro, MÁS FUERTE cuanto más lejos: evita que los nodos poco
-      // conectados salgan disparados fuera de la vista (los "puntos dispares" lejanos).
+      // Center gravity grows STRONGER with distance, preventing weakly connected nodes
+      // from flying out of view as distant outliers.
       const dist = Math.hypot(ni.x, ni.y);
       const g = 0.03 + (dist > 700 ? (dist - 700) * 0.0004 : 0);
       fx += -ni.x * g; fy += -ni.y * g;
       ni.fx = fx; ni.fy = fy;
     }
-    for (const e of E) {                          // muelles por arista
+    for (const e of E) {                          // One spring per edge.
       const s = N[G.idx.get(e.src)], t = N[G.idx.get(e.dst)];
       if (!s || !t) continue;
       let dx = t.x - s.x, dy = t.y - s.y;
       const d = Math.hypot(dx, dy) || 0.01;
-      // los knn son muchos: muelle más largo y flojo para que el clúster respire y no
-      // se colapse en una pelota; los enlaces con significado tiran más y juntan.
+      // k-NN edges are numerous: use longer, looser springs so clusters breathe instead
+      // of collapsing into a ball. Meaningful links pull harder and draw nodes together.
       const knn = e.type === "knn";
       const rest = knn ? 130 : 70;
       const f = (d - rest) * (knn ? 0.006 : 0.02) * (0.4 + (e.weight || 0.5));
@@ -686,14 +687,14 @@
     for (const n of N) {
       if (n === (G.drag && G.drag.node)) continue;
       let vx = (n.vx + n.fx * a) * 0.85, vy = (n.vy + n.fy * a) * 0.85;
-      if (!isFinite(vx)) vx = 0; if (!isFinite(vy)) vy = 0;   // nunca dejar que NaN contamine
-      const sp = Math.hypot(vx, vy);                          // límite de velocidad: sin latigazos
+      if (!isFinite(vx)) vx = 0; if (!isFinite(vy)) vy = 0;   // Never let NaN propagate.
+      const sp = Math.hypot(vx, vy);                          // Speed limit prevents snapping.
       if (sp > 40) { vx *= 40 / sp; vy *= 40 / sp; }
       n.vx = vx; n.vy = vy;
       n.x += vx; n.y += vy;
-      const rad = Math.hypot(n.x, n.y);                       // frontera dura: nada se escapa del lienzo
+      const rad = Math.hypot(n.x, n.y);                       // Hard boundary: keep everything on canvas.
       if (rad > 1600) { n.x *= 1600 / rad; n.y *= 1600 / rad; n.vx = 0; n.vy = 0; }
-      GPOS.set(n.id, { x: n.x, y: n.y });   // recordar dónde quedó, para el próximo refresco
+      GPOS.set(n.id, { x: n.x, y: n.y });   // Preserve the position for the next refresh.
     }
   }
 
@@ -703,17 +704,17 @@
 
   function dibujarGrafo() {
     const { ctx, w, h } = G;
-    // el NODO en foco (hover manda sobre selección) rige el resaltado de vecinos.
+    // The focused NODE controls neighbor highlighting; hover takes priority over selection.
     const foco = G.hover || G.sel;
     ctx.clearRect(0, 0, w, h);
-    // aristas
+    // Edges.
     for (const e of G.aristas) {
       const s = G.nodos[G.idx.get(e.src)], t = G.nodos[G.idx.get(e.dst)];
       if (!s || !t) continue;
       const a = toScreen(s), b = toScreen(t);
       const puente = e.status === "proposed" || e.type === "bridge" || e.type === "dream";
-      const knn = e.type === "knn";   // estructura de navegación: fina y tenue
-      const atomo = e.type === "atom"; // átomo -> su texto fuente: se muestra claro
+      const knn = e.type === "knn";   // Navigation structure: thin and subtle.
+      const atomo = e.type === "atom"; // Atom → source text: draw clearly.
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
       ctx.strokeStyle = puente ? getVar("--vscode-textLink-foreground")
         : atomo ? "rgba(120,190,140,.6)"
@@ -725,9 +726,9 @@
       ctx.stroke(); ctx.globalAlpha = 1;
     }
     ctx.setLineDash([]);
-    // nodos — círculo con GLOW suave del color de su estado (look "constelación")
-    // ETIQUETAS: solo el nodo en foco y sus vecinos directos (estilo Obsidian: el texto
-    // aparece al posar el ratón, no todo a la vez —222 textos era ilegible—).
+    // Nodes: circles with a soft state-colored GLOW for a constellation appearance.
+    // LABELS: only the focused node and its direct neighbors. As in Obsidian, text
+    // appears on hover rather than all at once—222 simultaneous labels were illegible.
     const etiquetar = [];
     for (const n of G.nodos) {
       const p = toScreen(n);
@@ -746,7 +747,7 @@
       ctx.globalAlpha = 1;
       if (enFoco) etiquetar.push({ n, p, r, principal: n.id === foco });
     }
-    // etiquetas encima de todo, con halo para que se lean sobre cualquier tema
+    // Draw labels above everything, with a halo that remains readable in any theme.
     if (etiquetar.length) {
       ctx.font = "11px " + (getVar("--vscode-font-family") || "sans-serif");
       ctx.textBaseline = "middle";
@@ -763,8 +764,8 @@
     }
   }
 
-  // Encuadra el GRUESO de los nodos en el lienzo (zoom-to-fit). Usa percentiles 5–95
-  // en vez de min/max: así un nodo suelto y lejano no encoge todo el mapa a un punto.
+  // Fit the BULK of nodes on canvas. Use the 5th–95th percentiles instead of min/max so
+  // one distant outlier does not shrink the entire map to a point.
   function encuadrar() {
     if (!G || !G.nodos.length) return;
     const xs = G.nodos.map((n) => n.x).filter(isFinite).sort((a, b) => a - b);
@@ -809,7 +810,7 @@
       const n = nodoEn(mx, my);
       if (n) {
         G.sel = n.id; detalle(n.m);
-        // en modo vecindario, clicar un nodo recentra el barrio en él.
+        // In neighborhood mode, clicking a node recenters the neighborhood on it.
         if (NBHD) { MAPFOCO = n.id; renderGraph(visibles()); return; }
         G.drag = { node: n, dx: 0, dy: 0 };
         correrSim();
@@ -824,7 +825,7 @@
         else { const n = G.drag.node; n.x = (mx - G.w / 2 - G.ox) / G.scale; n.y = (my - G.h / 2 - G.oy) / G.scale; n.vx = n.vy = 0; GPOS.set(n.id, { x: n.x, y: n.y }); dibujarGrafo(); }
         return;
       }
-      // HOVER (sin arrastrar): ilumina el nodo y sus vecinos, atenúa el resto.
+      // HOVER without dragging: highlight the node and its neighbors; dim the rest.
       const n = nodoEn(mx, my);
       const id = n ? n.id : null;
       c.style.cursor = n ? "pointer" : "default";
@@ -860,7 +861,7 @@
   }
 
   // ==========================================================================
-  // TIEMPO
+  // TIMELINE
   // ==========================================================================
   function renderTimeline(items) {
     const c = $("view-timeline");
@@ -878,7 +879,7 @@
   }
 
   // ==========================================================================
-  // EJES (scatter importancia × fiabilidad)
+  // AXES (importance × reliability scatter plot)
   // ==========================================================================
   let AX = null;
   function renderAxes(items) {
@@ -890,7 +891,7 @@
     ctx.clearRect(0, 0, W, H);
     const px = (v) => pad + v * (W - pad * 1.5);
     const py = (v) => (H - pad) - v * (H - pad * 1.5);
-    // ejes
+    // Axes.
     ctx.strokeStyle = "rgba(140,140,140,.5)"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(pad, H - pad); ctx.lineTo(W - pad / 2, H - pad);
     ctx.moveTo(pad, H - pad); ctx.lineTo(pad, pad / 2); ctx.stroke();
@@ -898,7 +899,7 @@
     ctx.fillText(L.axImportancia, W - 110, H - pad + 16);
     ctx.save(); ctx.translate(14, pad + 60); ctx.rotate(-Math.PI / 2);
     ctx.fillText(L.axFiabilidad, 0, 0); ctx.restore();
-    // guía diagonal (importante pero poco fiable = arriba-izq / abajo-der)
+    // Diagonal guide: important but unreliable runs from top-left to bottom-right.
     AX = { canvas, pts: [] };
     for (const m of items) {
       const x = px(m.importance || 0), y = py(m.confidence || 0);
@@ -932,7 +933,7 @@
   }
 
   // ==========================================================================
-  // ESTADO (salud: CLI, BD, servidor MCP, registro)
+  // STATUS (health of the CLI, database, MCP server, and log)
   // ==========================================================================
   function bytes(n) {
     if (n == null) return L.guion;
@@ -947,8 +948,8 @@
     if (!s) { c.innerHTML = `<p class="hint">${L.consultandoEstado}</p>`; return; }
     const db = s.db || {}, mcp = s.mcp || {}, log = s.log || {}, st = s.stats || {};
     const schemaOk = db.schema === db.schema_expected;
-    // El hueco del semáforo SIEMPRE se reserva (aunque la fila no tenga estado), para
-    // que todas las etiquetas alineen en la misma columna y no queden dentadas.
+    // ALWAYS reserve the status-light slot, even for rows without a state, so labels
+    // align in one column rather than appearing jagged.
     const fila = (label, val, ok) =>
       `<div class="strow"><span class="sem ${ok === undefined ? "none" : ok ? "ok" : "no"}">`
       + `${ok === undefined ? "" : ok ? "●" : "○"}</span>`
@@ -970,14 +971,14 @@
       + `</div>`
       + `<div class="scard"><h3>${L.hMemoria}</h3>`
       + fila(L.sTotal, L.sRecuerdos(st.total ?? "?"))
-      + fila(L.sEpisodicos, st.episodicos_activos ?? L.guion)
-      + fila(L.sSemanticos, st.semanticos ?? L.guion)
-      + fila(L.sLatentes, st.latentes ?? L.guion)
-      + fila(L.sArchivados, st.archivados ?? L.guion)
-      + (st.por_contexto ? Object.entries(st.por_contexto).sort((a, b) => b[1] - a[1])
+      + fila(L.sEpisodicos, st.active_episodic ?? L.guion)
+      + fila(L.sSemanticos, st.semantic ?? L.guion)
+      + fila(L.sLatentes, st.dormant ?? L.guion)
+      + fila(L.sArchivados, st.archived ?? L.guion)
+      + (st.by_context ? Object.entries(st.by_context).sort((a, b) => b[1] - a[1])
           .map(([ns, n]) => fila(`· ${esc(ns)}`,
             `<span style="color:${nsColor(ns)}">${n}</span>`)).join("") : "")
-      + (st.tokens ? fila(L.sTokensTurno, st.tokens.presupuesto_por_turno ?? L.guion) : "")
+      + (st.tokens ? fila(L.sTokensTurno, st.tokens.budget_per_turn ?? L.guion) : "")
       + `</div>`
       + `<div class="scard"><h3>${L.hMCP}</h3>`
       + fila(L.sEnMarcha, mcp.running ? L.sMcpSi(mcp.running) : L.sMcpNo, mcp.running > 0)
@@ -1011,7 +1012,7 @@
         else if (b.dataset.cmd === "open-log")
           vscode.postMessage({ type: "open-log", path: b.dataset.path || "" });
         else if (b.dataset.cmd === "refresh-status") {
-          renderStatus(null);                 // "consultando…"
+          renderStatus(null);                 // "Checking…"
           vscode.postMessage({ type: "status-request" });
         }
         else if (b.dataset.cmd === "kill")
@@ -1021,18 +1022,18 @@
   }
 
   // ==========================================================================
-  // TOKENS (la factura de la casa, hecha visible)
+  // TOKENS (making the project's bill visible)
   // ==========================================================================
   function renderTokens(d) {
     const c = $("view-tokens");
     if (!d) { c.innerHTML = `<p class="hint">${L.calculandoFactura}</p>`; return; }
     const s = d.summary || {}, serie = d.series || [];
-    const media = s.media_por_inyeccion || 0, presup = s.presupuesto_hook || 350;
+    const media = s.avg_per_injection || 0, presup = s.hook_budget || 350;
     const usoPct = Math.min(100, Math.round((media / presup) * 100));
     const ult = serie.slice(-48);
     const maxTok = Math.max(1, ...ult.map((x) => x.tok));
-    // mini-gráfico: últimas ~48 inyecciones como barras. El valor se lee arriba al pasar
-    // el ratón (data-*), porque escribirlo en cada barra sería ilegible.
+    // Mini-chart: the latest ~48 injections as bars. Hover reads the value above via
+    // data-* attributes; writing a value on every bar would be illegible.
     const barras = ult.map((x, i) => {
       const h = Math.round((x.tok / maxTok) * 100);
       const over = x.tok > presup;
@@ -1042,9 +1043,9 @@
     c.innerHTML =
       `<div class="hero">`
       + `<div class="hnum"><span class="hbig">${s.total ?? 0}</span><span class="hlbl">${L.tGastados}</span></div>`
-      + `<div class="hnum good"><span class="hbig">${s.ahorrado_por_presupuesto ?? 0}</span><span class="hlbl">${L.tAhorrados}</span></div>`
-      + `<div class="hnum"><span class="hbig">${s.inyecciones ?? 0}</span><span class="hlbl">${L.tInyecciones}</span></div>`
-      + `<div class="hnum"><span class="hbig">${s.hoy ?? 0}</span><span class="hlbl">${L.tHoy}</span></div>`
+      + `<div class="hnum good"><span class="hbig">${s.saved_by_budget ?? 0}</span><span class="hlbl">${L.tAhorrados}</span></div>`
+      + `<div class="hnum"><span class="hbig">${s.injections ?? 0}</span><span class="hlbl">${L.tInyecciones}</span></div>`
+      + `<div class="hnum"><span class="hbig">${s.today ?? 0}</span><span class="hlbl">${L.tHoy}</span></div>`
       + `</div>`
       + `<div class="scard"><h3>${L.tMediaVs}</h3>`
       + `<div class="gauge"><span class="gfill" style="width:${usoPct}%"></span>`
@@ -1055,15 +1056,15 @@
       + `<b>${presup}</b> ${L.tTokTurno} `
       + `<button class="sbtn" data-budget="50" title="+50">+</button> `
       + `<button class="sbtn" data-budget="reset">${L.tReset}</button></span></div>`
-      + `<div class="strow"><span class="slabel">${L.tPresupId}</span><span class="sval">${s.presupuesto_identidad ?? L.guion} ${L.tTok}</span></div>`
+      + `<div class="strow"><span class="slabel">${L.tPresupId}</span><span class="sval">${s.identity_budget ?? L.guion} ${L.tTok}</span></div>`
       + `</div>`
       + (serie.length
           ? `<div class="scard"><h3>${L.tHistoria(serie.length)}</h3>`
             + `<div id="tok-readout" class="tok-readout">&nbsp;</div>`
             + `<div class="chart">${barras}</div></div>`
           : "")
-      + `<p class="hint">${L.tEstimacion(esc(s.metodo || ""))}</p>`;
-    // Lector del valor de cada barra al pasar el ratón (delegación en el contenedor).
+      + `<p class="hint">${L.tEstimacion(esc(s.method || ""))}</p>`;
+    // Read each bar's value on hover through container-level event delegation.
     const chart = c.querySelector(".chart"), ro = $("tok-readout");
     if (chart && ro) {
       chart.addEventListener("pointermove", (e) => {
@@ -1084,7 +1085,7 @@
   }
 
   // ==========================================================================
-  // REGISTRO (el log de decisiones, en vivo y coloreado)
+  // LOG (live, color-coded decision log)
   // ==========================================================================
   const LOG_COL = {
     recall: "#4aa3df", remember: "#7ec36b", update: "#7ec36b", sleep: "#c48ae0",
@@ -1094,22 +1095,22 @@
   function renderLog(d) {
     const c = $("view-log");
     if (!d) { c.innerHTML = `<p class="hint">${L.leyendoRegistro}</p>`; return; }
-    const ent = (d.entries || []).slice().reverse();   // más reciente arriba
+    const ent = (d.entries || []).slice().reverse();   // Newest first.
     if (!ent.length) {
       c.innerHTML = `<p class="hint">${L.registroVacio}</p>`;
       return;
     }
     c.innerHTML = ent.map((e) => {
-      const col = LOG_COL[e.accion] || "var(--vscode-descriptionForeground)";
+      const col = LOG_COL[e.action] || "var(--vscode-descriptionForeground)";
       const hora = (e.ts || "").slice(11);
       return `<div class="lrow"><span class="ltime">${esc(hora)}</span>`
-        + `<span class="lact" style="color:${col};border-color:${col}">${esc(e.accion || "?")}</span>`
-        + `<span class="lmsg">${esc(e.mensaje || "")}</span></div>`;
+        + `<span class="lact" style="color:${col};border-color:${col}">${esc(e.action || "?")}</span>`
+        + `<span class="lmsg">${esc(e.message || "")}</span></div>`;
     }).join("");
   }
 
   // ==========================================================================
-  // IDEAS (puentes que propone el sueño: hipótesis, no evidencia)
+  // IDEAS (bridges proposed by dreaming: hypotheses, not evidence)
   // ==========================================================================
   function renderIdeasDiagnostic(diag) {
     if (!diag) return "";
@@ -1145,7 +1146,7 @@
   }
 
   // ==========================================================================
-  // HECHOS (role-records: el diferenciador VSA, hecho visible)
+  // FACTS (role records: making the VSA differentiator visible)
   // ==========================================================================
   const _ROLES = ["subject", "predicate", "object", "time", "source"];
   function renderFacts(d) {
@@ -1161,9 +1162,9 @@
     c.innerHTML = `<p class="hint">${L.factsIntro}</p>` + fs.map((f) => {
       const extra = _ROLES.slice(3).filter((r) => f.fields[r])
         .map((r) => `${esc(r)}: ${esc(f.fields[r])}`).join(" · ");
-      const estado = f.vigente ? "" : `<span class="fact-old">${L.factsCerrado}</span>`;
+      const estado = f.current ? "" : `<span class="fact-old">${L.factsCerrado}</span>`;
       const ctx = f.context ? `<span class="fact-ctx">⟨${esc(f.context)}⟩</span>` : "";
-      return `<div class="fact${f.vigente ? "" : " cerrado"}">`
+      return `<div class="fact${f.current ? "" : " cerrado"}">`
         + `<div class="fact-head"><span class="id">#${f.id}</span>${ctx}${estado}</div>`
         + `<div class="fact-triple">${chip(f)}</div>`
         + (extra ? `<div class="fact-extra"><small>${extra}</small></div>` : "")
@@ -1172,7 +1173,7 @@
   }
 
   // ==========================================================================
-  // pestañas, búsqueda, mensajes
+  // Tabs, search, and messages.
   // ==========================================================================
   const PIDE = {
     status: () => vscode.postMessage({ type: "status-request" }),
@@ -1190,7 +1191,7 @@
     document.querySelectorAll(".view").forEach((s) => s.classList.toggle("active", s.id === "view-" + v));
     if (PIDE[v]) {
       $("empty").classList.add("hidden");
-      PLACEHOLDER_VACIO[v](null);   // "cargando…"
+      PLACEHOLDER_VACIO[v](null);   // "Loading…"
       PIDE[v]();
     } else repintar();
   }
@@ -1211,7 +1212,7 @@
 
   function lanzarBusquedaAgente() {
     const q = $("q").value.trim();
-    if (!q) { HITS = null; repintar(); return; }   // sin semilla: repintar avisa
+    if (!q) { HITS = null; repintar(); return; }   // No seed: repaint displays guidance.
     $("scope").textContent = L.buscandoCon($("mode").value);
     vscode.postMessage({ type: "search", query: q, mode: $("mode").value });
   }
@@ -1222,10 +1223,10 @@
       MEM = msg.memories || []; EDGES = msg.edges || []; SCOPE = msg.scope || "";
       HITS = null; ACTIVE = null;
       PAUSED = !!msg.paused; pintarPausa();
-      const w = $("weave"); if (w) w.disabled = false;   // re-activar tras tejer
+      const w = $("weave"); if (w) w.disabled = false;   // Re-enable after weaving.
       pintarChips();
       if (relanzarBusqueda) { relanzarBusqueda = false; lanzarBusquedaAgente(); return; }
-      if (PIDE[VIEW]) PIDE[VIEW]();   // estado/tokens/registro se re-piden en cada refresco
+      if (PIDE[VIEW]) PIDE[VIEW]();   // Re-request status/tokens/log on every refresh.
       else repintar();
     } else if (msg.type === "search-result") {
       HITS = msg.memories || [];
@@ -1246,17 +1247,17 @@
     }
   });
 
-  // eventos de UI
+  // UI events.
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => activarVista(t.dataset.view));
   $("q").addEventListener("input", () => {
-    if ($("mode").value === "text") repintar();   // filtro instantáneo en cliente
+    if ($("mode").value === "text") repintar();   // Instant client-side filter.
   });
   $("q").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && $("mode").value !== "text") lanzarBusquedaAgente();
   });
   $("mode").addEventListener("change", () => {
     HITS = null;
-    actualizarModo(true);   // cambia el placeholder y enfoca la caja
+    actualizarModo(true);   // Change the placeholder and focus the input.
     if ($("mode").value === "text") repintar(); else lanzarBusquedaAgente();
   });
   $("kind").addEventListener("change", () => repintar());
@@ -1271,9 +1272,9 @@
     HOPS = Number($("hops").value) || 2;
     if (NBHD && VIEW === "graph") renderGraph(visibles());
   });
-  // Refrescar = recargar de disco, SIN borrar la búsqueda. Si había una búsqueda de
-  // agente en curso, se relanza al llegar los datos (bandera). Limpiar la caja es otra
-  // cosa distinta (se hace vaciándola a mano), no lo que espera un botón de refresco.
+  // Refresh reloads from disk WITHOUT clearing the search. If an agent search was active,
+  // a flag reruns it when data arrives. Clearing the input is a separate explicit action,
+  // not what users expect from a refresh button.
   let relanzarBusqueda = false;
   $("refresh").onclick = () => {
     relanzarBusqueda = ($("mode").value !== "text" && !!$("q").value.trim());
@@ -1283,7 +1284,7 @@
     vscode.postMessage({ type: "choose-db" }));
   $("all").addEventListener("change", () => {
     const todos = [...new Set(MEM.map((m) => m.namespace))].sort();
-    // Marcar = ver todos; desmarcar = aislar UNO (nunca dejar la pantalla vacía).
+    // Checking shows all; clearing isolates ONE and never leaves the screen empty.
     ACTIVE = ($("all").checked || !todos.length) ? null : new Set([todos[0]]);
     pintarChips(); repintar();
   });

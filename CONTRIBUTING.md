@@ -42,17 +42,17 @@ El CI ejecuta lo mismo en Python 3.11–3.13, más los benchmarks y los ejemplos
   antes/después.
 - **Documentación honesta**: si tu cambio tiene una pega, dilo en el README/ROADMAP.
 - Mantén el núcleo ligero (numpy + mcp). Lo pesado va en un *extra* opcional y se
-  acredita en [ATTRIBUTION.md](ATTRIBUTION.md).
+  acredita en [ATTRIBUTION.md](docs/ATTRIBUTION.md).
 - Sigue el estilo de alrededor: los comentarios explican el *porqué*, no el *qué*.
 
 ### Atribución
 
 Si usas trabajo de otros —código, datos, un modelo, una idea— **dilo**, con su
-licencia, en [ATTRIBUTION.md](ATTRIBUTION.md). Aquí no es negociable.
+licencia, en [ATTRIBUTION.md](docs/ATTRIBUTION.md). Aquí no es negociable.
 
 ### Buenos primeros aportes
 
-Lo pendiente está en [ROADMAP.md](ROADMAP.md). Algunos autocontenidos:
+Lo pendiente está en [ROADMAP.md](docs/ROADMAP.md). Algunos autocontenidos:
 
 - Persistir los contadores del modelo de sorpresa entre reinicios.
 - Un índice LSH para que la recuperación siga siendo sublineal pasados ~100k recuerdos.
@@ -95,16 +95,16 @@ Python 3.11–3.13 plus benchmarks and examples.
 - **Numbers** for any quality/performance claim — post the before/after.
 - **Honest docs**: if your change has a downside, say so.
 - Keep the core dependency-light (numpy + mcp); heavier things go behind an optional
-  extra and are credited in [ATTRIBUTION.md](ATTRIBUTION.md).
+  extra and are credited in [ATTRIBUTION.md](docs/ATTRIBUTION.md).
 
 ### Attribution
 
 If you use someone else's work — code, data, a model, an idea — **say so**, with its
-licence, in [ATTRIBUTION.md](ATTRIBUTION.md). Non-negotiable here.
+licence, in [ATTRIBUTION.md](docs/ATTRIBUTION.md). Non-negotiable here.
 
 ### Good first contributions
 
-See [ROADMAP.md](ROADMAP.md) (surprise-model persistence, physical purge policy, an
+See [ROADMAP.md](docs/ROADMAP.md) (surprise-model persistence, physical purge policy, an
 LSH index, ablations, external datasets).
 
 Bugs: open an issue. Security: see [SECURITY.md](SECURITY.md). By contributing you

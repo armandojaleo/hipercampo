@@ -17,9 +17,9 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.encoder import encode_text          # noqa: E402
-from hipercampo.memory import Hipercampo             # noqa: E402
-from hipercampo.vsa import similarity                # noqa: E402
+from hipercampo.core.encoder import encode_text          # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
+from hipercampo.core.vsa import similarity                # noqa: E402
 
 
 def parte_A():

@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/hipercampo)](https://pypi.org/project/hipercampo/)
 [![Downloads](https://static.pepy.tech/badge/hipercampo)](https://pepy.tech/project/hipercampo)
 
-🌍 **Español: [README.es.md](README.es.md)** · You are reading the English version.
+🌍 **Español: [README.es.md](docs/README.es.md)** · You are reading the English version.
 
 **A living memory for AI agents — Claude, Codex, and whatever comes next — built on hypervectors, not embeddings.**
 
@@ -30,7 +30,7 @@ modeled on the hippocampus, with four ideas integrated into a cycle:
 
 ---
 
-## Install (full guide: [INSTALL.md](INSTALL.md))
+## Install (full guide: [INSTALL.md](docs/INSTALL.md))
 
 **Quick path — from PyPI:**
 
@@ -55,7 +55,7 @@ python scripts/demo.py                # watch the cycle run
 Restart your MCP client and you'll have 18 memory tools (`hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`, `hc_remember_fact`, `hc_ask_role`,
 `hc_assist`, `hc_sleep`, `hc_consolidate`, `hc_forget`, `hc_health`, `hc_stats`). For Docker, Claude Desktop,
-`.mcp.json`, verification and troubleshooting → **[INSTALL.md](INSTALL.md)**.
+`.mcp.json`, verification and troubleshooting → **[INSTALL.md](docs/INSTALL.md)**.
 
 ---
 
@@ -124,7 +124,7 @@ Honest reading:
   brings false-recall to **0.00** here — better than embeddings' cosine cutoff (0.20).
 - **Honest about scale**: 0.00 is at N=20. On the N=500 sweep the rate settles at
   **0.17** (lexical) / **~0.10** (semantic) — still on par with embeddings, but not zero.
-  Small, synthetic corpus: a signal, not proof at scale. See [ROADMAP.md](ROADMAP.md).
+  Small, synthetic corpus: a signal, not proof at scale. See [ROADMAP.md](docs/ROADMAP.md).
 
 ## Scale & latency (measured)
 
@@ -203,7 +203,7 @@ Forgetting combines the last three into a transparent *retention*
 
 The thing embeddings **can't** do: ask *who did what to whom* and get the right
 answer by role. A fact is encoded by binding each value to its ROLE and bundling —
-then you recover any field by *unbinding* (`hipercampo/roles.py`):
+then you recover any field by *unbinding* (`hipercampo/cycle/roles.py`):
 
 ```python
 from hipercampo.roles import ItemMemory, encode_fact, query_role
@@ -218,7 +218,7 @@ dog"* have the **same values** but the recovered subject/object are **swapped** 
 dense embedding places them at nearly the same point; VSA keeps them distinct.
 Measured: correct filler recovered per role with a clear margin (0.74 vs 0.54),
 capacity up to 5 roles. Wiring these role-records into the live MCP cycle is next
-(see [ROADMAP.md](ROADMAP.md)).
+(see [ROADMAP.md](docs/ROADMAP.md)).
 
 ## Contexts, Docker, security
 
@@ -237,14 +237,14 @@ the ones you link:
 What is linked is **read, never touched**: storing, reinforcing, forgetting and
 consolidating operate on your own drawer alone, and a project that is not linked is
 invisible. The full map, with read and write arrows, is in
-**[INSTALL.md](INSTALL.md)**.
+**[INSTALL.md](docs/INSTALL.md)**.
 
 - You can also isolate by **separate files** (`HIPERCAMPO_DB`) instead of
   namespaces. **Local** isolation, not multi-user security — hipercampo is
   local-first. See [SECURITY.md](SECURITY.md).
 - **Docker**: `docker compose build && docker compose run --rm hipercampo`.
 - **Security**: retrieved text is **data, not instructions**. Built-in safeguards
-  (`hipercampo/safety.py`): `hc_remember` warns on likely **secrets** (plaintext DB),
+  (`hipercampo/support/safety.py`): `hc_remember` warns on likely **secrets** (plaintext DB),
   `hc_recall` flags memories that look like **injected instructions** as `untrusted`.
   They warn, not block. Details in [SECURITY.md](SECURITY.md).
 
@@ -283,7 +283,7 @@ we explore a different paradigm, with its limits measured.
 ## License & attribution
 
 MIT (see [LICENSE](LICENSE)). Original code; dependencies and ideas credited in
-[ATTRIBUTION.md](ATTRIBUTION.md). House rule: **if we use others' work, especially
+[ATTRIBUTION.md](docs/ATTRIBUTION.md). House rule: **if we use others' work, especially
 copyrighted, we say so.**
 
 ## Could this be a product? (spin-off, stated openly)

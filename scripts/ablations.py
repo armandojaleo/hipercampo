@@ -11,8 +11,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo import audit, config, memory  # noqa: E402
-from hipercampo.memory import Hipercampo  # noqa: E402
+from hipercampo.support import audit, config  # noqa: E402
+from hipercampo.cycle import memory
+from hipercampo.cycle.memory import Hipercampo  # noqa: E402
 from scripts.calibrate import relleno  # noqa: E402
 from scripts.stress import CASOS, DISTRACTORES  # noqa: E402
 

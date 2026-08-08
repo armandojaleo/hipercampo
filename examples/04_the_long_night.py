@@ -1,11 +1,12 @@
 """
-Caso de uso 4 (largo) · Una noche de incubación: sorpresa, sueño, poda y EUREKA.
-Ejecuta:  python examples/04_the_long_night.py
+Use case 4 (long) - A night of incubation: surprise, sleep, pruning and EUREKA.
+Run:  python examples/04_the_long_night.py
 
-Sigue a una investigadora durante semanas: acumula recuerdos (trabajo + vida),
-DUERME (consolida), el tiempo PODA lo trivial a estado latente, SUEÑA (teje puentes
-entre ideas lejanas) y, al final, `muse` ata un recuerdo sepultado con el problema
-actual: la eureka. Todo emerge de la mecánica, no está guionizado.
+Follows a researcher over several weeks: piles up memories (work + life),
+SLEEPS (consolidates), time PRUNES the trivial ones into dormant state,
+DREAMS (weaves bridges between distant ideas) and, at the end, `muse` ties a
+buried memory to the current problem: the eureka moment. Everything emerges
+from the mechanics, none of it is scripted.
 """
 
 import sys
@@ -13,7 +14,7 @@ import time
 from pathlib import Path
 
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# UTF-8 output even when redirected (on Windows, cp1252 breaks on «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -21,83 +22,83 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.memory import Hipercampo             # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 DB = "data/ex_long.db"
 
 
-def limpiar():
+def cleanup():
     for s in ("", "-wal", "-shm"):
         Path(DB + s).unlink(missing_ok=True)
 
 
-def titulo(t):
-    print("\n" + "═" * 66 + f"\n  {t}\n" + "═" * 66)
+def heading(t):
+    print("\n" + "=" * 66 + f"\n  {t}\n" + "=" * 66)
 
 
 def main():
-    limpiar()
-    hc = Hipercampo(DB, namespace="investigadora")
+    cleanup()
+    hc = Hipercampo(DB, namespace="researcher")
 
-    titulo("SEMANA 1-3 · Acumula recuerdos (trabajo y vida)")
-    recuerdos = [
-        # el problema y su entorno técnico (se irán reforzando/asociando)
-        ("intento que muchos sensores acuerden una hora común sin reloj central", 0.7),
-        ("los sensores solo hablan con sus vecinos más cercanos de la red", 0.6),
-        ("un reloj central sería un punto único de fallo que quiero evitar", 0.6),
-        ("cada sensor ajusta su hora mirando la de sus vecinos poco a poco", 0.6),
-        # vida y lecturas tangenciales (poco reforzadas: se sepultarán)
-        ("de niña veía las luciérnagas del jardín parpadear todas a la vez", 0.3),
-        ("leí que las luciérnagas se sincronizan sin ninguna que dirija", 0.35),
-        ("el café de la esquina cambió su mezcla de tueste este mes", 0.2),
-        ("mi abuela contaba historias de pescadores al anochecer", 0.2),
-        ("el corazón late gracias a células que se acompasan entre vecinas", 0.4),
+    heading("WEEKS 1-3 - Piles up memories (work and life)")
+    memories = [
+        # the problem and its technical context (will keep reinforcing/associating)
+        ("trying to get many sensors to agree on a common time with no central clock", 0.7),
+        ("the sensors only talk to their nearest neighbors in the network", 0.6),
+        ("a central clock would be a single point of failure I want to avoid", 0.6),
+        ("each sensor nudges its clock by looking at its neighbors', bit by bit", 0.6),
+        # life and tangential reading (barely reinforced: will get buried)
+        ("as a kid I watched fireflies in the garden blink all at once", 0.3),
+        ("read that fireflies sync up with no one leading them", 0.35),
+        ("the corner cafe changed its roast blend this month", 0.2),
+        ("my grandmother told stories of fishermen at dusk", 0.2),
+        ("the heart beats thanks to cells that pace each other", 0.4),
     ]
-    for t, imp in recuerdos:
+    for t, imp in memories:
         r = hc.remember(t, imp)
-        print(f"  {'· recordado' if r['stored'] else '· (ya lo sabía)'}: {t[:52]}")
+        print(f"  {'- remembered' if r['stored'] else '- (already knew that)'}: {t[:52]}")
 
-    titulo("FIN DE SEMANA · Duerme: consolida lo repetido")
+    heading("END OF WEEK - Sleeps: consolidates what repeats")
     print("  ", hc.consolidate())
 
-    titulo("PASAN LAS SEMANAS · El tiempo poda lo trivial (a latente)")
+    heading("WEEKS PASS - Time prunes the trivial (into dormant)")
     hc.store.db.execute("UPDATE memories SET last_access = ? WHERE importance < 0.45",
                         (time.time() - 120 * 86400,))
     hc.store.commit()
-    print("  olvido:", hc.forget(dry_run=False))
-    print("  estado:", {k: hc.stats()[k] for k in ("episodicos_activos", "latentes")})
+    print("  forget:", hc.forget(dry_run=False))
+    print("  status:", {k: hc.stats()[k] for k in ("active_episodic", "dormant")})
 
-    titulo("DE MADRUGADA · Sueña: PROPONE puentes entre ideas lejanas")
-    sueno = hc.dream(max_bridges=3, dry_run=False)   # registra como hipótesis
-    for b in sueno.get("bridges", []):
-        print(f"  hipótesis: {b['hypothesis']}")
-    if not sueno.get("bridges"):
-        print("  (esta noche no surgieron puentes nuevos)")
-    print("\n  Nota: son HIPÓTESIS. No influyen en la memoria hasta confirmarlas")
-    print("  con hc_accept_bridge — lo especulativo no contamina lo observado.")
+    heading("LATE AT NIGHT - Dreams: PROPOSES bridges between distant ideas")
+    dream = hc.dream(max_bridges=3, dry_run=False)   # records as hypotheses
+    for b in dream.get("bridges", []):
+        print(f"  hypothesis: {b['hypothesis']}")
+    if not dream.get("bridges"):
+        print("  (no new bridges came up tonight)")
+    print("\n  Note: these are HYPOTHESES. They don't affect the memory until confirmed")
+    print("  with hc_accept_bridge — speculation doesn't contaminate what's observed.")
 
-    titulo("A LA MAÑANA SIGUIENTE · Sigue atascada. Piensa en voz alta:")
-    print("  «necesito que la red se ponga de acuerdo sola, sin nadie al mando»\n")
-    print("  → muse busca inspiración (incluye lo sepultado):\n")
-    ideas = hc.muse("que la red se sincronice sola sin nadie al mando", k=4)
+    heading("THE NEXT MORNING - Still stuck. Thinking out loud:")
+    print("  «I need the network to agree on its own, with nobody in charge»\n")
+    print("  -> muse looks for inspiration (includes what's buried):\n")
+    ideas = hc.muse("getting the network to sync on its own with nobody in charge", k=4)
     for idea in ideas:
-        marca = " ✨ RESURGIÓ de la infancia/lecturas" if idea["resurgido"] else ""
-        print(f"  • «{idea['text']}»{marca}")
-        if idea.get("conectado_por"):
-            print(f"      ↳ por: «{idea['conectado_por'][:55]}»")
+        mark = " ✨ RESURFACED from childhood/reading" if idea["resurfaced"] else ""
+        print(f"  - «{idea['text']}»{mark}")
+        if idea.get("connected_via"):
+            print(f"      -> via: «{idea['connected_via'][:55]}»")
 
-    eureka = next((i for i in ideas if i["resurgido"]), None)
-    titulo("EUREKA")
+    eureka = next((i for i in ideas if i["resurfaced"]), None)
+    heading("EUREKA")
     if eureka:
-        print("  Un recuerdo sepultado resurgió y ató el problema con una analogía:")
+        print("  A buried memory resurfaced and tied the problem to an analogy:")
         print(f"    «{eureka['text']}»")
-        print("  → Y si los sensores se sincronizan COMO LAS LUCIÉRNAGAS: sin líder,")
-        print("    solo mirando a los vecinos y ajustándose... ¡ahí está la solución!")
+        print("  -> What if the sensors sync up LIKE FIREFLIES: no leader,")
+        print("    just watching their neighbors and adjusting... there's the solution!")
     else:
-        print("  (Esta vez no resurgió nada; la incubación no siempre da fruto —")
-        print("   como en la mente real. Vuelve a intentarlo otra noche.)")
+        print("  (Nothing resurfaced this time; incubation doesn't always pay off —")
+        print("   just like in a real mind. Try again another night.)")
     hc.store.close()
-    limpiar()
+    cleanup()
 
 
 if __name__ == "__main__":

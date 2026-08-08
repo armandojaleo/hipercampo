@@ -17,7 +17,7 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.roles import ItemMemory, encode_fact, query_role   # noqa: E402
+from hipercampo.cycle.roles import ItemMemory, encode_fact, query_role   # noqa: E402
 
 
 def linea(c="─"):

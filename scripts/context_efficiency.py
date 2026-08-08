@@ -21,9 +21,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo import audit, config, memory  # noqa: E402
-from hipercampo.budget import es_estimacion, estimate_tokens, metodo  # noqa: E402
-from hipercampo.memory import Hipercampo  # noqa: E402
+from hipercampo.support import audit, config  # noqa: E402
+from hipercampo.cycle import memory
+from hipercampo.support.budget import is_estimate, estimate_tokens, method  # noqa: E402
+from hipercampo.cycle.memory import Hipercampo  # noqa: E402
 from scripts.calibrate import NEGATIVAS  # noqa: E402
 from scripts.stress import CASOS, DISTRACTORES  # noqa: E402
 
@@ -125,8 +126,8 @@ def run_local() -> dict:
                 "p50": statistics.median(tokens),
                 "p95": percentile(tokens, 0.95),
                 "total": sum(tokens),
-                "estimated": es_estimacion(),
-                "method": metodo(),
+                "estimated": is_estimate(),
+                "method": method(),
             },
             "answered_payload_tokens": {
                 "mean": statistics.mean(answered_tokens) if answered_tokens else 0.0,
@@ -252,8 +253,8 @@ def run_longmemeval(path: str | Path, limit: int | None = None,
             "payload_tokens": {
                 "mean": statistics.mean(tokens) if tokens else 0.0,
                 "p95": percentile(tokens, 0.95),
-                "estimated": es_estimacion(),
-                "method": metodo(),
+                "estimated": is_estimate(),
+                "method": method(),
             },
             "answered_payload_tokens": {
                 "mean": statistics.mean(answered_tokens) if answered_tokens else 0.0,

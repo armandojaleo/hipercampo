@@ -26,7 +26,7 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.memory import Hipercampo             # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 # hecho -> {categoria: pregunta}
 CASOS = [
@@ -116,7 +116,7 @@ def cargar():
 
 if __name__ == "__main__":
     if "--semantic" in sys.argv:
-        from hipercampo import encoder
+        from hipercampo.core import encoder
         print("Activando semántica (descarga modelo la 1ª vez)...")
         ok = encoder.enable_semantic()
         print("semántica:", "ACTIVA" if ok else "NO disponible (modo léxico)")

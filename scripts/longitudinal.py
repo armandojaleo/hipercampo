@@ -31,8 +31,9 @@ except Exception:
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hipercampo import audit, config, memory                       # noqa: E402
-from hipercampo.memory import Hipercampo                            # noqa: E402
+from hipercampo.support import audit, config                       # noqa: E402
+from hipercampo.cycle import memory
+from hipercampo.cycle.memory import Hipercampo                            # noqa: E402
 
 DAY = 86400.0
 BASE_EPOCH = 1_600_000_000.0          # un punto de partida fijo y reproducible

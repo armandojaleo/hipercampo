@@ -1,10 +1,10 @@
 """
-Caso de uso 3 · Brainstorming creativo con recuerdos que resurgen.
-Ejecuta:  python examples/03_creative_brainstorm.py
+Use case 3 - Creative brainstorming with memories that resurface.
+Run:  python examples/03_creative_brainstorm.py
 
-La mente no borra: sepulta. Y a veces un recuerdo lejano vuelve y ata una idea
-nueva. hc_muse busca conexiones INDIRECTAS e incluye lo latente, diciendo además
-POR QUÉ conectó cada cosa (el recuerdo puente).
+The mind doesn't erase: it buries. And sometimes a distant memory comes back
+and ties into a new idea. hc_muse looks for INDIRECT connections and
+includes dormant ones, also saying WHY each thing connected (the bridge memory).
 """
 
 import sys
@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# UTF-8 output even when redirected (on Windows, cp1252 breaks on «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -20,49 +20,49 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hipercampo.memory import Hipercampo             # noqa: E402
+from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 DB = "data/ex_muse.db"
 
 
-def limpiar():
+def cleanup():
     for s in ("", "-wal", "-shm"):
         Path(DB + s).unlink(missing_ok=True)
 
 
 def main():
-    limpiar()
-    hc = Hipercampo(DB, namespace="creativo")
+    cleanup()
+    hc = Hipercampo(DB, namespace="creative")
 
-    recuerdos = [
-        ("los hongos micorrízicos conectan árboles bajo tierra y comparten nutrientes", 0.4),
-        ("de joven leí sobre redes de telégrafo del siglo XIX", 0.3),
-        ("un enjambre de hormigas resuelve rutas sin líder central", 0.4),
-        ("estoy diseñando un sistema distribuido sin coordinador único", 0.7),
-        ("las neuronas se refuerzan cuando se activan juntas", 0.5),
+    memories = [
+        ("mycorrhizal fungi connect trees underground and share nutrients", 0.4),
+        ("as a kid I read about 19th century telegraph networks", 0.3),
+        ("an ant swarm solves routes with no central leader", 0.4),
+        ("I'm designing a distributed system with no single coordinator", 0.7),
+        ("neurons reinforce each other when they fire together", 0.5),
     ]
-    for t, imp in recuerdos:
+    for t, imp in memories:
         hc.remember(t, imp)
 
-    # el tiempo entierra lo poco reforzado
+    # time buries what's barely reinforced
     hc.store.db.execute("UPDATE memories SET last_access = ? WHERE importance < 0.45",
                         (time.time() - 120 * 86400,))
     hc.store.commit()
     hc.forget(dry_run=False)
-    print(f"El tiempo pasó. Latentes: {hc.stats()['latentes']}\n")
+    print(f"Time passed. Dormant: {hc.stats()['dormant']}\n")
 
-    print("Pensando: «un sistema distribuido sin coordinador, que se auto-organice»")
-    print("→ muse trae conexiones inesperadas:\n")
-    for idea in hc.muse("un sistema distribuido que se auto-organiza sin líder", k=3):
-        marca = " ✨(resurgido de lo latente)" if idea["resurgido"] else ""
-        print(f"  • «{idea['text']}»{marca}")
-        if idea.get("conectado_por"):
-            print(f"      ↳ conectado por: «{idea['conectado_por']}»")
+    print("Thinking: «a distributed system with no coordinator, that self-organizes»")
+    print("-> muse brings unexpected connections:\n")
+    for idea in hc.muse("a distributed system that self-organizes with no leader", k=3):
+        mark = " ✨(resurfaced from dormant)" if idea["resurfaced"] else ""
+        print(f"  - «{idea['text']}»{mark}")
+        if idea.get("connected_via"):
+            print(f"      -> connected via: «{idea['connected_via']}»")
 
-    print("\n  Una lectura olvidada del telégrafo o los hongos del bosque pueden")
-    print("  inspirar un diseño de hoy. Eso es incubación creativa.")
+    print("\n  A forgotten read about telegraphs or fungi in a forest can inspire")
+    print("  today's design. That's creative incubation.")
     hc.store.close()
-    limpiar()
+    cleanup()
 
 
 if __name__ == "__main__":
