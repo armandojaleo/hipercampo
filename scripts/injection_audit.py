@@ -1,13 +1,13 @@
 """
-AUDITORÍA de la inyección automática (el hook UserPromptSubmit corre en CADA turno).
-Mide lo que de verdad importa para que hipercampo AHORRE tokens en vez de quemarlos:
-  - coste real por turno (media/p95/máx, del registro auditable)
-  - tasa de inyección (cuántos turnos inyectan algo vs se callan)
-  - RELEVANCIA: de lo inyectado, ¿cuánto es del tema (namespace) correcto vs ruido cruzado?
-    (con HIPERCAMPO_LINKED=* se leen TODOS los proyectos: aquí se ve el coste de eso.)
+AUDIT automatic injection (the UserPromptSubmit hook runs on EVERY turn).
+Measure what matters if hipercampo is to SAVE tokens instead of burning them:
+  - actual cost per turn (mean/p95/max from the audit log)
+  - injection rate (how many turns inject something rather than abstaining)
+  - RELEVANCE: how much injected material comes from the right namespace rather
+    than cross-project noise? (HIPERCAMPO_LINKED=* reads ALL projects.)
 
-Uso:
-  python scripts/injection_audit.py            # sobre la memoria real
+Usage:
+  python scripts/injection_audit.py            # against the real memory
   python scripts/injection_audit.py --json
 """
 import argparse
@@ -26,7 +26,8 @@ from hipercampo.support import audit, budget                       # noqa: E402
 from hipercampo.support.config import db_path                       # noqa: E402
 from hipercampo.cycle.memory import Hipercampo                   # noqa: E402
 
-# batería etiquetada por el tema esperado (el namespace que DEBERÍA dominar la inyección)
+# Battery labeled by expected topic (the namespace that SHOULD dominate injection).
+# Spanish prompts are intentional retrieval samples.
 PROMPTS = [
     ("proj-hipercampo", "¿cómo funciona el grafo navegable y el recall en hipercampo?"),
     ("proj-hipercampo", "¿qué decidimos sobre el rumbo del release y las ramas?"),
@@ -41,8 +42,8 @@ PROMPTS = [
 ]
 
 
-def coste_real():
-    """Distribución del coste de inyección del registro auditable real."""
+def actual_cost():
+    """Return the injection-cost distribution from the real audit log."""
     toks = []
     for ln in audit.tail(0, action="tokens"):
         m = re.search(r"(\d+) tok", ln)
@@ -54,44 +55,44 @@ def coste_real():
 
     def p(q):
         return toks[min(len(toks) - 1, int(q * len(toks)))]
-    return {"inyecciones": len(toks), "media": round(sum(toks) / len(toks)),
+    return {"injections": len(toks), "mean": round(sum(toks) / len(toks)),
             "p50": p(0.5), "p95": p(0.95), "max": toks[-1],
-            "caros_>200": sum(1 for t in toks if t > 200)}
+            "expensive_>200": sum(1 for t in toks if t > 200)}
 
 
-def audita_relevancia(ns, linked):
-    hc = Hipercampo(db_path(), namespace=ns, linked=linked)
-    filas = []
+def audit_relevance(namespace, linked):
+    hc = Hipercampo(db_path(), namespace=namespace, linked=linked)
+    rows = []
     try:
-        for tema, prompt in PROMPTS:
-            r = hc.assist(prompt)
-            accion = r.get("action") or "nothing"
-            res = r.get("result") or []
-            # coste igual que el hook: cabecera + recuerdos, recortado al presupuesto
-            lineas = [f"[memoria · {accion}] {r.get('why', '')}"] + \
-                     [f"- {h.get('text', '')}" for h in res]
-            _, gasto = budget.fit_budget(lineas)
-            nss = [h.get("namespace") for h in res if h.get("namespace")]
-            fuera = sum(1 for n in nss if n != tema) if tema not in ("generic",) else 0
-            filas.append({"tema": tema, "accion": accion, "n": len(res),
-                          "tokens": gasto["tokens"], "ns": nss,
-                          "cross": fuera, "total_ns": len(nss)})
+        for topic, prompt in PROMPTS:
+            result = hc.assist(prompt)
+            action = result.get("action") or "nothing"
+            memories = result.get("result") or []
+            # Match hook cost: heading + memories, trimmed to the token budget.
+            lines = [f"[memory · {action}] {result.get('why', '')}"] + \
+                    [f"- {hit.get('text', '')}" for hit in memories]
+            _, usage = budget.fit_budget(lines)
+            namespaces = [hit.get("namespace") for hit in memories if hit.get("namespace")]
+            cross = sum(1 for item in namespaces if item != topic) if topic != "generic" else 0
+            rows.append({"topic": topic, "action": action, "n": len(memories),
+                         "tokens": usage["tokens"], "namespaces": namespaces,
+                         "cross": cross, "total_namespaces": len(namespaces)})
     finally:
         hc.close()
-    return filas
+    return rows
 
 
-def resumen(filas):
-    inyectan = [f for f in filas if f["accion"] != "nothing" and f["n"] > 0]
-    total_ns = sum(f["total_ns"] for f in filas)
-    cross = sum(f["cross"] for f in filas)
-    toks = [f["tokens"] for f in inyectan] or [0]
+def summarize(rows):
+    injected = [row for row in rows if row["action"] != "nothing" and row["n"] > 0]
+    total_namespaces = sum(row["total_namespaces"] for row in rows)
+    cross = sum(row["cross"] for row in rows)
+    tokens = [row["tokens"] for row in injected] or [0]
     return {
-        "prompts": len(filas),
-        "inyeccion_rate": round(len(inyectan) / len(filas), 2),
-        "tokens_medios_cuando_inyecta": round(sum(toks) / len(toks)),
-        "cross_namespace_rate": round(cross / total_ns, 3) if total_ns else 0.0,
-        "recuerdos_inyectados": total_ns, "de_otro_tema": cross,
+        "prompts": len(rows),
+        "injection_rate": round(len(injected) / len(rows), 2),
+        "mean_tokens_when_injecting": round(sum(tokens) / len(tokens)),
+        "cross_namespace_rate": round(cross / total_namespaces, 3) if total_namespaces else 0.0,
+        "injected_memories": total_namespaces, "from_another_topic": cross,
     }
 
 
@@ -100,29 +101,29 @@ def main():
     ap.add_argument("--namespace", default="proj-hipercampo")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    audit.set_logfile(db_path())        # leer el registro REAL (junto a la BD real)
+    audit.set_logfile(db_path())        # Read the REAL log next to the real database.
     audit._ENABLED = False
-    coste = coste_real()
-    # con linking (como el hook real: LINKED=*) vs aislado, para VER el coste del cruce
-    con = resumen(audita_relevancia(a.namespace, "*"))
-    aislado = resumen(audita_relevancia(a.namespace, ""))
-    out = {"coste_real_registro": coste, "linked_*": con, "aislado": aislado}
+    cost = actual_cost()
+    # Compare linking (like the real LINKED=* hook) with an isolated namespace.
+    linked = summarize(audit_relevance(a.namespace, "*"))
+    isolated = summarize(audit_relevance(a.namespace, ""))
+    out = {"actual_log_cost": cost, "linked_*": linked, "isolated": isolated}
     if a.json:
         print(json.dumps(out, ensure_ascii=False, indent=2)); return
-    print("AUDITORÍA DE INYECCIÓN")
+    print("INJECTION AUDIT")
     print("-" * 58)
-    if coste:
-        print(f"coste real (registro): {coste['inyecciones']} inyecciones · "
-              f"media {coste['media']} · p50 {coste['p50']} · p95 {coste['p95']} · "
-              f"máx {coste['max']} tok · caras(>200)={coste['caros_>200']}")
+    if cost:
+        print(f"actual cost (log): {cost['injections']} injections · "
+              f"mean {cost['mean']} · p50 {cost['p50']} · p95 {cost['p95']} · "
+              f"max {cost['max']} tok · expensive(>200)={cost['expensive_>200']}")
     print()
-    print(f"{'':<28}{'LINKED=*':>12}{'aislado':>12}")
-    for k in ("inyeccion_rate", "tokens_medios_cuando_inyecta",
-              "cross_namespace_rate", "de_otro_tema"):
-        print(f"{k:<28}{str(con[k]):>12}{str(aislado[k]):>12}")
+    print(f"{'':<28}{'LINKED=*':>12}{'isolated':>12}")
+    for key in ("injection_rate", "mean_tokens_when_injecting",
+                "cross_namespace_rate", "from_another_topic"):
+        print(f"{key:<28}{str(linked[key]):>12}{str(isolated[key]):>12}")
     print("-" * 58)
-    print("cross_namespace_rate alto = recuerdos de OTRO proyecto colándose "
-          "(ruido que paga tokens cada turno).")
+    print("A high cross_namespace_rate means memories from ANOTHER project are "
+          "leaking in (noise that costs tokens on every turn).")
 
 
 if __name__ == "__main__":

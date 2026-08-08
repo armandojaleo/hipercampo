@@ -1,20 +1,20 @@
 """
-Validación en corpus REAL (no sintético) del grafo navegable.
+Navigable-graph validation on a REAL (non-synthetic) corpus.
 
-El benchmark de escala (`nav_scale.py`) usa clústeres sintéticos a similitud ~0.99:
-trivialmente separables. Aquí se valida sobre TEXTO real y difuso —docstrings de la
-librería estándar de Python, agrupados por módulo (categoría con verdad)—, offline y
-reproducible en cualquier máquina. La pregunta honesta: ¿el titular de b12 (navegar
-recupera como escanear, tocando poco) aguanta fuera del banco sintético?
+The scale benchmark (`nav_scale.py`) uses synthetic clusters at ~0.99 similarity,
+which are trivially separable. This benchmark uses fuzzy REAL TEXT: Python standard
+library docstrings grouped by module (the ground-truth category). It is offline and
+reproducible on any machine. The honest question is whether b12's headline claim
+(navigation retrieves like a scan while touching little) survives real text.
 
-Mide, sobre el MISMO camino de producción (store.reindex_navgraph + store.navgraph +
+It measures the SAME production path (store.reindex_navgraph + store.navgraph +
 graph.search_with_stats):
-  - FIDELIDAD del índice: recall@5 de navegar vs escaneo completo (la verdad),
-  - %visitado, latencia y RSS (coste real para robots),
-  - precisión de GRUPO@5: navegar y escaneo (calidad semántica; será baja en léxico,
-    y ese es justo el cuello de botella conocido de los sinónimos).
+  - index FIDELITY: navigation recall@5 versus a full scan (ground truth),
+  - percentage visited, latency, and RSS (actual cost for agents),
+  - GROUP precision@5 for navigation and scan (semantic quality; it will be low in
+    lexical mode, which is precisely the known synonym bottleneck).
 
-Ejecuta:  python scripts/nav_real.py [--check] [--json]
+Run:  python scripts/nav_real.py [--check] [--json]
 """
 
 import argparse
@@ -43,7 +43,7 @@ from hipercampo.storage.store import Store                    # noqa: E402
 from hipercampo.core.vsa import similarity_batch           # noqa: E402
 
 DB = "data/_nav_real.db"
-MODULOS = ["email", "http", "json", "math", "random", "os", "xml", "unittest",
+MODULES = ["email", "http", "json", "math", "random", "os", "xml", "unittest",
            "logging", "sqlite3", "statistics", "argparse", "collections", "asyncio",
            "socket", "decimal", "datetime", "threading", "hashlib", "urllib",
            "html", "csv", "configparser", "tarfile", "zipfile", "ftplib", "smtplib"]
@@ -63,36 +63,36 @@ def clean() -> None:
         Path(DB + suf).unlink(missing_ok=True)
 
 
-def cosechar() -> tuple[list[str], list[int], list[str]]:
-    """Docstrings reales, etiquetados por módulo. Recorre submódulos para tener volumen."""
-    textos, etiqueta, nombres = [], [], []
-    vistos: set[str] = set()
-    for lbl, raiz in enumerate(MODULOS):
+def harvest() -> tuple[list[str], list[int], list[str]]:
+    """Collect real docstrings labeled by module, including class members for volume."""
+    texts, labels, names = [], [], []
+    seen: set[str] = set()
+    for label, root in enumerate(MODULES):
         try:
-            mod = importlib.import_module(raiz)
+            mod = importlib.import_module(root)
         except Exception:
             continue
-        # Solo miembros de primer nivel: importar submódulos por pkgutil puede ejecutar
-        # código (p.ej. unittest.__main__ corre tests). Con clases y funciones del módulo
-        # basta para tener texto real y volumen suficiente, sin efectos secundarios.
+        # Only top-level members: importing submodules through pkgutil can execute code
+        # (for example unittest.__main__ runs tests). Module classes and functions give
+        # enough real text and volume without those side effects.
         for _, obj in inspect.getmembers(mod):
             try:
                 doc = inspect.getdoc(obj)
-                miembros = inspect.getmembers(obj) if inspect.isclass(obj) else []
+                members = inspect.getmembers(obj) if inspect.isclass(obj) else []
             except Exception:
-                doc, miembros = None, []
-            candidatos = [doc] + [inspect.getdoc(o) for _, o in miembros[:40]]
-            for d in candidatos:
+                doc, members = None, []
+            candidates = [doc] + [inspect.getdoc(item) for _, item in members[:40]]
+            for d in candidates:
                 if not d or len(d) < 80:
                     continue
                 d = " ".join(d.split())[:400]
-                if d in vistos:
+                if d in seen:
                     continue
-                vistos.add(d)
-                textos.append(d)
-                etiqueta.append(lbl)
-                nombres.append(raiz)
-    return textos, etiqueta, nombres
+                seen.add(d)
+                texts.append(d)
+                labels.append(label)
+                names.append(root)
+    return texts, labels, names
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -101,7 +101,7 @@ def percentile(values: list[float], q: float) -> float:
 
 
 def current_rss_mb() -> float:
-    """Memoria residente actual con stdlib, sin convertir psutil en dependencia."""
+    """Return current resident memory using stdlib only, without requiring psutil."""
     try:
         statm = Path("/proc/self/statm")
         if statm.exists():
@@ -146,7 +146,7 @@ def current_rss_mb() -> float:
 
 
 def evaluate(metrics: dict, thresholds: dict | None = None) -> list[str]:
-    """Devuelve regresiones legibles; lista vacía significa que el gate pasa."""
+    """Return readable regressions; an empty list means the gate passes."""
     limits = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     failures = []
     checks = [
@@ -159,11 +159,11 @@ def evaluate(metrics: dict, thresholds: dict | None = None) -> list[str]:
     for name, actual, expected, op in checks:
         failed = actual < expected if op == ">=" else actual > expected
         if failed:
-            failures.append(f"{name}: {actual:.3f} debe ser {op} {expected:.3f}")
+            failures.append(f"{name}: {actual:.3f} must be {op} {expected:.3f}")
     group_gap = metrics["group_scan"] - metrics["group_nav"]
     if group_gap > limits["max_group_gap"]:
         failures.append(
-            f"group_gap: {group_gap:.3f} debe ser <= {limits['max_group_gap']:.3f}"
+            f"group_gap: {group_gap:.3f} must be <= {limits['max_group_gap']:.3f}"
         )
     return failures
 
@@ -171,12 +171,12 @@ def evaluate(metrics: dict, thresholds: dict | None = None) -> list[str]:
 def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
                   shortcuts: int = 2,
                   adaptive_shortcuts: bool = True) -> dict:
-    textos, etiquetas, nombres = cosechar()
-    n = len(textos)
+    texts, labels, names = harvest()
+    n = len(texts)
     if n < 6:
-        raise RuntimeError(f"corpus real insuficiente: {n}")
-    etiqueta = np.array(etiquetas)
-    reparto = {nombre: nombres.count(nombre) for nombre in set(nombres)}
+        raise RuntimeError(f"insufficient real corpus: {n}")
+    label_array = np.array(labels)
+    distribution = {name: names.count(name) for name in set(names)}
 
     clean()
     store = Store(DB, namespace="real")
@@ -184,7 +184,7 @@ def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
         started = time.perf_counter()
         codes, ids = [], []
         with store.transaction():
-            for txt in textos:
+            for txt in texts:
                 hv = encode_text(txt)
                 mid = store.add(txt, hv, 1.0, 0.5, 0.6)
                 codes.append(hv)
@@ -211,7 +211,7 @@ def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
         fidelidad, grupo_nav, grupo_scan, lat, vis = [], [], [], [], []
         for qi in sample:
             qi = int(qi)
-            q, qid, lbl = codes[qi], ids[qi], etiqueta[qi]
+            q, qid, lbl = codes[qi], ids[qi], label_array[qi]
             sims = similarity_batch(q, mat)
             orden = [int(p) for p in np.argsort(sims)[::-1] if int(p) != qi][:5]
             scan_ids = {ids[p] for p in orden}
@@ -222,15 +222,15 @@ def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
             nav_ids = [mid for mid, _ in found if mid != qid][:5]
             fidelidad.append(len(set(nav_ids) & scan_ids) / 5.0)
             grupo_nav.append(
-                np.mean([etiqueta[id_a_pos[mid]] == lbl
+                np.mean([label_array[id_a_pos[mid]] == lbl
                          for mid in nav_ids if mid in id_a_pos])
                 if nav_ids else 0.0
             )
-            grupo_scan.append(np.mean([etiqueta[p] == lbl for p in orden]))
+            grupo_scan.append(np.mean([label_array[p] == lbl for p in orden]))
 
         return {
             "corpus": n,
-            "modules": len(set(nombres)),
+            "modules": len(set(names)),
             "queries": len(sample),
             "candidates": candidates,
             "ef": ef,
@@ -241,7 +241,7 @@ def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
             "mean_base_degree": graph.mean_base_degree,
             "two_hop_coverage": graph.two_hop_coverage,
             "distribution": dict(
-                sorted(reparto.items(), key=lambda item: -item[1])[:8]
+                sorted(distribution.items(), key=lambda item: -item[1])[:8]
             ),
             "seed_seconds": seed_seconds,
             "index_seconds": index_seconds,
@@ -262,60 +262,60 @@ def run_benchmark(query_count: int = 40, candidates: int = 12, ef: int = 12,
 
 def print_report(metrics: dict) -> None:
     print(
-        f"Corpus REAL: {metrics['corpus']} docstrings de {metrics['modules']} módulos "
-        f"(categoría = módulo)"
+        f"REAL corpus: {metrics['corpus']} docstrings from {metrics['modules']} modules "
+        f"(category = module)"
     )
-    print("reparto:", metrics["distribution"], "…")
+    print("distribution:", metrics["distribution"], "…")
     print(
-        f"configuración: candidatos={metrics['candidates']} · "
+        f"configuration: candidates={metrics['candidates']} · "
         f"ef={metrics['ef']} · shortcuts={metrics['effective_shortcuts']}/"
-        f"{metrics['shortcuts']} · componentes={metrics['component_count']} · "
-        f"grado={metrics['mean_base_degree']:.1f} · "
-        f"cobertura2={100 * metrics['two_hop_coverage']:.1f}%"
+        f"{metrics['shortcuts']} · components={metrics['component_count']} · "
+        f"degree={metrics['mean_base_degree']:.1f} · "
+        f"two-hop coverage={100 * metrics['two_hop_coverage']:.1f}%"
     )
     print(
-        f"sembrado+codificado: {metrics['seed_seconds']:.1f}s · "
-        f"índice: {metrics['index_seconds']:.1f}s · "
+        f"seed+encode: {metrics['seed_seconds']:.1f}s · "
+        f"index: {metrics['index_seconds']:.1f}s · "
         f"RSS: {metrics['rss_mb']:.1f}MB · "
-        f"pico Python del índice: {metrics['index_peak_mb']:.1f}MB"
+        f"index Python peak: {metrics['index_peak_mb']:.1f}MB"
     )
-    print("\n=== VEREDICTO en corpus REAL ===")
-    print(f"fidelidad nav vs escaneo (recall@5): {metrics['fidelity']:.3f}")
+    print("\n=== VERDICT on REAL corpus ===")
+    print(f"navigation vs scan fidelity (recall@5): {metrics['fidelity']:.3f}")
     print(
-        f"latencia navegable: p50={metrics['p50_ms']:.2f}ms "
+        f"navigation latency: p50={metrics['p50_ms']:.2f}ms "
         f"p95={metrics['p95_ms']:.2f}ms"
     )
     print(
-        f"visitados: {metrics['visited_mean']:.0f} de {metrics['corpus']} "
+        f"visited: {metrics['visited_mean']:.0f} of {metrics['corpus']} "
         f"({100 * metrics['visited_ratio']:.1f}%)"
     )
     print(
-        f"precisión de grupo@5 — navegar: {metrics['group_nav']:.3f} · "
-        f"escaneo: {metrics['group_scan']:.3f}"
+        f"group precision@5 — navigation: {metrics['group_nav']:.3f} · "
+        f"scan: {metrics['group_scan']:.3f}"
     )
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Benchmark navegable sobre corpus real")
+    parser = argparse.ArgumentParser(description="Navigable benchmark on a real corpus")
     parser.add_argument("--check", action="store_true",
-                        help="falla si alguna métrica cruza su umbral")
+                        help="fail if any metric crosses its threshold")
     parser.add_argument("--json", action="store_true",
-                        help="emite métricas y veredicto como JSON")
+                        help="emit metrics and verdict as JSON")
     parser.add_argument("--queries", type=int, default=40,
-                        help="número de consultas deterministas (por defecto: 40)")
+                        help="number of deterministic queries (default: 40)")
     parser.add_argument("--candidates", type=int, default=12,
-                        help="candidatos navegables (por defecto: 12)")
+                        help="navigation candidates (default: 12)")
     parser.add_argument("--ef", type=int, default=12,
-                        help="anchura de búsqueda (por defecto: 12)")
+                        help="search width (default: 12)")
     parser.add_argument("--shortcuts", type=int, default=2,
-                        help="atajos efímeros por nodo (por defecto: 2)")
+                        help="ephemeral shortcuts per node (default: 2)")
     parser.add_argument("--adaptive-shortcuts", action=argparse.BooleanOptionalAction,
-                        default=True, help="ajusta atajos según la topología")
+                        default=True, help="adapt shortcuts to graph topology")
     args = parser.parse_args(argv)
     if args.queries < 1:
-        parser.error("--queries debe ser mayor que cero")
+        parser.error("--queries must be greater than zero")
     if args.candidates < 5 or args.ef < 1 or args.shortcuts < 0:
-        parser.error("candidatos>=5, ef>0 y shortcuts>=0 son obligatorios")
+        parser.error("candidates>=5, ef>0, and shortcuts>=0 are required")
 
     metrics = run_benchmark(
         args.queries, candidates=args.candidates, ef=args.ef,
@@ -339,9 +339,9 @@ def main(argv: list[str] | None = None) -> int:
             print("\n=== QUALITY GATE ===")
             if failures:
                 for failure in failures:
-                    print(f"FALLO · {failure}")
+                    print(f"FAIL · {failure}")
             else:
-                print("OK · todas las métricas conservan su contrato")
+                print("OK · all metrics satisfy their contract")
     return 1 if failures else 0
 
 if __name__ == "__main__":

@@ -1,24 +1,24 @@
 """
-Banco de ESTRÉS categorizado — pone a prueba la recuperación de hipercampo en
-condiciones duras y compara modo léxico vs semántico, sin piedad.
+Categorized STRESS benchmark for hipercampo retrieval under difficult conditions.
+It compares lexical and semantic modes without pulling punches.
 
-Ejecuta:
-    python scripts/stress.py                # solo léxico
-    python scripts/stress.py --semantic     # léxico + hook semántico (descarga modelo)
+Run:
+    python scripts/stress.py                # lexical only
+    python scripts/stress.py --semantic     # lexical + semantic hook (downloads model)
 
-Tres categorías de consulta sobre los MISMOS hechos:
-    keyword   la pregunta comparte palabras distintivas con el hecho
-    typo      igual, pero con las palabras clave MAL escritas
-    synonym   parafraseada con sinónimos, casi sin palabras compartidas
+Three query categories over the SAME facts:
+    keyword   the question shares distinctive words with the fact
+    typo      the same, but with misspelled keywords
+    synonym   paraphrased with synonyms and almost no shared words
 
-El corpus incluye hechos del MISMO dominio que se confunden entre sí (distractores
-"confusos"), no ruido fácil. Mide MRR y hit@1 por categoría.
+The corpus contains easily confused facts from the SAME domain (hard distractors),
+not easy noise. It measures MRR and hit@1 by category.
 """
 
 import sys
 from pathlib import Path
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# Keep UTF-8 output when redirected (Windows cp1252 breaks «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -28,8 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
-# hecho -> {categoria: pregunta}
-CASOS = [
+# fact -> {category: question}. Spanish text is intentional retrieval test data.
+CASES = [
     ("la clave de la API de pagos empieza por hcdemo_9f", {
         "keyword": "¿cuál es la clave de la API de pagos?",
         "typo": "¿cuál es la clabe de la API de pgos?",
@@ -72,9 +72,9 @@ CASOS = [
         "synonym": "¿en qué domicilio está la sede principal?"}),
 ]
 
-# Distractores del MISMO universo (confusos): comparten vocabulario pero no
-# responden a ninguna pregunta.
-DISTRACTORES = [
+# Hard distractors from the SAME universe: they share vocabulary but answer none
+# of the questions. Spanish text is intentional retrieval test data.
+DISTRACTORS = [
     "la clave de la wifi de invitados se renueva cada mes",
     "el servidor de pruebas se reinicia los domingos",
     "la base de datos de usuarios es un postgres replicado",
@@ -88,46 +88,46 @@ DISTRACTORES = [
 ]
 
 
-def evaluar(hc, casos, categoria):
+def evaluate(hc, cases, category):
     hit1 = 0
     rr = 0.0
-    fallos = []
-    for hecho, qs in casos:
-        hits = hc.recall(qs[categoria], k=5)
-        pos = next((i for i, h in enumerate(hits) if h["text"] == hecho), None)
+    failures = []
+    for fact, questions in cases:
+        hits = hc.recall(questions[category], k=5)
+        pos = next((i for i, hit in enumerate(hits) if hit["text"] == fact), None)
         if pos == 0:
             hit1 += 1
         rr += 1.0 / (pos + 1) if pos is not None else 0.0
         if pos != 0:
-            fallos.append((qs[categoria], pos))
-    n = len(casos)
-    return {"hit@1": hit1 / n, "MRR": rr / n, "fallos": fallos}
+            failures.append((questions[category], pos))
+    n = len(cases)
+    return {"hit@1": hit1 / n, "MRR": rr / n, "failures": failures}
 
 
-def cargar():
+def load_memory():
     Path("data/_stress.db").unlink(missing_ok=True)
     hc = Hipercampo("data/_stress.db")
-    for hecho, _ in CASOS:
-        hc.remember(hecho, 0.6)
-    for d in DISTRACTORES:
-        hc.remember(d, 0.4)
+    for fact, _ in CASES:
+        hc.remember(fact, 0.6)
+    for distractor in DISTRACTORS:
+        hc.remember(distractor, 0.4)
     return hc
 
 
 if __name__ == "__main__":
     if "--semantic" in sys.argv:
         from hipercampo.core import encoder
-        print("Activando semántica (descarga modelo la 1ª vez)...")
+        print("Enabling semantics (downloads the model on first use)...")
         ok = encoder.enable_semantic()
-        print("semántica:", "ACTIVA" if ok else "NO disponible (modo léxico)")
+        print("semantics:", "ENABLED" if ok else "UNAVAILABLE (lexical mode)")
 
-    hc = cargar()
-    print(f"\nCorpus: {len(CASOS)} hechos + {len(DISTRACTORES)} distractores confusos")
-    print(f"{'categoría':10} {'hit@1':>7} {'MRR':>7}")
+    hc = load_memory()
+    print(f"\nCorpus: {len(CASES)} facts + {len(DISTRACTORS)} hard distractors")
+    print(f"{'category':10} {'hit@1':>7} {'MRR':>7}")
     print("-" * 26)
     total_mrr = 0.0
     for cat in ("keyword", "typo", "synonym"):
-        r = evaluar(hc, CASOS, cat)
+        r = evaluate(hc, CASES, cat)
         total_mrr += r["MRR"]
         print(f"{cat:10} {r['hit@1']:>7.2f} {r['MRR']:>7.3f}")
     print("-" * 26)

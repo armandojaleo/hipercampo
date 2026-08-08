@@ -1,4 +1,4 @@
-"""Ablaciones aisladas de los mecanismos cognitivos de hipercampo.
+"""Isolated ablations of hipercampo's cognitive mechanisms.
 
 Run ``python scripts/ablations.py --check`` to turn measured relationships into a
 regression gate, or add ``--json`` for machine-readable output.
@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hipercampo.support import audit, config  # noqa: E402
 from hipercampo.cycle import memory
 from hipercampo.cycle.memory import Hipercampo  # noqa: E402
-from scripts.calibrate import relleno  # noqa: E402
-from scripts.stress import CASOS, DISTRACTORES  # noqa: E402
+from scripts.calibrate import filler  # noqa: E402
+from scripts.stress import CASES, DISTRACTORS  # noqa: E402
 
 CATEGORIES = ("keyword", "typo", "synonym")
 
@@ -24,9 +24,9 @@ def _seed(varied_confidence: bool = True) -> Hipercampo:
     hc = Hipercampo(":memory:", namespace="ablation")
     target_confidence = 0.95 if varied_confidence else 0.5
     distractor_confidence = 0.10 if varied_confidence else 0.5
-    for fact, _ in CASOS:
+    for fact, _ in CASES:
         hc.remember(fact, 0.5, target_confidence)
-    for distractor in DISTRACTORES:
+    for distractor in DISTRACTORS:
         hc.remember(distractor, 0.5, distractor_confidence)
     return hc
 
@@ -39,14 +39,14 @@ def _mrr(hc: Hipercampo, hops: int = 0) -> dict[str, float]:
         by_category = {}
         for category in CATEGORIES:
             reciprocal_rank = 0.0
-            for fact, queries in CASOS:
+            for fact, queries in CASES:
                 hits = hc.recall(queries[category], k=20, hops=hops)
                 position = next(
                     (i for i, hit in enumerate(hits) if fact in hit["text"]), None
                 )
                 if position is not None:
                     reciprocal_rank += 1.0 / (position + 1)
-            by_category[category] = reciprocal_rank / len(CASOS)
+            by_category[category] = reciprocal_rank / len(CASES)
         by_category["global"] = sum(by_category.values()) / len(CATEGORIES)
         return by_category
     finally:
@@ -60,7 +60,7 @@ def _surprise_ablation() -> dict:
         hc = Hipercampo(":memory:", namespace=name)
         if disabled:
             hc.surprise.predictable = lambda _score: False
-        results = [hc.remember(text, 0.5) for text in relleno(100)]
+        results = [hc.remember(text, 0.5) for text in filler(100)]
         rare = hc.remember(anomaly, 0.8)
         variants[name] = {
             "routine_stored": sum(bool(result.get("stored")) for result in results),

@@ -1,18 +1,18 @@
 """
-Experimento LONGITUDINAL — demostración #2 de la fase de evidencia (ver paper/OUTLINE.md).
+LONGITUDINAL experiment — evidence-phase demonstration #2 (see paper/OUTLINE.md).
 
-Simula MESES de vida de una memoria de agente con un RELOJ SIMULADO (parchea time.time,
-comprime el tiempo) y mide si las funciones cognitivas de hipercampo —hechos con validez
-temporal, olvido activo con retención, abstención— producen una memoria más útil por MB,
-correcta en el tiempo, con baja false recall, que olvida el ruido pero conserva lo valioso.
+Simulate MONTHS in an agent memory with a SIMULATED CLOCK (patching time.time to
+compress time). Measure whether hipercampo's cognitive features—temporally valid facts,
+active forgetting with retention, and abstention—produce a more useful memory per MB:
+temporally correct, low in false recall, forgetting noise while keeping valuable facts.
 
-Regla de la casa: PRIMERO el generador y las métricas (medir antes de creer). El número a
-1M vendrá después; esto valida que las métricas son computables y dan señal a escala modesta.
-Se compara contra un BASELINE naive (guardar todo como texto, responder por recall top-1,
-sin validez temporal ni olvido) — el patrón "vector store".
+House rule: generator and metrics FIRST—measure before believing. The 1M run comes
+later; this validates that metrics are computable and informative at modest scale.
+Compare with a naive BASELINE that stores everything as text and answers with top-1
+recall, without temporal validity or forgetting: the typical "vector store" pattern.
 
-Uso:
-  python scripts/longitudinal.py                       # corrida modesta + resumen
+Usage:
+  python scripts/longitudinal.py                       # modest run + summary
   python scripts/longitudinal.py --json
   python scripts/longitudinal.py --entities 200 --noise 3000 --months 12 --seed 7
 """
@@ -36,9 +36,9 @@ from hipercampo.cycle import memory
 from hipercampo.cycle.memory import Hipercampo                            # noqa: E402
 
 DAY = 86400.0
-BASE_EPOCH = 1_600_000_000.0          # un punto de partida fijo y reproducible
+BASE_EPOCH = 1_600_000_000.0          # Fixed, reproducible starting point.
 
-# --- reloj simulado: todo el motor lee time.time(), así que parchearlo comprime meses ----
+# --- simulated clock: the engine reads time.time(), so patching compresses months ----
 _CLOCK = [BASE_EPOCH]
 _REAL_TIME = time.time
 def _set_clock(t): _CLOCK[0] = t
@@ -47,42 +47,42 @@ def _unpatch_clock(): time.time = _REAL_TIME
 
 
 def build_stream(rng, cfg):
-    """Genera un flujo de eventos etiquetado con su ground-truth temporal."""
+    """Generate an event stream labeled with temporal ground truth."""
     horizon = cfg["months"] * 30 * DAY
     events = []                        # (t, kind, payload)
-    gt = {}                            # entidad -> [(t, valor), ...] ordenado
+    gt = {}                            # entity -> sorted [(t, value), ...]
 
-    # 1) ENTIDADES con un atributo que CAMBIA en el tiempo (contradicciones, caducidad).
+    # 1) ENTITIES with an attribute that CHANGES over time (contradictions, expiry).
     for i in range(cfg["entities"]):
         subj, pred = f"entidad{i}", "estado"
         n_changes = rng.randint(1, cfg["max_changes"])
         ts = sorted(rng.uniform(0, horizon) for _ in range(n_changes))
         timeline = []
         for k, t in enumerate(ts):
-            val = f"s{i}v{k}"          # valor distintivo (token único)
+            val = f"s{i}v{k}"          # Distinctive value (unique token).
             events.append((BASE_EPOCH + t, "fact", (subj, pred, val)))
             timeline.append((BASE_EPOCH + t, val))
         gt[(subj, pred)] = timeline
 
-    # 2) RUIDO rutinario de bajo valor (debería olvidarse).
+    # 2) Low-value routine NOISE (should be forgotten).
     for j in range(cfg["noise"]):
         t = BASE_EPOCH + rng.uniform(0, horizon)
         events.append((t, "noise", f"noise{j} rutina {rng.randint(0, 9999)}"))
 
-    # 3) Episodios RAROS de alto valor (deberían sobrevivir al olvido).
+    # 3) High-value RARE episodes (should survive forgetting).
     for j in range(cfg["rare"]):
         t = BASE_EPOCH + rng.uniform(0, horizon)
         events.append((t, "rare", f"rare{j} incidente critico {rng.randint(0, 9999)}"))
 
-    # 4) RESURFACING: recuerdos de bajo valor plantados PRONTO (se olvidan), cada uno con
-    # una PISTA única. Al final se lanza esa pista: ¿los devuelve muse aunque estén latentes?
+    # 4) RESURFACING: low-value memories planted EARLY so they fade, each with a unique
+    # CUE. At the end, feed that cue to muse and see whether dormant memories return.
     for j in range(cfg["resurf"]):
         t = BASE_EPOCH + rng.uniform(0, horizon * 0.1)
         events.append((t, "resurf", f"resurf{j} zzq{j}"))
 
     events.sort(key=lambda e: e[0])
 
-    # PROBES temporales: (entidad, t) en un instante aleatorio; valor esperado = el vigente en t.
+    # Temporal PROBES: (entity, t) at a random instant; expected value is valid at t.
     probes = []
     keys = list(gt.keys())
     for _ in range(cfg["probes"]):
@@ -90,14 +90,14 @@ def build_stream(rng, cfg):
         t = BASE_EPOCH + rng.uniform(0, horizon)
         probes.append((key, t, _valid_at(gt[key], t)))
 
-    # AUSENTES: sujeto Y predicado NOVEDOSOS (nunca guardados) -> deben provocar abstención.
-    # (Compartir el predicado no vale: el emparejamiento de hechos casa por el conjunto conocido.)
+    # ABSENT: novel subject AND predicate, never stored, so they should trigger abstention.
+    # Sharing a predicate is insufficient because fact matching uses the known set.
     absent = [(f"fantasma{i}", f"atributo{i}") for i in range(cfg["absent"])]
     return events, gt, probes, absent, horizon
 
 
 def _valid_at(timeline, t):
-    """Valor vigente en el instante t (el del último cambio con t_i <= t; None si antes)."""
+    """Return the value valid at t: the last change with t_i <= t, else None."""
     val = None
     for ti, vi in timeline:
         if ti <= t:
@@ -108,7 +108,7 @@ def _valid_at(timeline, t):
 
 
 def run_world(events, cfg, horizon, mode):
-    """Corre un 'mundo' (full=hipercampo, naive=baseline) sobre el MISMO flujo."""
+    """Run one world (full=hipercampo, naive=baseline) over the SAME stream."""
     prev_gate = memory.GATE_ENABLED
     prev_auto = memory.AUTOSLEEP_EVERY
     audit._ENABLED = False
@@ -126,7 +126,7 @@ def run_world(events, cfg, horizon, mode):
                 if mode == "full":
                     hc.remember_fact({"subject": subj, "predicate": pred, "object": val},
                                      importance=0.6, confidence=0.7)
-                else:                         # naive: cada versión es un texto que coexiste
+                else:                         # Naive: every version coexists as text.
                     hc.remember(f"{subj} {pred} {val}", importance=0.6, confidence=0.7)
             elif kind == "noise":
                 hc.remember(payload, importance=0.15, confidence=0.3)
@@ -134,11 +134,11 @@ def run_world(events, cfg, horizon, mode):
                 hc.remember(payload, importance=0.2, confidence=0.3)
             else:                              # rare
                 hc.remember(payload, importance=0.9, confidence=0.9)
-            # ciclos mensuales de olvido (solo el mundo cognitivo)
+            # Monthly forgetting cycles, only in the cognitive world.
             if mode == "full" and t >= next_forget:
                 hc.forget()
                 next_forget += 30 * DAY
-        _set_clock(BASE_EPOCH + horizon + 7 * DAY)   # una semana después del último evento
+        _set_clock(BASE_EPOCH + horizon + 7 * DAY)   # One week after the last event.
         if mode == "full":
             hc.forget()
     finally:
@@ -152,7 +152,7 @@ def measure(hc, path, mode, gt, probes, absent, horizon):
     _set_clock(end_t)
     out = {}
 
-    # --- corrección temporal (solo el mundo con validez temporal responde a esto) ---
+    # --- temporal correctness: only the temporally aware world can answer this ---
     if mode == "full":
         ok = 0
         for (subj, pred), t, expected in probes:
@@ -162,9 +162,9 @@ def measure(hc, path, mode, gt, probes, absent, horizon):
                 ok += 1
         out["temporal_correctness"] = round(ok / len(probes), 3) if probes else None
     else:
-        out["temporal_correctness"] = None    # el vector store no modela el tiempo
+        out["temporal_correctness"] = None    # A vector store does not model time.
 
-    # --- valor ACTUAL correcto y tasa de CONTRADICCIÓN (responder una verdad ya cerrada) ---
+    # --- correct CURRENT value and CONTRADICTION rate (returning expired truth) ---
     correct = contradiction = miss = 0
     for (subj, pred), timeline in gt.items():
         current = timeline[-1][1]
@@ -184,7 +184,7 @@ def measure(hc, path, mode, gt, probes, absent, horizon):
     out["current_correctness"] = round(correct / n, 3)
     out["contradiction_rate"] = round(contradiction / n, 3)
 
-    # --- false recall: preguntar por entidades AUSENTES, debe abstenerse ---
+    # --- false recall: queries for ABSENT entities should cause abstention ---
     answered = 0
     for subj, pred in absent:
         if mode == "full":
@@ -196,7 +196,7 @@ def measure(hc, path, mode, gt, probes, absent, horizon):
             answered += 1
     out["false_recall"] = round(answered / len(absent), 3) if absent else None
 
-    # --- calidad de olvido: el ruido debe adormecer, lo raro seguir despierto ---
+    # --- forgetting quality: noise should become dormant while rare facts stay awake ---
     rows = hc.store.dump(all_namespaces=False, include_dormant=True)
     noise = [r for r in rows if r["text"].startswith("noise")]
     rare = [r for r in rows if r["text"].startswith("rare")]
@@ -207,15 +207,15 @@ def measure(hc, path, mode, gt, probes, absent, horizon):
         "valuable_kept_rate": round(rk / len(rare), 3) if rare else None,
     }
 
-    # --- resurfacing: recuerdos olvidados que vuelven cuando aparece su pista (muse) ---
-    # Solo el mundo que OLVIDA tiene que resurgir; el naive nunca los perdió (n/a).
+    # --- resurfacing: forgotten memories return when their cue appears through muse ---
+    # Only the world that FORGETS needs resurfacing; naive never lost them (n/a).
     if mode == "full":
         resurf = [r for r in rows if r["text"].startswith("resurf")]
         dormidos = [r for r in resurf if r["dormant"]]
-        base = dormidos or resurf                      # entre los que se olvidaron (o todos)
+        base = dormidos or resurf                      # Forgotten subset, or all as fallback.
         vueltos = 0
         for r in base:
-            cue = r["text"].split()[1]                 # la pista única (zzqN)
+            cue = r["text"].split()[1]                 # Unique cue (zzqN).
             got = hc.muse(cue, k=3)
             if any(cue in h.get("text", "") for h in got):
                 vueltos += 1
@@ -226,9 +226,9 @@ def measure(hc, path, mode, gt, probes, absent, horizon):
     else:
         out["resurfacing"] = {"dormant_rate": None, "resurfaced_rate": None}
 
-    # --- huella: bytes totales en disco + señal/ruido (despiertos / total). NO se usa
-    # "bytes por útil": olvidar ADORMECE (no borra), así que los latentes siguen en disco
-    # y esa ratio penalizaría precisamente al que sabe olvidar. El total sí es comparable.
+    # --- footprint: total disk bytes + signal/noise (awake / total). Do NOT use
+    # "bytes per useful memory": forgetting makes memories DORMANT, not deleted, so
+    # dormant data remains on disk and that ratio would punish effective forgetting.
     hc.store.commit()
     size = os.path.getsize(path)
     util = sum(1 for r in rows if not r["dormant"])
@@ -274,31 +274,31 @@ def main():
     if a.json:
         print(json.dumps(report, ensure_ascii=False, indent=2)); return
     f, nv = report["full"], report["naive"]
-    print(f"LONGITUDINAL · {report['events']} eventos · {cfg['months']} meses simulados "
-          f"· {cfg['entities']} entidades · {cfg['noise']} ruido")
+    print(f"LONGITUDINAL · {report['events']} events · {cfg['months']} simulated months "
+          f"· {cfg['entities']} entities · {cfg['noise']} noise items")
     print("-" * 62)
     def s(x):
         return "n/a" if x is None else (f"{x:.3f}" if isinstance(x, float) else str(x))
 
-    def row(name, k, sub=None, mejor="?", nota=""):
+    def row(name, k, sub=None, better="?", note=""):
         fv = f[k] if sub is None else f[k][sub]
         nvv = nv[k] if sub is None else nv[k][sub]
-        print(f"{name:<24}{s(fv):>12}{s(nvv):>10}   {mejor:<4} {nota}")
-    print(f"{'':<24}{'hiper':>12}{'naive':>10}        qué significa")
-    row("contradicción", "contradiction_rate", None, "↓", "responder algo YA CADUCADO")
-    row("acierto actual", "current_correctness", None, "↑", "sabe qué es verdad AHORA")
-    row("acierto temporal", "temporal_correctness", None, "↑", "qué era verdad EN EL PASADO")
-    row("false recall", "false_recall", None, "↓", "responder lo que no sabe")
-    row("ruido olvidado", "forgetting", "noise_dormant_rate", "↑", "suelta la morralla")
-    row("valioso conservado", "forgetting", "valuable_kept_rate", "↑", "no pierde lo importante")
-    row("resurfacing", "resurfacing", "resurfaced_rate", "↑", "lo olvidado vuelve con su pista")
-    row("awake ratio", "footprint", "awake_ratio", "", "fracción despierta (señal limpia)")
-    row("db bytes", "footprint", "db_bytes", "↓", "huella en disco")
+        print(f"{name:<24}{s(fv):>12}{s(nvv):>10}   {better:<4} {note}")
+    print(f"{'':<24}{'hiper':>12}{'naive':>10}        meaning")
+    row("contradiction", "contradiction_rate", None, "↓", "returns EXPIRED truth")
+    row("current accuracy", "current_correctness", None, "↑", "knows what is true NOW")
+    row("temporal accuracy", "temporal_correctness", None, "↑", "truth IN THE PAST")
+    row("false recall", "false_recall", None, "↓", "answers what it does not know")
+    row("forgotten noise", "forgetting", "noise_dormant_rate", "↑", "drops low-value noise")
+    row("valuable retained", "forgetting", "valuable_kept_rate", "↑", "keeps what matters")
+    row("resurfacing", "resurfacing", "resurfaced_rate", "↑", "a cue revives forgotten data")
+    row("awake ratio", "footprint", "awake_ratio", "", "awake fraction (clean signal)")
+    row("db bytes", "footprint", "db_bytes", "↓", "disk footprint")
     print("-" * 62)
-    verdict = (f"Titular: hipercampo contradice {f['contradiction_rate']:.0%} vs "
-               f"{nv['contradiction_rate']:.0%} del naive; sabe el 'ahora' "
+    verdict = (f"Headline: hipercampo contradicts {f['contradiction_rate']:.0%} vs "
+               f"{nv['contradiction_rate']:.0%} for naive; it knows 'now' "
                f"{f['current_correctness']:.0%} vs {nv['current_correctness']:.0%}, "
-               f"y responde el pasado (el naive no puede).")
+               f"and answers about the past (naive cannot).")
     print(verdict)
 
 

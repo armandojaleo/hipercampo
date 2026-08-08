@@ -1,15 +1,15 @@
-"""Calidad por token de contexto y adaptador de recuperación LongMemEval.
+"""Context quality per token and a LongMemEval retrieval adapter.
 
-El modo local es offline y bloqueante::
+Local mode is offline and blocking::
 
     python scripts/context_efficiency.py --check
 
-Un dataset oficial ya descargado puede evaluarse sin dependencias extra::
+A previously downloaded official dataset can be evaluated without extra dependencies::
 
     python scripts/context_efficiency.py --longmemeval data/longmemeval_s_cleaned.json
 
-LongMemEval aquí mide *retrieval* de sesiones de evidencia, no la respuesta final
-de un LLM. Separar ambas capas evita atribuir al índice la calidad del generador.
+Here LongMemEval measures evidence-session *retrieval*, not an LLM's final answer.
+Keeping the layers separate avoids attributing generator quality to the index.
 """
 
 import argparse
@@ -25,8 +25,8 @@ from hipercampo.support import audit, config  # noqa: E402
 from hipercampo.cycle import memory
 from hipercampo.support.budget import is_estimate, estimate_tokens, method  # noqa: E402
 from hipercampo.cycle.memory import Hipercampo  # noqa: E402
-from scripts.calibrate import NEGATIVAS  # noqa: E402
-from scripts.stress import CASOS, DISTRACTORES  # noqa: E402
+from scripts.calibrate import NEGATIVE_QUERIES  # noqa: E402
+from scripts.stress import CASES, DISTRACTORS  # noqa: E402
 
 CATEGORIES = ("keyword", "typo", "synonym")
 LOCAL_THRESHOLDS = {
@@ -46,15 +46,15 @@ def percentile(values: list[float], q: float) -> float:
 
 
 def payload_tokens(hits: list[dict]) -> int:
-    """Coste del resultado completo que cruza MCP, incluidos metadatos."""
+    """Return the full result cost crossing MCP, including metadata."""
     return estimate_tokens(json.dumps(hits, ensure_ascii=False, separators=(",", ":")))
 
 
 def _seed_local() -> Hipercampo:
     hc = Hipercampo(":memory:", namespace="context-benchmark")
-    for fact, _ in CASOS:
+    for fact, _ in CASES:
         hc.remember(fact, 0.5, 0.95)
-    for distractor in DISTRACTORES:
+    for distractor in DISTRACTORS:
         hc.remember(distractor, 0.5, 0.10)
     return hc
 
@@ -76,14 +76,14 @@ def run_local() -> dict:
     memory.AUTOSLEEP_EVERY = 0
     try:
         hc = _seed_local()
-        config.paused = lambda: True  # medir lectura, sin refuerzo entre consultas
+        config.paused = lambda: True  # Measure reads without reinforcement between queries.
         reciprocal_rank = 0.0
         hit1 = 0
         answered_positive = 0
         latencies: list[float] = []
         tokens: list[float] = []
         answered_tokens: list[float] = []
-        for fact, questions in CASOS:
+        for fact, questions in CASES:
             for category in CATEGORIES:
                 hits, latency, cost = _measure_query(hc, questions[category])
                 latencies.append(latency)
@@ -100,7 +100,7 @@ def run_local() -> dict:
                     reciprocal_rank += 1.0 / (position + 1)
 
         false_answers = 0
-        for question in NEGATIVAS:
+        for question in NEGATIVE_QUERIES:
             hits, latency, cost = _measure_query(hc, question)
             latencies.append(latency)
             tokens.append(float(cost))
@@ -109,8 +109,8 @@ def run_local() -> dict:
                 answered_tokens.append(float(cost))
         hc.close()
 
-        positive_count = len(CASOS) * len(CATEGORIES)
-        negative_count = len(NEGATIVAS)
+        positive_count = len(CASES) * len(CATEGORIES)
+        negative_count = len(NEGATIVE_QUERIES)
         answered = answered_positive + false_answers
         return {
             "dataset": "local-stress",
@@ -160,7 +160,7 @@ def evaluate_local(report: dict, thresholds: dict | None = None) -> list[str]:
          limits["max_latency_p95_ms"], "<="),
     )
     return [
-        f"{name}: {value:.3f} debe ser {operator} {limit:.3f}"
+        f"{name}: {value:.3f} must be {operator} {limit:.3f}"
         for name, value, limit, operator in checks
         if (operator == ">=" and value < limit) or (operator == "<=" and value > limit)
     ]
@@ -169,7 +169,7 @@ def evaluate_local(report: dict, thresholds: dict | None = None) -> list[str]:
 def load_longmemeval(path: str | Path, limit: int | None = None) -> list[dict]:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, list):
-        raise ValueError("LongMemEval debe ser una lista JSON de instancias")
+        raise ValueError("LongMemEval must be a JSON list of instances")
     required = {
         "question_id", "question", "haystack_session_ids",
         "haystack_sessions", "answer_session_ids",
@@ -178,9 +178,9 @@ def load_longmemeval(path: str | Path, limit: int | None = None) -> list[dict]:
     for index, instance in enumerate(selected):
         if not isinstance(instance, dict) or not required <= set(instance):
             missing = required - set(instance) if isinstance(instance, dict) else required
-            raise ValueError(f"instancia LongMemEval {index} incompleta: {sorted(missing)}")
+            raise ValueError(f"incomplete LongMemEval instance {index}: {sorted(missing)}")
         if len(instance["haystack_session_ids"]) != len(instance["haystack_sessions"]):
-            raise ValueError(f"instancia LongMemEval {index}: ids y sesiones no coinciden")
+            raise ValueError(f"LongMemEval instance {index}: IDs and sessions do not match")
     return selected
 
 
@@ -276,14 +276,14 @@ def print_report(report: dict) -> None:
     print(f"dataset: {report['dataset']}")
     if report["dataset"] == "local-stress":
         print(f"hit@1={report['hit_at_1']:.3f} · MRR={report['mrr']:.3f} · "
-              f"abstención={report['abstention_accuracy']:.3f} · "
-              f"precisión selectiva={report['selective_precision']:.3f}")
+              f"abstention={report['abstention_accuracy']:.3f} · "
+              f"selective precision={report['selective_precision']:.3f}")
     else:
         print(f"recall@{report['k']}={report['retrieval_recall_at_k']} · "
-              f"abstención={report['abstention_accuracy']}")
-    print(f"contexto: p50={report['payload_tokens'].get('p50', 0):.0f} "
+              f"abstention={report['abstention_accuracy']}")
+    print(f"context: p50={report['payload_tokens'].get('p50', 0):.0f} "
           f"p95={report['payload_tokens']['p95']:.0f} tokens · "
-          f"latencia p50={report['latency_ms']['p50']:.2f}ms "
+          f"latency p50={report['latency_ms']['p50']:.2f}ms "
           f"p95={report['latency_ms']['p95']:.2f}ms")
 
 
@@ -296,9 +296,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
     if args.limit is not None and args.limit < 1:
-        parser.error("--limit debe ser mayor que cero")
+        parser.error("--limit must be greater than zero")
     if not 1 <= args.k <= 25:
-        parser.error("-k debe estar entre 1 y 25")
+        parser.error("-k must be between 1 and 25")
     report = (
         run_longmemeval(args.longmemeval, args.limit, args.k)
         if args.longmemeval else run_local()

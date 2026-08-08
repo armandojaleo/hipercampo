@@ -30,12 +30,12 @@ Issues = "https://github.com/armandojaleo/hipercampo/issues"
 Changelog = "https://github.com/armandojaleo/hipercampo/blob/main/docs/CHANGELOG.md"
 
 [project.optional-dependencies]
-# Hook semántico OPCIONAL. Trae modelos de terceros con su propia licencia
-# (ver ATTRIBUTION.md). No se instala por defecto: el core es VSA puro, CPU.
+# OPTIONAL semantic hook. It brings third-party models with their own licenses
+# (see ATTRIBUTION.md). It is not installed by default: the core is CPU-only VSA.
 semantic = ["sentence-transformers>=2.2"]
-# OPCIONAL: mejora `servers`/`restart`/`status` para identificar qué fichero y
-# contexto sirve cada servidor MCP (lee el entorno del proceso). Sin él, todo
-# funciona igual pero esa identidad no siempre es legible (sobre todo en Windows).
+# OPTIONAL: improves `servers`/`restart`/`status` by identifying the file and context
+# served by each MCP server from its process environment. Everything still works
+# without it, though that identity is not always readable, especially on Windows.
 procs = ["psutil>=5.9"]
 
 [project.scripts]
@@ -49,9 +49,9 @@ build-backend = "hatchling.build"
 packages = ["hipercampo"]
 
 [tool.mypy]
-# Puerta de tipos sobre el núcleo. No es --strict (el código usa numpy y dicts
-# JSON heterogéneos donde el tipado total estorba más que ayuda); es el nivel que
-# caza bugs reales —Nones sin comprobar, asignaciones incompatibles— sin ahogar.
+# Type gate over the core. This is not --strict: numpy and heterogeneous JSON dicts
+# make exhaustive typing more obstructive than useful. This level catches real bugs
+# such as unchecked None values and incompatible assignments without overwhelming us.
 python_version = "3.12"
 ignore_missing_imports = true
 
@@ -60,5 +60,5 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "B"]
-# E702 (a; b): estilo de la casa en tests y CLI compactos — legible y deliberado.
+# E702 (a; b): house style in compact tests and CLI code—readable and deliberate.
 ignore = ["E702", "E701"]

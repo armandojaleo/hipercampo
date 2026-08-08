@@ -1,14 +1,14 @@
 """
-El grafo navegable small-world (`hipercampo/navgraph.py`): el índice que SÍ encaja
-en VSA. Se recuerda NAVEGANDO un grafo de vecinos, no escaneando todo.
+The navigable small-world graph (`hipercampo/navgraph.py`): the index that fits VSA.
+Recall NAVIGATES a neighbor graph instead of scanning everything.
 
-Lo que se exige (medido antes en sondas, aquí congelado como contrato):
-  - navegable: buscar por el grafo recupera casi lo mismo que el escaneo completo,
-  - los ATAJOS débiles de largo alcance son lo que lo hace navegable (sin ellos, islas),
-  - visita solo una FRACCIÓN de la memory (no todo — la semilla de la sublinealidad),
-  - se construye NAVEGANDO al insertar (sin escaneo), y no revienta con memoria pequeña.
+Contract requirements, measured in probes before being frozen here:
+  - graph search retrieves almost the same results as a full scan,
+  - weak long-range SHORTCUTS make it navigable (without them it forms islands),
+  - it visits only a FRACTION of memory, the seed of sublinear behavior,
+  - insertion builds by NAVIGATION, without scanning, and small memories work.
 
-Ejecuta:  python tests/test_navgraph.py
+Run:  python tests/core/test_navgraph.py
 """
 
 import sys
@@ -25,17 +25,16 @@ from hipercampo.core.navgraph import NavGraph        # noqa: E402
 from hipercampo.core.vsa import similarity_batch, stack_hvs   # noqa: E402
 
 
-def _corpus(n_temas=40, por_tema=20, seed=0):
-    """Recuerdos con ESTRUCTURA: temas con vocabulario propio compartido (vecindarios
-    reales), como una memoria de verdad y no ruido uniforme."""
+def _corpus(topic_count=40, per_topic=20, seed=0):
+    """Build STRUCTURED memories with shared topic vocabularies and real neighborhoods."""
     rng = np.random.default_rng(seed)
     vocab = [f"palabra{i}" for i in range(300)]
     suj = ["el sistema", "la maquina", "el modulo", "el proceso", "el nodo",
            "la memoria", "el sensor", "el motor", "la red", "el robot"]
     textos, tema = [], []
-    for t in range(n_temas):
+    for t in range(topic_count):
         nucleo = list(rng.choice(vocab, size=6, replace=False))
-        for _ in range(por_tema):
+        for _ in range(per_topic):
             k = int(rng.integers(3, 6))
             pal = list(rng.choice(nucleo, size=k, replace=True))
             extra = list(rng.choice(vocab, size=2, replace=False))
@@ -48,11 +47,11 @@ def _codes(textos):
     return stack_hvs([encode_text(t).tobytes() for t in textos])
 
 
-def _consultas(textos, tema, n_temas, seed=7):
-    """Una paráfrasis por tema: un trozo de un recuerdo del tema (la 'pista')."""
+def _queries(textos, tema, topic_count, seed=7):
+    """Build one paraphrase per topic from part of a topic memory as its cue."""
     rng = np.random.default_rng(seed)
     Q, Qt = [], []
-    for t in range(n_temas):
+    for t in range(topic_count):
         idxs = np.where(tema == t)[0]
         base = textos[int(rng.choice(idxs))].split()
         Q.append(encode_text(" ".join(base[:4])))
@@ -60,11 +59,11 @@ def _consultas(textos, tema, n_temas, seed=7):
     return Q, Qt
 
 
-def _recall_y_visitas(codes, textos, tema, n_temas, **kw):
+def _recall_and_visits(codes, textos, tema, topic_count, **kw):
     g = NavGraph(seed=0, **kw)
     for i in range(len(codes)):
         g.add(i, codes[i])
-    Q, _ = _consultas(textos, tema, n_temas)
+    Q, _ = _queries(textos, tema, topic_count)
     rec, vis = 0.0, 0
     for q in Q:
         d = 1.0 - similarity_batch(q, codes)          # menor = más cerca (uso sim)
@@ -76,41 +75,40 @@ def _recall_y_visitas(codes, textos, tema, n_temas, **kw):
     return rec / m, vis / m, len(codes)
 
 
-def test_es_navegable_y_no_visita_todo():
-    """Navegar el grafo recupera casi lo mismo que el escaneo, tocando una fracción."""
+def test_is_navigable_without_visiting_everything():
+    """Graph navigation nearly matches a scan while touching only a fraction."""
     textos, tema = _corpus()
     codes = _codes(textos)
-    recall, visitas, n = _recall_y_visitas(codes, textos, tema, 40)
-    assert recall >= 0.80, f"grafo poco navegable: recall@5={recall:.3f}"
-    assert visitas < 0.7 * n, f"visita casi todo ({visitas:.0f}/{n}): no ahorra"
+    recall, visits, n = _recall_and_visits(codes, textos, tema, 40)
+    assert recall >= 0.80, f"poor graph navigation: recall@5={recall:.3f}"
+    assert visits < 0.7 * n, f"visits nearly everything ({visits:.0f}/{n})"
 
 
-def test_los_atajos_hacen_navegable():
-    """Sin atajos de largo alcance el grafo se rompe en islas. Con ellos, navega.
-    Es el corazón del hallazgo (small-world de Watts-Strogatz), congelado."""
+def test_shortcuts_make_graph_navigable():
+    """Long-range shortcuts join islands: the frozen Watts-Strogatz finding."""
     textos, tema = _corpus()
     codes = _codes(textos)
-    sin, _, _ = _recall_y_visitas(codes, textos, tema, 40, shortcuts=0)
-    con, _, _ = _recall_y_visitas(codes, textos, tema, 40, shortcuts=3)
-    assert con >= sin, f"los atajos deberían ayudar o igualar: con={con:.3f} sin={sin:.3f}"
-    assert con >= 0.80, f"con atajos debería ser navegable: {con:.3f}"
+    without, _, _ = _recall_and_visits(codes, textos, tema, 40, shortcuts=0)
+    with_shortcuts, _, _ = _recall_and_visits(codes, textos, tema, 40, shortcuts=3)
+    assert with_shortcuts >= without
+    assert with_shortcuts >= 0.80, f"shortcuts should make it navigable: {with_shortcuts:.3f}"
 
 
-def test_insercion_incremental_construye_grafo():
-    """Se construye NAVEGANDO al insertar (sin escaneo). Cada nodo queda enlazado."""
-    textos, tema = _corpus(n_temas=10, por_tema=10)
+def test_incremental_insertion_builds_graph():
+    """Insertion builds through NAVIGATION without scanning, linking every node."""
+    textos, tema = _corpus(topic_count=10, per_topic=10)
     codes = _codes(textos)
     g = NavGraph(seed=0)
     for i in range(len(codes)):
         g.add(i, codes[i])
     assert len(g) == len(codes)
-    # ningún nodo (salvo a lo sumo el primero) queda aislado
+    # No node except, at most, the first remains isolated.
     aislados = [mid for mid in range(len(codes)) if not g.adj.get(mid)]
-    assert len(aislados) <= 1, f"nodos aislados: {aislados}"
+    assert len(aislados) <= 1, f"isolated nodes: {aislados}"
 
 
-def test_memoria_pequena_no_revienta():
-    """Con uno o dos recuerdos, buscar sigue funcionando (respaldo trivial)."""
+def test_small_memory_still_works():
+    """Search still works with one or two memories through the trivial fallback."""
     g = NavGraph(seed=0)
     hv = encode_text("un unico recuerdo en la memoria")
     g.add(1, hv)
@@ -120,8 +118,8 @@ def test_memoria_pequena_no_revienta():
     assert len(g.search(encode_text("recuerdo"), k=5)) >= 1
 
 
-def test_busqueda_con_metricas_hace_un_solo_recorrido():
-    """Observar el coste no debe duplicar el coste que intenta medir."""
+def test_search_with_metrics_makes_one_traversal():
+    """Observing cost must not double the cost being measured."""
     g = NavGraph(seed=0)
     for i in range(20):
         g.add(i, encode_text(f"recuerdo navegable numero {i}"))
@@ -140,7 +138,7 @@ def test_busqueda_con_metricas_hace_un_solo_recorrido():
     assert llamadas == 1
 
 
-def test_shortcuts_adaptativos_solo_se_apagan_en_componente_denso():
+def test_adaptive_shortcuts_only_disable_for_dense_component():
     codes = {i: encode_text(f"nodo topologico {i}") for i in range(24)}
 
     densos = set()
@@ -191,8 +189,8 @@ def test_shortcuts_adaptativos_solo_se_apagan_en_componente_denso():
     assert separado.component_count == 2
     assert separado.effective_shortcuts == 2
 
-def test_landmarks_eligen_la_isla_semantica_correcta():
-    """Un representante por componente evita depender de atajos aleatorios."""
+def test_landmarks_choose_correct_semantic_island():
+    """One representative per component avoids dependence on random shortcuts."""
     bases = [encode_text(f"concepto totalmente distinto {i}") for i in range(10)]
     codes = {}
     edges = []

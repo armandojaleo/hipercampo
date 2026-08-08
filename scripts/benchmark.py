@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
-# (hecho_a_recordar, pregunta_parafraseada_que_debe_recuperarlo)
+# (fact_to_remember, paraphrased_query_that_should_retrieve_it)
 QA = [
     ("la clave de la API de pagos empieza por hcdemo_9f",
      "¿cuál es la clave de la API de pagos?"),
@@ -59,7 +59,7 @@ QA = [
 ]
 
 # Distractors: plausible same-domain noise that answers none of the queries.
-DISTRACTORES = [
+DISTRACTORS = [
     "el gato de la oficina se llama Pixel",
     "las sillas nuevas llegaron el martes",
     "hay café descafeinado en la segunda planta",
@@ -99,41 +99,44 @@ def run(dataset=QA) -> dict:
     Path("data/_bench.db").unlink(missing_ok=True)
     hc = Hipercampo("data/_bench.db")
 
-    hechos = {h for h, _ in dataset}
-    for hecho in hechos:
-        hc.remember(hecho, 0.6)
-    for d in DISTRACTORES:
-        hc.remember(d, 0.3)
+    facts = {fact for fact, _ in dataset}
+    for fact in facts:
+        hc.remember(fact, 0.6)
+    for distractor in DISTRACTORS:
+        hc.remember(distractor, 0.3)
 
     hit1 = hit3 = 0
     rr_sum = 0.0
-    fallos = []
-    for hecho, pregunta in dataset:
-        hits = hc.recall(pregunta, k=5)
-        pos = next((i for i, h in enumerate(hits) if h["text"] == hecho), None)
+    failures = []
+    for fact, question in dataset:
+        hits = hc.recall(question, k=5)
+        pos = next((i for i, hit in enumerate(hits) if hit["text"] == fact), None)
         if pos == 0:
             hit1 += 1
         if pos is not None and pos < 3:
             hit3 += 1
         rr_sum += 1.0 / (pos + 1) if pos is not None else 0.0
         if pos != 0:
-            fallos.append((pregunta, pos, [h["text"][:40] for h in hits[:2]]))
+            failures.append((question, pos, [hit["text"][:40] for hit in hits[:2]]))
 
     hc.store.close()
     Path("data/_bench.db").unlink(missing_ok=True)
     n = len(dataset)
     return {"n": n, "hit@1": hit1 / n, "hit@3": hit3 / n, "MRR": rr_sum / n,
-            "fallos": fallos}
+            "failures": failures}
 
 
-def _informe(titulo, r):
-    print(f"\n{titulo}")
-    print(f"  hit@1 = {r['hit@1']:.2f}   hit@3 = {r['hit@3']:.2f}   MRR = {r['MRR']:.3f}")
-    if r["fallos"]:
-        print(f"  {len(r['fallos'])} no salieron primeras:")
-        for preg, pos, _top in r["fallos"]:
-            donde = f"pos {pos}" if pos is not None else "NO recuperado"
-            print(f"   · «{preg[:48]}» → {donde}")
+def _report(title, result):
+    print(f"\n{title}")
+    print(
+        f"  hit@1 = {result['hit@1']:.2f}   hit@3 = {result['hit@3']:.2f}   "
+        f"MRR = {result['MRR']:.3f}"
+    )
+    if result["failures"]:
+        print(f"  {len(result['failures'])} did not rank first:")
+        for query, pos, _top in result["failures"]:
+            location = f"pos {pos}" if pos is not None else "NOT retrieved"
+            print(f"   · «{query[:48]}» → {location}")
 
 
 # Typo mode: misspelled keywords. Character trigrams should help because a typo
@@ -155,15 +158,15 @@ QA_TYPO = [
 
 
 if __name__ == "__main__":
-    modo_sem = "--semantic" in sys.argv
-    if modo_sem:
+    semantic_mode = "--semantic" in sys.argv
+    if semantic_mode:
         from hipercampo.core import encoder, semantic
         print("Enabling semantic hook (sentence-transformers)... "
-              "(descarga el modelo la 1ª vez)")
+              "(downloads the model on first use)")
         encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())
-        print("Hook activo.\n")
+        print("Hook enabled.\n")
 
-    print(f"Distractors: {len(DISTRACTORES)}  |  semantics: {'ON' if modo_sem else 'OFF'}")
-    _informe("== EASY (shared keywords) ==", run(QA))
-    _informe("== ERRATAS (palabras clave mal escritas) ==", run(QA_TYPO))
-    _informe("== HARD (synonyms, almost no shared words) ==", run(QA_HARD))
+    print(f"Distractors: {len(DISTRACTORS)}  |  semantics: {'ON' if semantic_mode else 'OFF'}")
+    _report("== EASY (shared keywords) ==", run(QA))
+    _report("== TYPOS (misspelled keywords) ==", run(QA_TYPO))
+    _report("== HARD (synonyms, almost no shared words) ==", run(QA_HARD))

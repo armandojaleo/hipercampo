@@ -29,7 +29,7 @@ except Exception:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.stress import CASOS, DISTRACTORES        # noqa: E402
+from scripts.stress import CASES, DISTRACTORS         # noqa: E402
 from hipercampo.cycle.memory import Hipercampo               # noqa: E402
 
 _word = re.compile(r"\w+", re.UNICODE)
@@ -40,7 +40,7 @@ def tok(s):
 
 
 # NEGATIVE queries should return nothing; they measure abstention.
-NEGATIVAS = [
+NEGATIVE_QUERIES = [
     "recetas de cocina tailandesa con leche de coco",
     "resultados de la liga de baloncesto del domingo",
     "cómo plantar tomates en un huerto urbano",
@@ -80,31 +80,32 @@ class BM25:
 
 
 # --- Evaluation utilities ----------------------------------------------------
-def mrr_hit1(rank_fn, casos, categoria, facts):
+def mrr_hit1(rank_fn, cases, category, facts):
     """Evaluate rank_fn(query) and return (MRR, hit1) over ordered fact indexes."""
     rr = hit1 = 0.0
-    for hecho, qs in casos:
-        idx_correcto = facts.index(hecho)
-        orden = rank_fn(qs[categoria])
-        pos = orden.index(idx_correcto) if idx_correcto in orden else None
+    for fact, questions in cases:
+        correct_index = facts.index(fact)
+        ranking = rank_fn(questions[category])
+        pos = ranking.index(correct_index) if correct_index in ranking else None
         if pos == 0:
             hit1 += 1
         rr += 1.0 / (pos + 1) if pos is not None else 0.0
-    n = len(casos)
+    n = len(cases)
     return rr / n, hit1 / n
 
 
-def falsa_recuperacion(devuelve_algo_fn):
+def false_retrieval(returns_anything_fn):
     """Fraction of NEGATIVE queries for which the method returns any
-    resultado (idealmente 0: saber abstenerse)."""
-    return sum(1 for q in NEGATIVAS if devuelve_algo_fn(q)) / len(NEGATIVAS)
+    result (ideally 0, meaning it knows when to abstain)."""
+    return (sum(1 for query in NEGATIVE_QUERIES if returns_anything_fn(query))
+            / len(NEGATIVE_QUERIES))
 
 
 def run(semantic=False):
-    facts = [h for h, _ in CASOS] + DISTRACTORES
+    facts = [h for h, _ in CASES] + DISTRACTORS
     cats = ("keyword", "typo", "synonym")
 
-    metodos = {}   # nombre -> (rank_fn, devuelve_algo_fn)
+    methods = {}   # name -> (rank_fn, returns_anything_fn)
 
     # BM25 ---------------------------------------------------------------
     bm = BM25(facts)
@@ -114,9 +115,9 @@ def run(semantic=False):
     def bm_hit(q):
         sc = bm.scores(q)
         return max(sc) > 0          # BM25 returns something when terms overlap.
-    metodos["BM25"] = (bm_rank, bm_hit)
+    methods["BM25"] = (bm_rank, bm_hit)
 
-    # embeddings + coseno (opcional) ------------------------------------
+    # embeddings + cosine (optional) ------------------------------------
     if semantic:
         try:
             from sentence_transformers import SentenceTransformer
@@ -130,11 +131,11 @@ def run(semantic=False):
             def cos_hit(q):
                 v = model.encode(q, normalize_embeddings=True)
                 return float((E @ v).max()) > 0.35   # Typical cosine threshold.
-            metodos["embeddings+cos"] = (cos_rank, cos_hit)
+            methods["embeddings+cos"] = (cos_rank, cos_hit)
         except Exception as e:
-            print(f"(embeddings no disponibles: {e})")
+            print(f"(embeddings unavailable: {e})")
 
-    # hipercampo (varias configuraciones) --------------------------------
+    # hipercampo (several configurations) --------------------------------
     def make_hc(ns, hops=1, semantic_hook=False):
         from hipercampo.core import encoder
         encoder.set_semantic_hook(None)
@@ -153,30 +154,33 @@ def run(semantic=False):
             hits = hc.recall(q, k=len(facts), hops=hops, include_history=True)
             got = [h["id"] for h in hits]
             ranked = [order_ids.index(i) for i in got if i in order_ids]
-            resto = [j for j in range(len(facts)) if j not in ranked]
-            return ranked + resto
+            remainder = [j for j in range(len(facts)) if j not in ranked]
+            return ranked + remainder
         def hit(q):
             return len(hc.recall(q, k=3, hops=hops)) > 0
         return hc, rank, hit
 
     hc1, r1, h1 = make_hc("full")
-    metodos["hipercampo"] = (r1, h1)
+    methods["hipercampo"] = (r1, h1)
     hc2, r2, h2 = make_hc("nohop", hops=0)
-    metodos["hc (no propagation)"] = (r2, h2)
+    methods["hc (no propagation)"] = (r2, h2)
     if semantic:
         hc3, r3, h3 = make_hc("sem", semantic_hook=True)
-        metodos["hipercampo+sem"] = (r3, h3)
+        methods["hipercampo+sem"] = (r3, h3)
 
-    # informe ------------------------------------------------------------
-    print(f"\nCorpus: {len(facts)} hechos | consultas negativas: {len(NEGATIVAS)}\n")
-    cab = f"{'method':22}" + "".join(f"{c:>10}" for c in cats) + f"{'overall':>9}{'falseRet':>10}"
-    print(cab); print("-" * len(cab))
-    for nombre, (rank_fn, hit_fn) in metodos.items():
-        mrrs = [mrr_hit1(rank_fn, CASOS, c, facts)[0] for c in cats]
-        glob = sum(mrrs) / len(mrrs)
-        fr = falsa_recuperacion(hit_fn)
-        fila = f"{nombre:22}" + "".join(f"{m:>10.3f}" for m in mrrs) + f"{glob:>9.3f}{fr:>10.2f}"
-        print(fila)
+    # Report -------------------------------------------------------------
+    print(f"\nCorpus: {len(facts)} facts | negative queries: {len(NEGATIVE_QUERIES)}\n")
+    header = (
+        f"{'method':22}" + "".join(f"{c:>10}" for c in cats)
+        + f"{'overall':>9}{'falseRet':>10}"
+    )
+    print(header); print("-" * len(header))
+    for name, (rank_fn, hit_fn) in methods.items():
+        mrrs = [mrr_hit1(rank_fn, CASES, c, facts)[0] for c in cats]
+        overall = sum(mrrs) / len(mrrs)
+        fr = false_retrieval(hit_fn)
+        row = f"{name:22}" + "".join(f"{m:>10.3f}" for m in mrrs) + f"{overall:>9.3f}{fr:>10.2f}"
+        print(row)
     print("\n(MRR: higher is better. falseRet: fraction of unrelated queries that"
           " return something; lower is better.)")
 

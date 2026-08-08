@@ -1,27 +1,26 @@
 """
-Calibrar la ABSTENCIÓN midiendo, no opinando.  Ejecuta:
+Calibrate ABSTENTION through measurement, not opinion. Run:
     python scripts/calibrate.py              # N = 20, 100, 500
     python scripts/calibrate.py --n 20,100,500,2000
 
-El ROADMAP pedía "calibrar MIN_RECALL_SCORE midiendo la tasa de falsas
-recuperaciones al crecer N". Esto lo hace, y hay una razón para que sea un script
-propio y no un test: los tres umbrales que deciden si la memoria responde o se
-calla (`MIN_RECALL_SCORE`, `ANSWER_MIN_SCORE`, `RECALL_Z`) son un COMPROMISO, no
-un valor correcto. Subirlos calla falsos positivos y también aciertos. Lo único
-honesto es enseñar la curva entera y elegir el codo a la vista.
+The ROADMAP asked to calibrate MIN_RECALL_SCORE by measuring the false-retrieval
+rate as N grows. This script does that. It is deliberately a script rather than a
+test: the three thresholds deciding whether memory answers or abstains
+(`MIN_RECALL_SCORE`, `ANSWER_MIN_SCORE`, `RECALL_Z`) are a TRADE-OFF, not a single
+correct value. Raising them suppresses both false positives and correct answers.
+The honest approach is to show the whole curve and choose the knee visibly.
 
-Cómo funciona (y por qué así):
-  1. Se ejecuta la memoria UNA vez por consulta con la puerta ABIERTA
-     (`memory.GATE_ENABLED = False`), guardando las señales crudas que la puerta
-     habría mirado — `Hipercampo.ultima_decision` — más el ranking completo.
-  2. Se barren los umbrales sobre esas señales con `memory.abstention_gate`, la
-     MISMA función que usa `recall()`. Barrer así cuesta una ejecución en vez de
-     una por combinación, y sobre todo garantiza que lo medido es lo que corre en
-     producción, no una reimplementación que puede divergir.
+How it works:
+  1. Run memory ONCE per query with the gate OPEN (`memory.GATE_ENABLED = False`),
+     recording the raw signals the gate would inspect (`Hipercampo.last_decision`)
+     plus the full ranking.
+  2. Sweep thresholds over those signals with `memory.abstention_gate`, the SAME
+     function used by `recall()`. This costs one run instead of one per combination
+     and guarantees that measurement follows production behavior.
 
-Métricas, en tensión deliberada:
-  - MRR   (positivas): recuperar bien lo que SÍ se sabe. Más alto mejor.
-  - falsaRec (negativas): consultas ajenas que devuelven algo. Más BAJO mejor.
+Metrics are deliberately in tension:
+  - MRR (positive queries): retrieve known facts well. Higher is better.
+  - false recall (negative queries): unrelated queries returning anything. Lower is better.
 """
 
 import sys
@@ -39,13 +38,13 @@ import numpy as np                                       # noqa: E402
 from hipercampo.support import audit                     # noqa: E402
 from hipercampo.cycle import memory
 from hipercampo.cycle.memory import Hipercampo                 # noqa: E402
-from scripts.stress import CASOS, DISTRACTORES           # noqa: E402
+from scripts.stress import CASES, DISTRACTORS            # noqa: E402
 
-# --- consultas NEGATIVAS ---------------------------------------------------
-# Las 5 de baselines.py daban una granularidad de 0.20: con 4 de 5 fallando no se
-# distingue una mejora real de un empate. Aquí hay 30, de dominios muy lejanos al
-# corpus (oficina/tecnología/empresa), para que la tasa signifique algo.
-NEGATIVAS = [
+# --- NEGATIVE queries ------------------------------------------------------
+# The five queries in baselines.py gave 0.20 granularity, too coarse to distinguish
+# a real improvement from a tie. These 30 Spanish retrieval samples come from domains
+# far from the office/technology/company corpus, making the rate meaningful.
+NEGATIVE_QUERIES = [
     "recetas de cocina tailandesa con leche de coco",
     "resultados de la liga de baloncesto del domingo",
     "cómo plantar tomates en un huerto urbano",
@@ -78,10 +77,10 @@ NEGATIVAS = [
     "cómo se restaura un mueble de madera antiguo",
 ]
 
-# --- relleno para hacer crecer N -------------------------------------------
-# Hechos sintéticos del MISMO dominio que el corpus base (oficina/empresa). Que
-# sean del mismo dominio es el punto: relleno de otro tema sería ruido fácil de
-# descartar y haría parecer la abstención mejor de lo que es. Estos compiten.
+# --- filler used to grow N -------------------------------------------------
+# Synthetic facts come from the SAME domain as the base corpus (office/company).
+# That is the point: another topic would be easy noise and make abstention look
+# better than it is. Spanish template text is intentional retrieval test data.
 _SUJETOS = ["el equipo de soporte", "el departamento de compras", "la oficina de Bilbao",
             "el turno de noche", "la sala de reuniones grande", "el archivo de contratos",
             "la impresora de la segunda planta", "el comedor de empresa",
@@ -99,12 +98,12 @@ _COLAS = ["según el protocolo interno", "y queda anotado en el registro",
           "y se comunica al comité", "sin excepciones desde el año pasado"]
 
 
-def relleno(n: int) -> list[str]:
-    """n hechos distintos y deterministas (sin azar: los resultados deben repetirse).
+def filler(n: int) -> list[str]:
+    """Return n distinct deterministic facts so results remain reproducible.
 
-    Cada uno lleva un CÓDIGO propio. Sin él, las combinaciones de plantilla se
-    parecen demasiado entre sí y `remember()` las descarta por redundantes: pedir
-    500 dejaba 210 en la base y el eje N del estudio no era el que decía ser.
+    Each fact has a unique CODE. Without it, template combinations look too similar
+    and `remember()` rejects them as redundant: requesting 500 left only 210 in the
+    database, so the study's N axis did not mean what it claimed.
     """
     out = []
     for i in range(n):
@@ -112,47 +111,47 @@ def relleno(n: int) -> list[str]:
         v = _VERBOS[(i // 10) % 10]
         p = _PERIODOS[(i // 100) % 10]
         c = _COLAS[(i // 1000) % 10]
-        out.append(f"el expediente {_codigo(i)}: {s} {v} {p} {c}")
+        out.append(f"el expediente {_code(i)}: {s} {v} {p} {c}")
     return out
 
 
-def _codigo(i: int) -> str:
-    """Identificador legible y único por índice (determinista, sin azar)."""
+def _code(i: int) -> str:
+    """Return a readable unique identifier for an index, without randomness."""
     cons, voc = "bcdfgjklmnprstvz", "aeiou"
     return (cons[i % 16] + voc[(i // 16) % 5] + cons[(i // 80) % 16]
             + voc[(i // 1280) % 5] + str(i))
 
 
-# --- recogida de señales ----------------------------------------------------
-def observar(n_objetivo: int, semantico: bool = False) -> dict:
-    """Ejecuta la memoria con la puerta ABIERTA y devuelve las señales crudas."""
+# --- signal collection -----------------------------------------------------
+def observe(target_n: int, semantic: bool = False) -> dict:
+    """Run memory with the gate OPEN and return raw signals."""
     from hipercampo.core import encoder
     encoder.set_semantic_hook(None)
-    if semantico and not encoder.enable_semantic():
-        raise SystemExit("El régimen semántico necesita sentence-transformers instalado.")
+    if semantic and not encoder.enable_semantic():
+        raise SystemExit("Semantic mode requires sentence-transformers.")
 
-    base = [h for h, _ in CASOS] + DISTRACTORES
-    facts = base + relleno(max(0, n_objetivo - len(base)))
+    base = [fact for fact, _ in CASES] + DISTRACTORS
+    facts = base + filler(max(0, target_n - len(base)))
 
-    db = Path(f"data/_cal_{'sem' if semantico else 'lex'}_{n_objetivo}.db")
+    db = Path(f"data/_cal_{'sem' if semantic else 'lex'}_{target_n}.db")
     for suf in ("", "-wal", "-shm"):
         Path(str(db) + suf).unlink(missing_ok=True)
     db.parent.mkdir(parents=True, exist_ok=True)
 
-    hc = Hipercampo(str(db), namespace=f"cal{'s' if semantico else 'l'}{n_objetivo}")
+    hc = Hipercampo(str(db), namespace=f"cal{'s' if semantic else 'l'}{target_n}")
     for f in facts:
         hc.remember(f, 0.5)
     guardados = hc.store.all(only_active=False)
     id_por_texto = {r["text"]: r["id"] for r in guardados}
-    # N REAL, no el intentado: remember() descarta lo redundante, así que pedir 500
-    # hechos no significa tener 500 en la base. Etiquetar la fila con el número que
-    # se pidió y no con el que hay sería mentir sobre la escala a la que se midió.
+    # ACTUAL N, not requested N: remember() rejects redundant data, so requesting 500
+    # facts does not guarantee 500 rows. Labeling with the request would misrepresent
+    # the scale actually measured.
     n_real = len(guardados)
 
     def sondear(q, objetivo_id=None):
         hits = hc.recall(q, k=len(facts), hops=1, include_history=True)
         diag = dict(hc.last_decision)
-        # (activación por item, ordenados como los devolvió recall)
+        # Per-item activation in recall order.
         acts = [(h["id"], h["activation"]) for h in hits]
         pos = None
         if objetivo_id is not None:
@@ -164,11 +163,11 @@ def observar(n_objetivo: int, semantico: bool = False) -> dict:
     previo, memory.GATE_ENABLED = memory.GATE_ENABLED, False
     try:
         positivas = []
-        for hecho, variantes in CASOS:
+        for hecho, variantes in CASES:
             oid = id_por_texto.get(hecho)
             for cat, q in variantes.items():
                 positivas.append((cat, sondear(q, oid)))
-        negativas = [sondear(q) for q in NEGATIVAS]
+        negativas = [sondear(q) for q in NEGATIVE_QUERIES]
     finally:
         memory.GATE_ENABLED = previo
         hc.store.close()
@@ -178,15 +177,15 @@ def observar(n_objetivo: int, semantico: bool = False) -> dict:
             "positivas": positivas, "negativas": negativas}
 
 
-# --- evaluación de un juego de umbrales ------------------------------------
+# --- threshold-set evaluation ---------------------------------------------
 def evaluar(obs: dict, min_item: float, suelo: float, z: float) -> dict:
-    """Recalcula MRR y falsaRec para unos umbrales, sin reejecutar la memoria."""
+    """Recompute MRR and false recall for thresholds without rerunning memory."""
     def responde(s):
-        # 1) filtro por ITEM (MIN_RECALL_SCORE): qué sobrevive de la lista
+        # 1) ITEM filter (MIN_RECALL_SCORE): what survives from the list.
         vivos = [(i, a) for i, a in s["acts"] if a >= min_item]
         if not vivos:
             return False, None
-        # 2) puerta de ABSTENCIÓN, con la misma función que usa recall()
+        # 2) ABSTENTION gate, using the same function as recall().
         directa = np.array(sorted((a for _, a in s["acts"]), reverse=True))
         ok, _ = memory.abstention_gate(directa, len(vivos), semantic=False,
                                        floor=suelo, zmin=z)
@@ -212,20 +211,20 @@ def main(ns: list[int], semantico: bool = False):
     actual = ((memory.MIN_RECALL_SCORE, memory.ANSWER_MIN_SCORE_SEM, memory.RECALL_Z_SEM)
               if semantico else
               (memory.MIN_RECALL_SCORE, memory.ANSWER_MIN_SCORE, memory.RECALL_Z))
-    print(f"\nRégimen: {'SEMÁNTICO' if semantico else 'LÉXICO'}")
-    print(f"Umbrales actuales: MIN_RECALL_SCORE={actual[0]} "
+    print(f"\nMode: {'SEMANTIC' if semantico else 'LEXICAL'}")
+    print(f"Current thresholds: MIN_RECALL_SCORE={actual[0]} "
           f"{'ANSWER_MIN_SCORE_SEM' if semantico else 'ANSWER_MIN_SCORE'}={actual[1]} "
           f"{'RECALL_Z_SEM' if semantico else 'RECALL_Z'}={actual[2]}")
-    print(f"Positivas: {len(CASOS) * 3} · Negativas: {len(NEGATIVAS)}\n")
+    print(f"Positive: {len(CASES) * 3} · Negative: {len(NEGATIVE_QUERIES)}\n")
 
     observaciones = {}
     for n in ns:
-        print(f"  … midiendo N={n}", flush=True)
-        observaciones[n] = observar(n, semantico)
+        print(f"  … measuring N={n}", flush=True)
+        observaciones[n] = observe(n, semantico)
 
-    # 1) cómo se comportan los umbrales ACTUALES al crecer N -----------------
-    print("\n=== Umbrales actuales, al crecer N ===")
-    cab = (f"{'N real':>8}{'(pedidos)':>11}{'keyword':>10}{'typo':>10}"
+    # 1) CURRENT threshold behavior as N grows -----------------------------
+    print("\n=== Current thresholds as N grows ===")
+    cab = (f"{'actual N':>8}{'(requested)':>11}{'keyword':>10}{'typo':>10}"
            f"{'synonym':>10}{'global':>9}{'falsaRec':>10}")
     print(cab); print("-" * len(cab))
     for obs in observaciones.values():
@@ -234,30 +233,29 @@ def main(ns: list[int], semantico: bool = False):
               for c in ("keyword", "typo", "synonym"))
               + f"{r['global']:>9.3f}{r['falsaRec']:>10.2f}")
 
-    # 1b) LA distribución: es lo que decide si la abstención puede funcionar -----
-    # Si la peor positiva puntúa por debajo de la mejor negativa, NINGÚN umbral
-    # absoluto las separa. Enseñarlo evita perseguir un valor que no existe.
-    print("\n=== Distribución del mejor ancla directo (`mejor`) ===")
-    cab = f"{'N':>7}  {'positivas p5/mediana/p95':>28}  {'negativas p5/mediana/p95':>28}  solape"
+    # 1b) Distribution decides whether abstention can work. If the weakest positive
+    # scores below the strongest negative, NO absolute threshold separates them.
+    print("\n=== Best direct-anchor (`best`) distribution ===")
+    cab = f"{'N':>7}  {'positive p5/median/p95':>28}  {'negative p5/median/p95':>28}  overlap"
     print(cab); print("-" * len(cab))
     for obs in observaciones.values():
         pos = np.array([s["diag"].get("best", 0.0) for _, s in obs["positivas"]])
         neg = np.array([s["diag"].get("best", 0.0) for s in obs["negativas"]])
         p = np.percentile(pos, [5, 50, 95]); q = np.percentile(neg, [5, 50, 95])
-        # fracción de negativas por encima de la positiva mediana: irreducible
+        # Fraction of negatives above the median positive: irreducible overlap.
         solape = float((neg >= np.median(pos)).mean())
         print(f"{obs['n']:>7}  {p[0]:>8.3f}/{p[1]:.3f}/{p[2]:.3f}      "
               f"  {q[0]:>8.3f}/{q[1]:.3f}/{q[2]:.3f}      {solape:>6.2f}")
 
-    # 2) barrido: el compromiso, a la vista ----------------------------------
+    # 2) Sweep: make the trade-off visible. ---------------------------------
     n_max = max(observaciones)
     obs = observaciones[n_max]
-    print(f"\n=== Barrido de umbrales (N={obs['n']}) ===")
+    print(f"\n=== Threshold sweep (N={obs['n']}) ===")
     cab = (f"{'MIN_ITEM':>9}{'SUELO':>8}{'Z':>6}"
            f"{'keyword':>10}{'typo':>10}{'synonym':>10}{'global':>9}{'falsaRec':>10}")
     print(cab); print("-" * len(cab))
-    # El rango se DERIVA de lo observado, no se fija a mano: el régimen semántico
-    # comprime las activaciones y una rejilla léxica caería entera fuera de escala.
+    # Derive the range from observations. Semantic mode compresses activations, so
+    # a hard-coded lexical grid could fall entirely outside the useful scale.
     _neg = np.array([s["diag"].get("best", 0.0) for s in obs["negativas"]])
     _pos = np.array([s["diag"].get("best", 0.0) for _, s in obs["positivas"]])
     lo, hi = float(np.percentile(_neg, 5)), float(np.percentile(_pos, 95))
@@ -274,15 +272,15 @@ def main(ns: list[int], semantico: bool = False):
                                 for c in ("keyword", "typo", "synonym"))
                       + f"{r['global']:>9.3f}{r['falsaRec']:>10.2f}")
 
-    # 3) el codo: mejor MRR entre los que más se callan ----------------------
+    # 3) Knee: best MRR among configurations that abstain most. -------------
     mejor_falsa = min(f[3]["falsaRec"] for f in filas)
     candidatos = [f for f in filas if f[3]["falsaRec"] <= mejor_falsa + 0.02]
     codo = max(candidatos, key=lambda f: f[3]["global"])
-    print(f"\nMejor falsaRec alcanzable: {mejor_falsa:.2f}")
-    print(f"Codo (máximo MRR ahí): MIN_RECALL_SCORE={codo[0]} "
+    print(f"\nBest achievable false recall: {mejor_falsa:.2f}")
+    print(f"Knee (maximum MRR there): MIN_RECALL_SCORE={codo[0]} "
           f"ANSWER_MIN_SCORE={codo[1]} RECALL_Z={codo[2]} "
           f"-> MRR {codo[3]['global']:.3f} · falsaRec {codo[3]['falsaRec']:.2f}")
-    print("\n(La elección es un COMPROMISO: no hay fila que gane en las dos columnas.)")
+    print("\n(The choice is a TRADE-OFF: no row wins in both columns.)")
 
 
 if __name__ == "__main__":

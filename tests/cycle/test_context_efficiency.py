@@ -1,4 +1,4 @@
-"""Gate de coste contextual y contrato del adaptador LongMemEval."""
+"""Context-cost gate and LongMemEval adapter contract."""
 
 import copy
 import io
@@ -59,7 +59,7 @@ def _clean() -> None:
     _FIXTURE.unlink(missing_ok=True)
 
 
-def test_gate_local_mide_calidad_contexto_y_latencia():
+def test_local_gate_measures_context_quality_and_latency():
     report = local_report()
     assert context.evaluate_local(report) == []
     assert report["mrr"] >= 0.70
@@ -69,7 +69,7 @@ def test_gate_local_mide_calidad_contexto_y_latencia():
     assert report["latency_ms"]["p95"] <= 50
 
 
-def test_gate_detecta_cada_regresion_de_contexto():
+def test_gate_detects_each_context_regression():
     cases = (
         ("mrr", 0.0, "mrr"),
         ("abstention_accuracy", 0.0, "abstention_accuracy"),
@@ -87,7 +87,7 @@ def test_gate_detecta_cada_regresion_de_contexto():
     assert any("latency" in failure for failure in context.evaluate_local(broken))
 
 
-def test_adaptador_longmemeval_mide_retrieval_y_abstencion():
+def test_longmemeval_adapter_measures_retrieval_and_abstention():
     _write_fixture()
     try:
         report = context.run_longmemeval(_FIXTURE, k=1)
@@ -99,20 +99,20 @@ def test_adaptador_longmemeval_mide_retrieval_y_abstencion():
     assert report["payload_tokens"]["p95"] > 0
 
 
-def test_adaptador_rechaza_schema_incompleto():
+def test_adapter_rejects_incomplete_schema():
     _FIXTURE.parent.mkdir(parents=True, exist_ok=True)
     _FIXTURE.write_text('[{"question_id":"rota"}]', encoding="utf-8")
     try:
         try:
             context.load_longmemeval(_FIXTURE)
-            raise AssertionError("aceptó una instancia incompleta")
+            raise AssertionError("accepted an incomplete instance")
         except ValueError as error:
-            assert "incompleta" in str(error)
+            assert "incomplete" in str(error)
     finally:
         _clean()
 
 
-def test_cli_json_local_es_estable():
+def test_local_json_cli_is_stable():
     measured = local_report()
     original = context.run_local
     context.run_local = lambda: measured
