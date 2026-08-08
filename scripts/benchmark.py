@@ -1,21 +1,20 @@
 """
-Benchmark de calidad de recuperación — ejecuta:  python scripts/benchmark.py
+Retrieval-quality benchmark — run: python scripts/benchmark.py
 
-Mide, con números, cómo de bien recupera hipercampo. La regla de oro de la
-optimización: MEDIR ANTES DE TOCAR. Sin esto, "mejorar" es adivinar.
+Measure hipercampo retrieval quality numerically. The golden rule of optimization is
+MEASURE BEFORE CHANGING. Without this, "improvement" is guesswork.
 
-Métricas (sobre un conjunto de preguntas con respuesta conocida, mezcladas con
-distractores):
-  hit@1   fracción de preguntas cuyo mejor resultado ES el correcto
-  hit@3   fracción cuyo correcto está entre los 3 primeros
-  MRR     Mean Reciprocal Rank: 1/(posición del correcto), promediado.
-          1.0 = siempre primero; 0.5 = típicamente segundo; etc.
+Metrics over questions with known answers, mixed with distractors:
+  hit@1   fraction whose top result IS correct
+  hit@3   fraction whose correct result is in the top three
+  MRR     Mean Reciprocal Rank: mean 1/(rank of the correct result).
+          1.0 = always first; 0.5 = typically second; and so on.
 """
 
 import sys
 from pathlib import Path
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# Keep UTF-8 output when redirected (Windows cp1252 breaks «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -59,7 +58,7 @@ QA = [
      "¿quién es el proveedor de correo transaccional?"),
 ]
 
-# Distractores: ruido plausible del mismo dominio, sin respuesta a ninguna query.
+# Distractors: plausible same-domain noise that answers none of the queries.
 DISTRACTORES = [
     "el gato de la oficina se llama Pixel",
     "las sillas nuevas llegaron el martes",
@@ -74,9 +73,8 @@ DISTRACTORES = [
 ]
 
 
-# Modo difícil: mismas respuestas, pero preguntas con SINÓNIMOS que casi no
-# comparten palabras con el hecho. Aquí es donde un codificador léxico sufre y un
-# codificador semántico brillaría. Sirve para saber si merece la pena el salto.
+# Hard mode: same answers, but SYNONYM queries share almost no words with the fact.
+# This exposes lexical encoder weakness and potential semantic encoder value.
 QA_HARD = [
     ("la clave de la API de pagos empieza por hcdemo_9f",
      "¿qué credencial usa el sistema de cobros?"),
@@ -138,8 +136,8 @@ def _informe(titulo, r):
             print(f"   · «{preg[:48]}» → {donde}")
 
 
-# Modo erratas: preguntas con las palabras clave MAL escritas. Aquí los trigramas
-# de caracteres deberían ayudar (una errata comparte casi todos sus trigramas).
+# Typo mode: misspelled keywords. Character trigrams should help because a typo
+# retains nearly all of its trigrams.
 QA_TYPO = [
     ("la clave de la API de pagos empieza por hcdemo_9f",
      "¿cuál es la clabe de la API de pgos?"),
@@ -160,12 +158,12 @@ if __name__ == "__main__":
     modo_sem = "--semantic" in sys.argv
     if modo_sem:
         from hipercampo.core import encoder, semantic
-        print("Activando hook semántico (sentence-transformers)... "
+        print("Enabling semantic hook (sentence-transformers)... "
               "(descarga el modelo la 1ª vez)")
         encoder.set_semantic_hook(semantic.make_sentence_transformer_hook())
         print("Hook activo.\n")
 
-    print(f"Distractores: {len(DISTRACTORES)}  |  semántica: {'ON' if modo_sem else 'OFF'}")
-    _informe("== FÁCIL (comparten palabras clave) ==", run(QA))
+    print(f"Distractors: {len(DISTRACTORES)}  |  semantics: {'ON' if modo_sem else 'OFF'}")
+    _informe("== EASY (shared keywords) ==", run(QA))
     _informe("== ERRATAS (palabras clave mal escritas) ==", run(QA_TYPO))
-    _informe("== DIFÍCIL (sinónimos, casi sin palabras compartidas) ==", run(QA_HARD))
+    _informe("== HARD (synonyms, almost no shared words) ==", run(QA_HARD))

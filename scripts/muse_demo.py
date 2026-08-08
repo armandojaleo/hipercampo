@@ -1,9 +1,9 @@
 """
-Demo del recuerdo INSPIRADOR — ejecuta:  python scripts/muse_demo.py
+INSPIRATIONAL recall demo — run: python scripts/muse_demo.py
 
-La mente no borra: sepulta. Y a veces un recuerdo lejano resurge y ata cosas que no
-sabías conectadas. Esta demo siembra recuerdos, deja que el olvido adormezca algunos,
-y usa `muse` para que resurjan por asociación e inspiren.
+The mind does not erase: it buries. Sometimes a distant memory resurfaces and links
+things you did not know were connected. This demo seeds memories, lets forgetting
+make some dormant, and uses `muse` to resurface them by association and inspire.
 """
 
 import sys
@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# Keep UTF-8 output when redirected (Windows cp1252 breaks «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -27,30 +27,31 @@ def main():
         Path("data/muse_demo.db" + suf).unlink(missing_ok=True)
     hc = Hipercampo("data/muse_demo.db", namespace="demo")
 
-    print("Sembrando recuerdos (algunos se sepultarán con el tiempo)...\n")
+    print("Seeding memories (some will become buried over time)...\n")
     hc.remember("de niño construía radios de galena con mi abuelo", 0.4)
     hc.remember("las antenas captan ondas que no vemos ni oímos", 0.4)
     hc.remember("el hipocampo consolida recuerdos mientras dormimos", 0.5)
     hc.remember("una radio de galena no necesita pilas: vive de la propia señal", 0.3)
     hc.remember("hoy trabajo en una memoria para IA que olvida como el cerebro", 0.7)
 
-    # el tiempo pasa: lo poco reforzado se adormece
-    viejo = time.time() - 90 * 86400
+    # Time passes: weakly reinforced memories become dormant.
+    old = time.time() - 90 * 86400
     hc.store.db.execute("UPDATE memories SET last_access = ? WHERE importance < 0.5",
-                        (viejo,))
+                        (old,))
     hc.store.commit()
-    olv = hc.forget(dry_run=False)
-    print(f"El tiempo pasó. {olv['olvidados']} recuerdos quedaron LATENTES (no borrados).")
-    print("Estado:", hc.stats(), "\n")
+    result = hc.forget(dry_run=False)
+    forgotten = result.get("forgotten", result.get("olvidados", 0))
+    print(f"Time passed. {forgotten} memories became DORMANT (not deleted).")
+    print("Status:", hc.stats(), "\n")
 
-    print("Pensando en voz alta: «una memoria que vive de su propia señal»")
-    print("→ muse busca conexiones inesperadas (incluye lo latente):\n")
+    print("Thinking aloud: «a memory powered by its own signal»")
+    print("→ muse searches for unexpected connections, including dormant ones:\n")
     for idea in hc.muse("una memoria que vive de su propia señal sin pilas", k=3):
-        marca = " ✨resurgido" if idea["resurfaced"] else ""
+        marker = " ✨resurfaced" if idea["resurfaced"] else ""
         print(f"  • «{idea['text']}»")
-        print(f"      via {idea['via']}{marca}")
+        print(f"      via {idea['via']}{marker}")
 
-    print("\n(Un recuerdo sepultado de la infancia puede volver y atar una idea nueva.)")
+    print("\n(A buried childhood memory can return and connect a new idea.)")
     hc.store.close()
 
 

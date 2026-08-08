@@ -1,7 +1,7 @@
 """Ablaciones aisladas de los mecanismos cognitivos de hipercampo.
 
-Ejecuta ``python scripts/ablations.py --check`` para convertir las relaciones
-medidas en una puerta de regresión, o añade ``--json`` para salida de máquina.
+Run ``python scripts/ablations.py --check`` to turn measured relationships into a
+regression gate, or add ``--json`` for machine-readable output.
 """
 
 import argparse
@@ -32,7 +32,7 @@ def _seed(varied_confidence: bool = True) -> Hipercampo:
 
 
 def _mrr(hc: Hipercampo, hops: int = 0) -> dict[str, float]:
-    """MRR sobre idénticas consultas; un resumen que contiene el hecho cuenta."""
+    """MRR over identical queries; a summary containing the fact counts as a hit."""
     previous_paused = config.paused
     config.paused = lambda: True
     try:
@@ -137,7 +137,7 @@ def evaluate(report: dict) -> list[str]:
     if surprise["full"]["routine_stored"] >= surprise["without_surprise"]["routine_stored"]:
         failures.append("surprise no reduce la corriente predecible")
     if not surprise["full"]["rare_stored"]:
-        failures.append("surprise perdió la anomalía rara")
+        failures.append("surprise lost the rare anomaly")
     confidence = report["confidence"]
     if confidence["full"]["global"] < confidence["without_confidence"]["global"] + 0.01:
         failures.append("confidence no aporta al menos 0.01 MRR")
@@ -147,7 +147,7 @@ def evaluate(report: dict) -> list[str]:
         - propagation["without_propagation"]["global"]
     )
     if abs(propagation_delta) > 0.02:
-        failures.append("propagation dejó de ser neutral en el banco actual")
+        failures.append("propagation is no longer neutral on the current benchmark")
     consolidation = report["consolidation"]
     full_nodes = consolidation["full"]["active_nodes"]
     ablated_nodes = consolidation["without_consolidation"]["active_nodes"]
@@ -156,7 +156,7 @@ def evaluate(report: dict) -> list[str]:
     full_mrr = consolidation["full"]["mrr"]["global"]
     ablated_mrr = consolidation["without_consolidation"]["mrr"]["global"]
     if full_mrr < ablated_mrr - 0.02:
-        failures.append("consolidation degrada MRR más de 0.02")
+        failures.append("consolidation degrades MRR by more than 0.02")
     return failures
 
 
@@ -166,13 +166,13 @@ def print_report(report: dict) -> None:
           f"{surprise['without_surprise']['routine_stored']}→"
           f"{surprise['full']['routine_stored']} · "
           f"rechazados={surprise['full']['predictable_rejected']} · "
-          f"anomalía={'sí' if surprise['full']['rare_stored'] else 'NO'}")
-    for key, label in (("confidence", "confianza"), ("propagation", "propagación")):
+          f"anomaly={'yes' if surprise['full']['rare_stored'] else 'NO'}")
+    for key, label in (("confidence", "confidence"), ("propagation", "propagation")):
         rows = report[key]
         ablated = next(name for name in rows if name != "full")
         print(f"{label}: MRR {rows[ablated]['global']:.3f}→{rows['full']['global']:.3f}")
     consolidation = report["consolidation"]
-    print("consolidación: nodos "
+    print("consolidation: nodes "
           f"{consolidation['without_consolidation']['active_nodes']}→"
           f"{consolidation['full']['active_nodes']} · MRR "
           f"{consolidation['without_consolidation']['mrr']['global']:.3f}→"

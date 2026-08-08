@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar     # noqa: E402
+from helpers import run_tests, clean     # noqa: E402
 import hipercampo                          # noqa: E402
 from hipercampo import Hipercampo          # noqa: E402
 
@@ -108,5 +108,5 @@ def test_el_paquete_expone_hipercampo():
 
 
 if __name__ == "__main__":
-    limpiar()
-    sys.exit(ejecutar(dict(globals())))
+    clean()
+    sys.exit(run_tests(dict(globals())))

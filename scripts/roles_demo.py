@@ -1,15 +1,15 @@
 """
-Demo del diferenciador: memoria COMPOSICIONAL con roles.
-Ejecuta:  python scripts/roles_demo.py
+Differentiator demo: COMPOSITIONAL memory with roles.
+Run: python scripts/roles_demo.py
 
-Muestra lo que BM25 y los embeddings NO pueden: preguntar por ROL
-("¿quién hizo qué a quién?") y recuperar el valor correcto por unbinding.
+Shows what BM25 and embeddings CANNOT do: query by ROLE ("who did what to whom?")
+and recover the correct value through unbinding.
 """
 
 import sys
 from pathlib import Path
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# Keep UTF-8 output when redirected (Windows cp1252 breaks «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hipercampo.cycle.roles import ItemMemory, encode_fact, query_role   # noqa: E402
 
 
-def linea(c="─"):
+def rule(c="─"):
     print(c * 60)
 
 
@@ -30,7 +30,7 @@ def main():
               "veterinaria", "marta", "curó", "frankfurt", "servidor", "aloja"]:
         im.add(v)
 
-    hechos = {
+    facts = {
         "El perro muerde al hombre":
             {"subject": "perro", "predicate": "muerde", "object": "hombre"},
         "El hombre muerde al perro":
@@ -38,25 +38,25 @@ def main():
         "Marta curó al gato":
             {"subject": "marta", "predicate": "curó", "object": "gato"},
     }
-    records = {frase: encode_fact(f, im) for frase, f in hechos.items()}
+    records = {sentence: encode_fact(fact, im) for sentence, fact in facts.items()}
 
-    linea("═")
-    print("  Memoria composicional: ¿quién hizo qué a quién?")
-    linea("═")
-    for frase, rec in records.items():
-        s = query_role(rec, "subject", im)[0]
-        p = query_role(rec, "predicate", im)[0]
-        o = query_role(rec, "object", im)[0]
-        print(f"\n  «{frase}»")
-        print(f"     ¿quién?  → {s[0]:8} ({s[1]:.2f})")
-        print(f"     ¿qué?    → {p[0]:8} ({p[1]:.2f})")
-        print(f"     ¿a quién?→ {o[0]:8} ({o[1]:.2f})")
+    rule("═")
+    print("  Compositional memory: who did what to whom?")
+    rule("═")
+    for sentence, record in records.items():
+        s = query_role(record, "subject", im)[0]
+        p = query_role(record, "predicate", im)[0]
+        o = query_role(record, "object", im)[0]
+        print(f"\n  «{sentence}»")
+        print(f"     who?     → {s[0]:8} ({s[1]:.2f})")
+        print(f"     did what?→ {p[0]:8} ({p[1]:.2f})")
+        print(f"     to whom? → {o[0]:8} ({o[1]:.2f})")
 
-    linea("═")
-    print("  Lo clave: 'perro muerde hombre' y 'hombre muerde perro' tienen los")
-    print("  MISMOS valores, pero el sujeto/objeto recuperados están INVERTIDOS.")
-    print("  Un embedding denso los pone casi en el mismo punto. VSA no.")
-    linea("═")
+    rule("═")
+    print("  The key: 'dog bites man' and 'man bites dog' contain the SAME values,")
+    print("  but their recovered subject/object roles are REVERSED.")
+    print("  A dense embedding places them at almost the same point. VSA does not.")
+    rule("═")
 
 
 if __name__ == "__main__":

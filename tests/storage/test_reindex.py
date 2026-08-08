@@ -20,7 +20,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria     # noqa: E402
+from helpers import run_tests, clean, memory     # noqa: E402
 from hipercampo.core.encoder import encode_text          # noqa: E402
 from hipercampo.storage.store import Store                   # noqa: E402
 
@@ -55,7 +55,7 @@ def _acierto_recall(hc, textos, tema, n_temas, rng):
 
 
 def test_reindex_densifica_sin_empeorar_recall():
-    hc = memoria("reindex_ok", namespace="proj")
+    hc = memory("reindex_ok", namespace="proj")
     textos, tema, rng = _sembrar(hc)
     antes_enlaces = len(hc.store.links_dump())
     antes_recall = _acierto_recall(hc, textos, tema, 15, np.random.default_rng(1))
@@ -72,7 +72,7 @@ def test_reindex_densifica_sin_empeorar_recall():
 
 
 def test_reindex_no_pisa_enlaces_existentes():
-    hc = memoria("reindex_keep", namespace="proj")
+    hc = memory("reindex_keep", namespace="proj")
     a = hc.remember("windows rechaza rutas largas con error 400", 0.7)["id"]
     b = hc.remember("los datos largos van por query string, no en el path", 0.7)["id"]
     hc.store.link(a, b, weight=0.9, type="lexical"); hc.store.commit()
@@ -86,7 +86,7 @@ def test_reindex_no_pisa_enlaces_existentes():
 
 
 def test_reindex_se_queda_en_su_contexto():
-    hc = memoria("reindex_ns", namespace="proj")
+    hc = memory("reindex_ns", namespace="proj")
     _sembrar(hc, n_temas=5, por=6, seed=3)
     otro = Store(hc.store.path, namespace="otro")
     for i in range(6):
@@ -106,7 +106,7 @@ def test_densificar_no_rompe_el_sueno():
     sentido, p.ej. knn y lexical con pesos distintos). El UNION de neighbors() lo
     devolvía duplicado, y dream reventaba (frozenset de tamaño 1). neighbors() ahora
     deduplica por vecino."""
-    hc = memoria("reindex_dream", namespace="proj")
+    hc = memory("reindex_dream", namespace="proj")
     _sembrar(hc, n_temas=8, por=8, seed=9)
     ids = [m["id"] for m in hc.store.all(only_active=False)][:2]
     hc.store.link(ids[0], ids[1], weight=0.9, type="lexical")
@@ -126,7 +126,7 @@ def test_reindex_all_namespaces_teje_cada_contexto():
     import json
     import os
     from hipercampo import cli
-    hc = memoria("reindex_all", namespace="proj-a")
+    hc = memory("reindex_all", namespace="proj-a")
     _sembrar(hc, n_temas=5, por=6, seed=1)
     db = hc.store.path
     hc.close()
@@ -165,7 +165,7 @@ def test_dream_all_namespaces_agrega_ideas_de_cada_contexto():
     import json
     import os
     from hipercampo import cli
-    hc = memoria("dream_all", namespace="ctx-a")
+    hc = memory("dream_all", namespace="ctx-a")
     _sembrar(hc, n_temas=6, por=8, seed=11)
     db = hc.store.path
     hc.store.reindex_navgraph(M=10)
@@ -193,7 +193,7 @@ def test_dream_all_namespaces_agrega_ideas_de_cada_contexto():
 
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
+    clean()
+    codigo = run_tests(dict(globals()))
+    clean()
     sys.exit(codigo)

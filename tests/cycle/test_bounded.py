@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria    # noqa: E402
+from helpers import run_tests, clean, memory    # noqa: E402
 
 
 def _sembrar_relleno(hc, n):
@@ -32,7 +32,7 @@ def _sembrar_relleno(hc, n):
 
 
 def test_max_scan_limita_las_filas_que_se_traen():
-    hc = memoria("bound_lim")
+    hc = memory("bound_lim")
     _sembrar_relleno(hc, 200)
     todas = hc.store.all(only_active=False)
     acotadas = hc.store.all(only_active=False, limit=50)
@@ -45,7 +45,7 @@ def test_la_cota_conserva_lo_mas_vivo():
     """Un recuerdo FUERTE (reforzado) se encuentra aunque la cota sea estrecha y haya
     mucho relleno: la cota se queda con lo más vivo, no con lo primero que pilla."""
     from hipercampo.core.encoder import encode_text
-    hc = memoria("bound_vivo")
+    hc = memory("bound_vivo")
     _sembrar_relleno(hc, 300)
     diana = "el tesoro esta escondido en la isla del faro"
     tid = hc.store.add(diana, encode_text(diana), 1.0, 0.9, 0.9)
@@ -59,7 +59,7 @@ def test_la_cota_conserva_lo_mas_vivo():
 
 
 def test_recall_con_cota_sigue_respondiendo_y_no_revienta():
-    hc = memoria("bound_ok")
+    hc = memory("bound_ok")
     _sembrar_relleno(hc, 120)
     hit = hc.recall("nota de relleno numero 50", k=3, max_scan=30)
     assert isinstance(hit, list), "con cota, recall sigue devolviendo una lista"
@@ -68,7 +68,7 @@ def test_recall_con_cota_sigue_respondiendo_y_no_revienta():
 
 def test_cota_ridicula_no_rompe():
     """max_scan=1 (o 0, que se sube a 1) es un caso extremo, no un error."""
-    hc = memoria("bound_min")
+    hc = memory("bound_min")
     _sembrar_relleno(hc, 50)
     assert isinstance(hc.recall("lo que sea", max_scan=1), list)
     assert isinstance(hc.recall("lo que sea", max_scan=0), list)   # 0 -> se acota a 1
@@ -78,7 +78,7 @@ def test_cota_ridicula_no_rompe():
 def test_existe_el_indice_que_hace_rapida_la_cota():
     """Sin índice sobre (namespace, strength, last_access) el ORDER BY del LIMIT era
     MÁS lento que escanear todo (medido). El índice es parte del contrato de la cota."""
-    hc = memoria("bound_idx")
+    hc = memory("bound_idx")
     idx = {r[0] for r in hc.store.db.execute(
         "SELECT name FROM sqlite_master WHERE type='index'").fetchall()}
     assert "idx_vivos" in idx, f"falta el índice de recuerdos vivos: {idx}"
@@ -86,7 +86,7 @@ def test_existe_el_indice_que_hace_rapida_la_cota():
 
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
+    clean()
+    codigo = run_tests(dict(globals()))
+    clean()
     sys.exit(codigo)

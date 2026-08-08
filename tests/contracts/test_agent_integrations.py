@@ -6,7 +6,7 @@ import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
-from helpers import ROOT, ejecutar, limpiar  # noqa: E402
+from helpers import ROOT, run_tests, clean  # noqa: E402
 
 
 
@@ -50,7 +50,7 @@ def test_documentacion_ofrece_claude_y_codex_sin_ocultar_el_adaptador_especifico
 
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
+    clean()
+    codigo = run_tests(dict(globals()))
+    clean()
     sys.exit(codigo)

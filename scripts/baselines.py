@@ -1,17 +1,17 @@
 """
-Fase 2 — ¿aporta hipercampo frente a lo estándar?  Ejecuta:
-    python scripts/baselines.py            # BM25 vs hipercampo (léxico) + ablaciones
-    python scripts/baselines.py --semantic # añade embeddings+coseno y hipercampo semántico
+Phase 2 — does hipercampo improve on standard methods? Run:
+    python scripts/baselines.py            # BM25 vs lexical hipercampo + ablations
+    python scripts/baselines.py --semantic # add embedding cosine and semantic hipercampo
 
-Compara, sobre el MISMO corpus (banco de estrés), varios métodos de recuperación:
-  - BM25            (léxico exacto clásico, sin dependencias, implementado aquí)
-  - embeddings+cos  (si hay sentence-transformers): el baseline "fuerte" semántico
-  - hipercampo      (léxico VSA, por defecto)
-  - hipercampo+sem  (con hook semántico)
-  - ablaciones de hipercampo (sin propagación, sin trigramas de carácter)
+Compare several retrieval methods on the SAME stress-test corpus:
+  - BM25            (classic exact lexical method, dependency-free, implemented here)
+  - embeddings+cos  (when sentence-transformers is present): strong semantic baseline
+  - hipercampo      (lexical VSA, default)
+  - hipercampo+sem  (with semantic hook)
+  - hipercampo ablations (without propagation or character trigrams)
 
-Métricas: MRR por categoría (keyword/typo/synonym) + tasa de FALSA RECUPERACIÓN
-sobre consultas negativas (mide la capacidad de ABSTENERSE, que BM25/coseno no tienen).
+Metrics: MRR by category (keyword/typo/synonym) plus FALSE RETRIEVAL rate on
+negative queries, measuring the ability to ABSTAIN that BM25/cosine lack.
 """
 
 import math
@@ -21,7 +21,7 @@ from collections import Counter
 from pathlib import Path
 
 
-# Salida UTF-8 aunque se redirija (en Windows, cp1252 rompe con «» ✨ ─).
+# Keep UTF-8 output when redirected (Windows cp1252 breaks «» ✨ ─).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
@@ -39,7 +39,7 @@ def tok(s):
     return _word.findall(s.lower())
 
 
-# Consultas NEGATIVAS: no deben devolver nada (miden la abstención).
+# NEGATIVE queries should return nothing; they measure abstention.
 NEGATIVAS = [
     "recetas de cocina tailandesa con leche de coco",
     "resultados de la liga de baloncesto del domingo",
@@ -49,7 +49,7 @@ NEGATIVAS = [
 ]
 
 
-# --- BM25 mínimo (sin dependencias) -----------------------------------------
+# --- Minimal dependency-free BM25 -------------------------------------------
 class BM25:
     def __init__(self, docs, k1=1.5, b=0.75):
         self.docs = [tok(d) for d in docs]
@@ -79,9 +79,9 @@ class BM25:
         return out
 
 
-# --- utilidades de evaluación ------------------------------------------------
+# --- Evaluation utilities ----------------------------------------------------
 def mrr_hit1(rank_fn, casos, categoria, facts):
-    """rank_fn(query) -> lista de índices de 'facts' ordenados. Devuelve (MRR, hit1)."""
+    """Evaluate rank_fn(query) and return (MRR, hit1) over ordered fact indexes."""
     rr = hit1 = 0.0
     for hecho, qs in casos:
         idx_correcto = facts.index(hecho)
@@ -95,7 +95,7 @@ def mrr_hit1(rank_fn, casos, categoria, facts):
 
 
 def falsa_recuperacion(devuelve_algo_fn):
-    """Fracción de consultas NEGATIVAS para las que el método devuelve algún
+    """Fraction of NEGATIVE queries for which the method returns any
     resultado (idealmente 0: saber abstenerse)."""
     return sum(1 for q in NEGATIVAS if devuelve_algo_fn(q)) / len(NEGATIVAS)
 
@@ -113,7 +113,7 @@ def run(semantic=False):
         return sorted(range(len(facts)), key=lambda i: sc[i], reverse=True)
     def bm_hit(q):
         sc = bm.scores(q)
-        return max(sc) > 0          # BM25 "devuelve algo" si hay solape de términos
+        return max(sc) > 0          # BM25 returns something when terms overlap.
     metodos["BM25"] = (bm_rank, bm_hit)
 
     # embeddings + coseno (opcional) ------------------------------------
@@ -129,7 +129,7 @@ def run(semantic=False):
                 return sorted(range(len(facts)), key=lambda i: sc[i], reverse=True)
             def cos_hit(q):
                 v = model.encode(q, normalize_embeddings=True)
-                return float((E @ v).max()) > 0.35   # umbral típico de coseno
+                return float((E @ v).max()) > 0.35   # Typical cosine threshold.
             metodos["embeddings+cos"] = (cos_rank, cos_hit)
         except Exception as e:
             print(f"(embeddings no disponibles: {e})")
@@ -162,14 +162,14 @@ def run(semantic=False):
     hc1, r1, h1 = make_hc("full")
     metodos["hipercampo"] = (r1, h1)
     hc2, r2, h2 = make_hc("nohop", hops=0)
-    metodos["hc (sin propagación)"] = (r2, h2)
+    metodos["hc (no propagation)"] = (r2, h2)
     if semantic:
         hc3, r3, h3 = make_hc("sem", semantic_hook=True)
         metodos["hipercampo+sem"] = (r3, h3)
 
     # informe ------------------------------------------------------------
     print(f"\nCorpus: {len(facts)} hechos | consultas negativas: {len(NEGATIVAS)}\n")
-    cab = f"{'método':22}" + "".join(f"{c:>10}" for c in cats) + f"{'global':>9}{'falsaRec':>10}"
+    cab = f"{'method':22}" + "".join(f"{c:>10}" for c in cats) + f"{'overall':>9}{'falseRet':>10}"
     print(cab); print("-" * len(cab))
     for nombre, (rank_fn, hit_fn) in metodos.items():
         mrrs = [mrr_hit1(rank_fn, CASOS, c, facts)[0] for c in cats]
@@ -177,8 +177,8 @@ def run(semantic=False):
         fr = falsa_recuperacion(hit_fn)
         fila = f"{nombre:22}" + "".join(f"{m:>10.3f}" for m in mrrs) + f"{glob:>9.3f}{fr:>10.2f}"
         print(fila)
-    print("\n(MRR: más alto mejor. falsaRec: fracción de consultas ajenas que"
-          " devuelven algo; más bajo mejor.)")
+    print("\n(MRR: higher is better. falseRet: fraction of unrelated queries that"
+          " return something; lower is better.)")
 
 
 if __name__ == "__main__":

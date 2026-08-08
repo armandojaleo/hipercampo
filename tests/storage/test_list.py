@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar     # noqa: E402
+from helpers import run_tests, clean     # noqa: E402
 from hipercampo import cli                 # noqa: E402
 from hipercampo.cycle.memory import Hipercampo   # noqa: E402
 from hipercampo.storage.store import Store         # noqa: E402
@@ -255,8 +255,8 @@ def _env():
 
 
 if __name__ == "__main__":     # el bucle de cobertura de CI ejecuta este fichero como script
-    limpiar()
+    clean()
     _clean()
-    codigo = ejecutar(dict(globals()))
+    codigo = run_tests(dict(globals()))
     _clean()
     sys.exit(codigo)

@@ -8,11 +8,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria      # noqa: E402
+from helpers import run_tests, clean, memory      # noqa: E402
 
 
 def test_health_dice_que_esta_sana():
-    hc = memoria("res_health")
+    hc = memory("res_health")
     h = hc.health()
     assert h["healthy"] is True, h
     assert h["integrity"] == "ok" and h["schema"] == "ok"
@@ -20,7 +20,7 @@ def test_health_dice_que_esta_sana():
 
 
 def test_recall_se_recupera_de_una_conexion_caida():
-    hc = memoria("res_recall")
+    hc = memory("res_recall")
     hc.remember("el servidor de produccion esta alojado en Frankfurt", 0.7)
     hc.store.db.close()                       # simula una caída de la BD
     hits = hc.recall("donde esta el servidor de produccion")
@@ -28,7 +28,7 @@ def test_recall_se_recupera_de_una_conexion_caida():
 
 
 def test_remember_se_recupera_de_una_conexion_caida():
-    hc = memoria("res_remember")
+    hc = memory("res_remember")
     hc.remember("primer recuerdo antes de la caida", 0.6)
     hc.store.db.close()
     r = hc.remember("un recuerdo escrito despues de reconectar solo", 0.6)
@@ -36,7 +36,7 @@ def test_remember_se_recupera_de_una_conexion_caida():
 
 
 def test_stats_se_recupera():
-    hc = memoria("res_stats")
+    hc = memory("res_stats")
     hc.remember("algo que contar en las estadisticas", 0.5)
     hc.store.db.close()
     s = hc.stats()
@@ -44,7 +44,7 @@ def test_stats_se_recupera():
 
 
 def test_un_fallo_irrecuperable_devuelve_error_legible():
-    hc = memoria("res_error")
+    hc = memory("res_error")
     hc.remember("recuerdo previo al desastre", 0.5)
     # rompemos la conexión Y la ruta: la reconexión también fallará
     hc.store.db.close()
@@ -56,5 +56,5 @@ def test_un_fallo_irrecuperable_devuelve_error_legible():
 
 
 if __name__ == "__main__":
-    limpiar()
-    sys.exit(ejecutar(dict(globals())))
+    clean()
+    sys.exit(run_tests(dict(globals())))

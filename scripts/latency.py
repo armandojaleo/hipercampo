@@ -1,18 +1,15 @@
 """
-Latencia y memoria de recall a escala — ejecuta:  python scripts/latency.py [N...]
+Recall latency and memory at scale — run: python scripts/latency.py [N...]
 
-La pregunta que un embebido/robot hace antes de confiar en hipercampo: ¿cuánto
-tarda recordar cuando hay muchos recuerdos, y cuánta RAM cuesta? Sin este número,
-"sirve para robots" es una opinión. Aquí está el dato, medido.
+The question an embedded system or robot asks before trusting hipercampo: how long
+does recall take with many memories, and how much RAM does it cost? Without this
+number, "works for robots" is an opinion. This script measures it.
 
-Mide, para cada tamaño N:
-  - latencia de recall SIN cota (escaneo completo): p50, p95, p99
-  - latencia CON cota (max_scan=2000): lo que un robot usaría para acotar tiempo
-  - RAM pico de un recall (la matriz N×1250 es el grueso)
+For each N, measure full-scan p50/p95/p99 latency, bounded `max_scan=2000` latency,
+and peak recall RAM (dominated by the N×1250 matrix).
 
-MEDIR ANTES DE CREER: la regla de la casa. No hay índice sublineal todavía (eso es
-Fase 4), así que el escaneo es lineal; este script enseña dónde empieza a doler y
-cuánto lo alivia la cota.
+MEASURE BEFORE BELIEVING: the house rule. This historical benchmark predates the
+sublinear index; it shows where linear scanning hurts and how much a bound helps.
 """
 
 import gc
@@ -32,19 +29,18 @@ from hipercampo.core.encoder import encode_text            # noqa: E402
 from hipercampo.cycle.memory import Hipercampo              # noqa: E402
 
 _DB = "data/_latency_bench.db"
-_MAX_SCAN = 2000            # cota que un robot pondría: "lo mejor entre los 2000 más vivos"
-_CONSULTAS = 40            # recalls por medición (para percentiles estables)
+_MAX_SCAN = 2000            # Robot-style bound: best among the 2,000 liveliest.
+_QUERIES = 40               # Recalls per measurement for stable percentiles.
 
 
-def _limpiar():
+def _clean():
     for suf in ("", "-wal", "-shm"):
         Path(_DB + suf).unlink(missing_ok=True)
 
 
-def _sembrar(n: int) -> Hipercampo:
-    """Puebla la BD con n recuerdos distintos, rápido (por el almacén, sin el ciclo
-    completo de sorpresa/enlace: aquí medimos recall, no la escritura)."""
-    _limpiar()
+def _seed(n: int) -> Hipercampo:
+    """Seed n distinct memories through storage; this measures recall, not writes."""
+    _clean()
     hc = Hipercampo(_DB, namespace="bench")
     temas = ["servidor", "cliente", "despliegue", "reunión", "clave", "error",
              "ruta", "base de datos", "red", "certificado", "cola", "caché"]
@@ -64,44 +60,44 @@ def _percentiles(muestras_ms):
     return p(0.50), p(0.95), p(0.99)
 
 
-def _medir(hc: Hipercampo, max_scan=None):
-    consultas = [f"detalle del servidor numero {i * 137}" for i in range(_CONSULTAS)]
-    hc.recall(consultas[0], k=5, max_scan=max_scan)   # calentamiento: la 1ª paga cachés
-    tiempos = []
-    for q in consultas:
+def _measure(hc: Hipercampo, max_scan=None):
+    queries = [f"detalle del servidor numero {i * 137}" for i in range(_QUERIES)]
+    hc.recall(queries[0], k=5, max_scan=max_scan)   # Warm-up pays cache costs.
+    timings = []
+    for q in queries:
         t0 = time.perf_counter()
         hc.recall(q, k=5, max_scan=max_scan)
-        tiempos.append((time.perf_counter() - t0) * 1000)
-    return _percentiles(tiempos)
+        timings.append((time.perf_counter() - t0) * 1000)
+    return _percentiles(timings)
 
 
-def _ram_pico_mb(hc: Hipercampo):
+def _peak_ram_mb(hc: Hipercampo):
     gc.collect()
     tracemalloc.start()
     hc.recall("detalle del servidor numero 99", k=5)
-    _, pico = tracemalloc.get_traced_memory()
+    _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    return pico / (1024 * 1024)
+    return peak / (1024 * 1024)
 
 
-def main(tamanos):
-    print(f"Latencia de recall (p50/p95/p99, ms) — {_CONSULTAS} consultas por celda")
-    print(f"cota = max_scan={_MAX_SCAN}\n")
-    cab = f"{'N':>8} | {'completo p50/p95/p99':>24} | {'con cota p50/p95/p99':>24} | RAM/recall"
-    print(cab)
+def main(sizes):
+    print(f"Recall latency (p50/p95/p99, ms) — {_QUERIES} queries per cell")
+    print(f"bound = max_scan={_MAX_SCAN}\n")
+    header = f"{'N':>8} | {'full p50/p95/p99':>24} | {'bounded p50/p95/p99':>24} | RAM/recall"
+    print(header)
     print("-" * 78)
-    for n in tamanos:
-        hc = _sembrar(n)
-        full = _medir(hc, max_scan=None)
-        cota = _medir(hc, max_scan=_MAX_SCAN)
-        ram = _ram_pico_mb(hc)
+    for n in sizes:
+        hc = _seed(n)
+        full = _measure(hc, max_scan=None)
+        bounded = _measure(hc, max_scan=_MAX_SCAN)
+        ram = _peak_ram_mb(hc)
         hc.close()
         f = "/".join(f"{x:5.1f}" for x in full)
-        c = "/".join(f"{x:5.1f}" for x in cota)
+        c = "/".join(f"{x:5.1f}" for x in bounded)
         print(f"{n:>8} | {f:>24} | {c:>24} | {ram:7.1f} MB")
-    _limpiar()
-    print("\nNota: escaneo lineal (sin índice sublineal aún — Fase 4). La cota mantiene "
-          "la latencia plana a cambio de mirar solo los recuerdos más vivos.")
+    _clean()
+    print("\nNote: this linear-scan benchmark predates the sublinear index. The bound "
+          "keeps latency flat by examining only the liveliest memories.")
 
 
 if __name__ == "__main__":

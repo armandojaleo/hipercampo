@@ -5,7 +5,7 @@ en VSA. Se recuerda NAVEGANDO un grafo de vecinos, no escaneando todo.
 Lo que se exige (medido antes en sondas, aquí congelado como contrato):
   - navegable: buscar por el grafo recupera casi lo mismo que el escaneo completo,
   - los ATAJOS débiles de largo alcance son lo que lo hace navegable (sin ellos, islas),
-  - visita solo una FRACCIÓN de la memoria (no todo — la semilla de la sublinealidad),
+  - visita solo una FRACCIÓN de la memory (no todo — la semilla de la sublinealidad),
   - se construye NAVEGANDO al insertar (sin escaneo), y no revienta con memoria pequeña.
 
 Ejecuta:  python tests/test_navgraph.py
@@ -19,7 +19,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar          # noqa: E402
+from helpers import run_tests, clean          # noqa: E402
 from hipercampo.core.encoder import encode_text      # noqa: E402
 from hipercampo.core.navgraph import NavGraph        # noqa: E402
 from hipercampo.core.vsa import similarity_batch, stack_hvs   # noqa: E402
@@ -212,5 +212,5 @@ def test_landmarks_eligen_la_isla_semantica_correcta():
     assert visited >= len(g.entries)
 
 if __name__ == "__main__":
-    limpiar()
-    sys.exit(ejecutar(dict(globals())))
+    clean()
+    sys.exit(run_tests(dict(globals())))

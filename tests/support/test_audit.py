@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar               # noqa: E402
+from helpers import run_tests, clean               # noqa: E402
 
 
 def _audit_activo(tmp: str):
@@ -183,7 +183,7 @@ def test_el_registro_dice_por_que_y_no_solo_que():
 
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
+    clean()
+    codigo = run_tests(dict(globals()))
     Path(_LOG).unlink(missing_ok=True)
     sys.exit(codigo)

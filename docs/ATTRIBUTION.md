@@ -1,65 +1,69 @@
-# Atribución y procedencia
+# Attribution and provenance
 
-Este proyecto es explícito sobre qué es original y qué debe crédito a terceros.
-Regla de la casa: **si usamos trabajo de otros, sobre todo con copyright, se dice.**
+This project is explicit about what is original and what owes credit to third
+parties. House rule: **if we use someone else's work—especially copyrighted
+work—we say so.**
 
-## Código
+## Code
 
-**Todo el código de `hipercampo/` es original**, escrito para este proyecto (por
-Armando Jaleo con asistencia de Claude, de Anthropic). No se ha copiado código con
-copyright de otros proyectos. El álgebra de hipervectores (`bind`=XOR,
-`bundle`=voto por mayoría, `permute`=rotación, distancia de Hamming) son
-operaciones matemáticas estándar de dominio público, no una implementación ajena.
+**All code under `hipercampo/` is original**, written for this project by Armando
+Jaleo with assistance from Anthropic's Claude. No copyrighted code has been copied
+from other projects. The hypervector algebra (`bind` = XOR, `bundle` = majority
+vote, `permute` = rotation, Hamming distance) consists of standard public-domain
+mathematical operations, not someone else's implementation.
 
-## Dependencias de software (con su licencia)
+## Software dependencies and their licences
 
-Se instalan por separado vía `pip`; **su código no se incluye** en este repositorio.
+These are installed separately through `pip`; **their code is not included** in
+this repository.
 
-| Dependencia | Uso | Licencia |
-|-------------|-----|----------|
-| [NumPy](https://numpy.org) | operaciones sobre los hipervectores | BSD-3-Clause |
-| [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) | servidor MCP (`FastMCP`) | MIT |
-| Python (stdlib: `sqlite3`, `hashlib`, `re`) | persistencia y utilidades | PSF |
+| Dependency | Use | Licence |
+|---|---|---|
+| [NumPy](https://numpy.org) | Hypervector operations | BSD-3-Clause |
+| [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) | MCP server (`FastMCP`) | MIT |
+| Python (stdlib: `sqlite3`, `hashlib`, `re`) | Persistence and utilities | PSF |
 
-Cada una conserva su propia licencia y copyright.
+Each dependency retains its own licence and copyright.
 
-### Dependencia OPCIONAL del hook semántico (no se instala por defecto)
+### OPTIONAL semantic-hook dependency (not installed by default)
 
-Solo si activas la semántica con `pip install hipercampo[semantic]`:
+Only when semantics are enabled with `pip install hipercampo[semantic]`:
 
-| Dependencia / recurso | Uso | Licencia |
-|-----------------------|-----|----------|
-| [sentence-transformers](https://github.com/UKPLab/sentence-transformers) | generar embeddings densos | Apache-2.0 |
-| Modelo `paraphrase-multilingual-MiniLM-L12-v2` (por defecto) | embeddings multilingües | Apache-2.0 (autores del modelo) |
+| Dependency / resource | Use | Licence |
+|---|---|---|
+| [sentence-transformers](https://github.com/UKPLab/sentence-transformers) | Generate dense embeddings | Apache-2.0 |
+| `paraphrase-multilingual-MiniLM-L12-v2` model (default) | Multilingual embeddings | Apache-2.0 (model authors) |
 
-El puente SimHash (`semantic.embedding_to_hv`) que convierte esos embeddings en
-hipervectores es **código original nuestro**. El modelo lo descarga el usuario y se
-rige por su propia licencia; puedes sustituirlo por cualquier otro con `make_hook`.
+The SimHash bridge (`semantic.embedding_to_hv`) that converts those embeddings
+into hypervectors is **our original code**. Users download the model themselves,
+and it remains governed by its own licence. You can replace it with any other
+model through `make_hook`.
 
-## Ideas y trabajo académico en el que nos inspiramos
+## Ideas and academic work that inspired us
 
-hipercampo **no implementa** estos trabajos; se inspira en sus ideas y las cita
-como es debido. Los conceptos son de sus autores:
+hipercampo **does not implement** these works; it draws inspiration from their
+ideas and cites them accordingly. The concepts belong to their authors:
 
-- **Pentti Kanerva** — *Sparse Distributed Memory* (memoria asociativa dispersa).
+- **Pentti Kanerva** — *Sparse Distributed Memory*.
 - **Tony A. Plate** — *Holographic Reduced Representations* (HRR / binding).
-- **Torchhd** — Heddes et al., *JMLR* 2023: librería de referencia HD/VSA. La
-  citamos como estado del arte; **no usamos su código** (implementamos VSA propio).
-- Línea reciente de memoria en LLMs (2024-2026): **Titans**, **MIRAS**, **HippoRAG**,
-  **MemGPT / Letta**, **Mem0**, **Graphiti**, y **MnemoCore** (HDC/VSA para memoria de
-  IA), además de la relación *atención ≈ SDM* (Bricken & Pehlevan, 2021). Sirvieron
-  para situar el hueco a explorar; ninguna aportó código a este repo. hipercampo no
-  reclama inventar HDC ni la memoria de agentes: reclama una *combinación* concreta
-  (VSA + sorpresa + consolidación + olvido, vía MCP).
+- **Torchhd** — Heddes et al., *JMLR* 2023: a reference HD/VSA library. We cite it
+  as prior art; **we do not use its code** and implement our own VSA.
+- Recent work on LLM memory (2024–2026): **Titans**, **MIRAS**, **HippoRAG**,
+  **MemGPT / Letta**, **Mem0**, **Graphiti**, and **MnemoCore** (HDC/VSA for AI
+  memory), as well as the relationship *attention ≈ SDM* (Bricken & Pehlevan,
+  2021). They helped locate the gap worth exploring; none contributed code to
+  this repository. hipercampo does not claim to have invented HDC or agent memory.
+  It claims a concrete *combination*: VSA + surprise + consolidation + forgetting,
+  exposed through MCP.
 
-## El "hook" semántico opcional
+## The optional semantic hook
 
-`encoder.set_semantic_hook()` permite enchufar un codificador semántico externo
-(por ejemplo un modelo de embeddings). **hipercampo no incluye ningún modelo.**
-Si conectas uno, ese modelo trae su propia licencia y sus propios términos, y eres
-tú quien los acepta: decláralo en tu despliegue.
+`encoder.set_semantic_hook()` lets users connect an external semantic encoder,
+such as an embedding model. **hipercampo includes no model.** If you connect one,
+that model brings its own licence and terms, which you accept; declare it in your
+deployment.
 
-## Cómo citar hipercampo
+## How to cite hipercampo
 
-> Jaleo, A. (2026). *hipercampo: memoria asociativa para LLMs basada en
-> hipervectores*. https://github.com/armandojaleo/hipercampo
+> Jaleo, A. (2026). *hipercampo: hypervector-based associative memory for LLMs*.
+> https://github.com/armandojaleo/hipercampo

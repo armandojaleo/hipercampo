@@ -204,7 +204,7 @@
   let PAUSED = false;    // "Don't remember" mode.
   let NBHD = false;      // Map neighborhood mode: selected node plus N hops.
   let HOPS = 2;          // Neighborhood hop count.
-  let MAPFOCO = null;    // ID of the neighborhood's center node.
+  let MAP_FOCUS = null;    // ID of the neighborhood's center node.
 
   // --- utilities ------------------------------------------------------------
   const norm = (s) => String(s || "").toLowerCase()
@@ -227,14 +227,14 @@
   // Color by the memory's COGNITIVE STATE (the differentiator: Obsidian colors by
   // folder; here color tells the memory's LIFE). Priority: dormant/superseded overrides
   // kind; an atom (document fragment) is green, matching its edge.
-  const EST_COL = {
+  const STATE_COLORS = {
     episodic: "#5cc8e8",     // Cyan: hippocampus, fresh.
     semantic: "#d9a648",     // Gold: cortex, consolidated knowledge.
     atom: "#78be8c",         // Green: fragment → source, matching the atom edge.
     superseded: "#c98a8a",   // Muted red: closed truth.
     dormant: "#7a7f8a",      // Gray: dormant.
   };
-  const EST_LBL = {
+  const STATE_LABELS = {
     es: { episodic: "episódico", semantic: "semántico", atom: "átomo",
       superseded: "reemplazado", dormant: "latente" },
     en: { episodic: "episodic", semantic: "semantic", atom: "atom",
@@ -259,7 +259,7 @@
 
   // "Soon dormant" heuristic: weak, old, and still awake. It is approximate (actual
   // decay lives in the engine) and is labeled accordingly in the UI.
-  function prontoLatente(m) {
+  function soonDormant(m) {
     if (m.dormant) return false;
     const edad = (Date.now() / 1000 - (m.last_access || 0)) / 86400;
     return (m.strength || 0) < 0.4 && edad > 7 && (m.importance || 0) < 0.8;
@@ -274,7 +274,7 @@
 
   // Visible memories: namespace chips + kind (cognitive state) filter + text in text
   // mode. Kind uses the SAME classification as the Map color.
-  function visibles() {
+  function visibleMemories() {
     let base = HITS !== null ? HITS : MEM;
     if (ACTIVE) base = base.filter((m) => ACTIVE.has(m.namespace));
     const kind = ($("kind") && $("kind").value) || "";
@@ -292,7 +292,7 @@
 
   // LIST ordering is client-side. Recall results are NEVER reordered: their order is
   // the engine's relevance decision, and overriding it would misrepresent its priorities.
-  const ORDEN = {
+  const SORTERS = {
     recent: (a, b) => (b.last_access || 0) - (a.last_access || 0),
     importance: (a, b) => (b.importance || 0) - (a.importance || 0),
     uses: (a, b) => (b.access_count || 0) - (a.access_count || 0),
@@ -300,7 +300,7 @@
   };
 
   // --- static labels, applied in the selected language at startup -----------
-  function aplicarIdioma() {
+  function applyLanguage() {
     $("q").placeholder = L.filtrar;
     $("mode").title = L.comoBuscar;
     const opts = $("mode").options;
@@ -312,7 +312,7 @@
     const ksel = $("kind");
     if (ksel) {
       ksel.title = L.filtrarTipo;
-      const klbl = EST_LBL[lang];
+      const klbl = STATE_LABELS[lang];
       ksel.options[0].textContent = L.tipoTodos;
       for (const o of ksel.options) if (o.value && klbl[o.value]) o.textContent = klbl[o.value];
     }
@@ -339,11 +339,11 @@
     const emptyPs = $("empty").querySelectorAll("p");
     if (emptyPs[0]) emptyPs[0].textContent = L.vacio;
     if (emptyPs[1]) emptyPs[1].textContent = L.vacioHint;
-    pintarPausa();   // Set the pause-button title from the language and state.
+    renderPause();   // Set the pause-button title from the language and state.
   }
 
   // --- namespace chips ------------------------------------------------------
-  function pintarChips() {
+  function renderChips() {
     const cont = $("chips");
     const todos = [...new Set(MEM.map((m) => m.namespace))].sort();
     if (todos.length <= 1) { cont.innerHTML = ""; return; }
@@ -359,7 +359,7 @@
         // Click to show ONLY this context; click it again when isolated to show all.
         const soloEste = ACTIVE && ACTIVE.size === 1 && ACTIVE.has(ns);
         ACTIVE = soloEste ? null : new Set([ns]);
-        sincronizarAll(todos); pintarChips(); repintar();
+        syncAll(todos); renderChips(); repaint();
       };
       cont.appendChild(el);
     }
@@ -367,13 +367,13 @@
 
   // The "all contexts" checkbox reflects whether all are visible and never leaves the
   // screen empty. Checking shows all; clearing isolates ONE (the first), never none.
-  function sincronizarAll(todos) {
+  function syncAll(todos) {
     const chk = $("all");
     if (chk) chk.checked = (ACTIVE === null);
   }
 
   // --- header / counter -----------------------------------------------------
-  function cabecera(n) {
+  function renderHeader(n) {
     const total = (HITS !== null ? HITS : MEM).length;
     const sc = $("scope");
     if (HITS !== null) {
@@ -392,7 +392,7 @@
   }
 
   // --- repaint the active view ---------------------------------------------
-  function mensajeVacio() {
+  function emptyMessage() {
     const m = $("mode").value;
     if (m !== "text" && HITS === null)
       return L.escribeConsulta(m);
@@ -401,19 +401,19 @@
     return L.nadaMostrar;
   }
 
-  function repintar() {
-    if (PIDE[VIEW]) return;   // Status/tokens/log are not rendered from here.
-    const items = visibles();
+  function repaint() {
+    if (REQUEST_VIEW[VIEW]) return;   // Status/tokens/log are not rendered from here.
+    const items = visibleMemories();
     const vacio = items.length === 0;
     $("empty").classList.toggle("hidden", !vacio);
-    if (vacio) $("empty").querySelector("p").textContent = mensajeVacio();
+    if (vacio) $("empty").querySelector("p").textContent = emptyMessage();
     $("error").classList.add("hidden");
-    cabecera(items.length);
+    renderHeader(items.length);
     if (VIEW === "list") renderList(items);
     else if (VIEW === "graph") renderGraph(items);
     else if (VIEW === "timeline") renderTimeline(items);
     else if (VIEW === "axes") renderAxes(items);
-    else if (VIEW === "status") { /* Requested separately; see activarVista. */ }
+    else if (VIEW === "status") { /* Requested separately; see activateView. */ }
   }
 
   // ==========================================================================
@@ -430,7 +430,7 @@
     el.className = "card" + (m.dormant ? " dormant" : "") + (m.superseded ? " superseded" : "");
     el.style.setProperty("--accent", nsColor(m.namespace));
     const flags = [m.dormant ? "💤" : "", m.consolidated ? "📦" : "",
-      m.superseded ? "↩" : "", prontoLatente(m) ? "⚠️" : ""].join("");
+      m.superseded ? "↩" : "", soonDormant(m) ? "⚠️" : ""].join("");
     const ns = m.namespace ? `<span class="ns" style="color:${nsColor(m.namespace)}">⟨${esc(m.namespace)}⟩</span>` : "";
     const comp = m.score_components || {};
     const compTitle = Object.keys(comp).length
@@ -470,7 +470,7 @@
   function accion(act, m) {
     if (act === "muse") {
       $("mode").value = "muse"; $("q").value = m.text.slice(0, 60);
-      lanzarBusquedaAgente();
+      runAgentSearch();
     } else if (act === "move") {
       vscode.postMessage({ type: "reclassify", id: m.id, namespace: m.namespace });
     } else {
@@ -486,7 +486,7 @@
     if (HITS === null) {
       const hijos = atomSetGlobal();
       if (hijos.size) items = items.filter((m) => !hijos.has(m.id));
-      const cmp = ORDEN[($("sort") && $("sort").value) || "recent"];
+      const cmp = SORTERS[($("sort") && $("sort").value) || "recent"];
       if (cmp) items = [...items].sort(cmp);
     }
     const c = $("view-list");
@@ -502,15 +502,15 @@
   let G = null;             // Graph state: positioned nodes, camera, and animation.
   const GPOS = new Map();   // id -> {x,y}, PERSISTENT across refreshes (no reshuffling).
 
-  const firmaNodos = (items) => items.map((m) => m.id).sort((a, b) => a - b).join(",");
+  const nodeSignature = (items) => items.map((m) => m.id).sort((a, b) => a - b).join(",");
 
   // Atoms are type='atom' edge targets (src=source, dst=atom). Color them separately.
-  const atomosDe = (aristas) => new Set(aristas.filter((e) => e.type === "atom").map((e) => e.dst));
+  const atomsFrom = (aristas) => new Set(aristas.filter((e) => e.type === "atom").map((e) => e.dst));
 
   // A node's N-hop neighborhood (BFS over visible edges in both directions).
   // This is essential for legibility: a neighborhood of a 222-node graph is readable;
   // the entire graph is not.
-  function vecindarioIds(focoId, items, hops) {
+  function neighborhoodIds(focoId, items, hops) {
     const idset = new Set(items.map((m) => m.id));
     if (!idset.has(focoId)) return idset;   // The focus is gone: do not filter.
     const ady = new Map();
@@ -532,7 +532,7 @@
   }
 
   // Most-connected node, used to start a neighborhood before the user selects one.
-  function nodoHub(items) {
+  function hubNode(items) {
     const grado = new Map();
     const idset = new Set(items.map((m) => m.id));
     for (const e of EDGES) {
@@ -549,23 +549,23 @@
     const canvas = $("graph-canvas");
     // NEIGHBORHOOD MODE: reduce the full tangle to one readable neighborhood.
     if (NBHD) {
-      if (MAPFOCO == null || !items.some((m) => m.id === MAPFOCO)) MAPFOCO = nodoHub(items);
-      if (MAPFOCO != null) {
-        const barrio = vecindarioIds(MAPFOCO, items, HOPS);
+      if (MAP_FOCUS == null || !items.some((m) => m.id === MAP_FOCUS)) MAP_FOCUS = hubNode(items);
+      if (MAP_FOCUS != null) {
+        const barrio = neighborhoodIds(MAP_FOCUS, items, HOPS);
         items = items.filter((m) => barrio.has(m.id));
       }
     }
     const vis = new Set(items.map((m) => m.id));
     const aristas = EDGES.filter((e) => vis.has(e.src) && vis.has(e.dst));
-    const sig = firmaNodos(items);
+    const sig = nodeSignature(items);
 
     // SAME node set (the typical auto-refresh): do NOT reseed or resimulate—that made
     // the map jump. Refresh data and redraw only.
     if (G && G.sig === sig) {
       const byId = new Map(items.map((m) => [m.id, m]));
       for (const n of G.nodos) n.m = byId.get(n.id) || n.m;
-      G.aristas = aristas; G.atomSet = atomosDe(aristas);
-      leyenda(items); ajustarCanvas(canvas); dibujarGrafo();
+      G.aristas = aristas; G.atomSet = atomsFrom(aristas);
+      renderLegend(items); resizeCanvas(canvas); drawGraph();
       return;
     }
 
@@ -594,39 +594,39 @@
     // graph instead of leaving it clustered in a corner.
     const camTouched = camPrev ? camPrev.touched : false;
     G = { canvas, ctx: canvas.getContext("2d"), nodos, idx, aristas, sig,
-      atomSet: atomosDe(aristas),
+      atomSet: atomsFrom(aristas),
       scale: (camPrev && camPrev.scale) || 1, ox: (camPrev && camPrev.ox) || 0, oy: (camPrev && camPrev.oy) || 0,
       sel: null, hover: null, drag: null, alpha: alpha0, raf: 0,
       camTouched, fitPending: !camTouched };
-    leyenda(items);
-    ajustarCanvas(canvas);
-    correrSim(alpha0);
-    engancharGrafo();
+    renderLegend(items);
+    resizeCanvas(canvas);
+    runSimulation(alpha0);
+    bindGraphEvents();
   }
 
-  function leyenda(items) {
+  function renderLegend(items) {
     // STATE legend (node colors): include only states that are present to avoid noise.
     // Namespaces remain in the chips above because they are filters.
     const atomSet = G ? G.atomSet : new Set();
     const presentes = [...new Set(items.map((m) => estadoNodo(m, atomSet)))];
     const orden = ["episodic", "semantic", "atom", "superseded", "dormant"];
-    const lbl = EST_LBL[lang];
+    const lbl = STATE_LABELS[lang];
     const l = $("graph-legend");
     l.innerHTML = orden.filter((k) => presentes.includes(k)).map((k) =>
-      `<div class="k"><span class="dot" style="background:${EST_COL[k]}"></span>${esc(lbl[k])}</div>`).join("")
+      `<div class="k"><span class="dot" style="background:${STATE_COLORS[k]}"></span>${esc(lbl[k])}</div>`).join("")
       + `<div class="k"><span class="ln" style="border-color:var(--vscode-foreground);opacity:.5"></span>${L.leyAsociacion}</div>`
       + `<div class="k"><span class="ln" style="border-color:var(--vscode-textLink-foreground);border-top-style:dashed"></span>${L.leyPuente}</div>`
-      + `<div class="k"><span class="ln" style="border-color:${EST_COL.atom}"></span>${L.leyAtomo}</div>`;
+      + `<div class="k"><span class="ln" style="border-color:${STATE_COLORS.atom}"></span>${L.leyAtomo}</div>`;
   }
 
-  function ajustarCanvas(c) {
+  function resizeCanvas(c) {
     const r = c.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr);
     if (G) { G.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); G.w = r.width; G.h = r.height; }
   }
 
-  function correrSim(alpha0) {
+  function runSimulation(alpha0) {
     if (!G) return;
     cancelAnimationFrame(G.raf);
     if (alpha0 != null) G.alpha = alpha0;
@@ -637,12 +637,12 @@
       G.alpha *= 0.94;   // Cool quickly so the map settles sooner and stops vibrating.
       // On SETTLE: fit once (unless the user moved the camera), then FREEZE.
       if (G.alpha <= 0.03 && !G.drag) {
-        if (G.fitPending && !G.camTouched) { G.fitPending = false; encuadrar(); }
-        else dibujarGrafo();
+        if (G.fitPending && !G.camTouched) { G.fitPending = false; fitGraph(); }
+        else drawGraph();
         G.raf = 0;                       // Frozen: no more frames until requested.
         return;
       }
-      dibujarGrafo();
+      drawGraph();
       G.raf = requestAnimationFrame(paso);
     };
     G.raf = requestAnimationFrame(paso);
@@ -702,7 +702,7 @@
 
   const radioNodo = (n) => (4 + (n.m.importance || 0.3) * 7) * Math.max(0.6, Math.min(1.6, G.scale));
 
-  function dibujarGrafo() {
+  function drawGraph() {
     const { ctx, w, h } = G;
     // The focused NODE controls neighbor highlighting; hover takes priority over selection.
     const foco = G.hover || G.sel;
@@ -733,9 +733,9 @@
     for (const n of G.nodos) {
       const p = toScreen(n);
       const r = radioNodo(n);
-      const enFoco = foco && (foco === n.id || vecino(foco, n.id));
+      const enFoco = foco && (foco === n.id || areNeighbors(foco, n.id));
       const atenua = foco && !enFoco;
-      const col = EST_COL[estadoNodo(n.m, G.atomSet)];
+      const col = STATE_COLORS[estadoNodo(n.m, G.atomSet)];
       ctx.globalAlpha = atenua ? 0.18 : 1;
       ctx.shadowColor = col;
       ctx.shadowBlur = (enFoco ? 16 : 7) * Math.max(0.6, Math.min(1.4, G.scale));
@@ -766,11 +766,11 @@
 
   // Fit the BULK of nodes on canvas. Use the 5th–95th percentiles instead of min/max so
   // one distant outlier does not shrink the entire map to a point.
-  function encuadrar() {
+  function fitGraph() {
     if (!G || !G.nodos.length) return;
     const xs = G.nodos.map((n) => n.x).filter(isFinite).sort((a, b) => a - b);
     const ys = G.nodos.map((n) => n.y).filter(isFinite).sort((a, b) => a - b);
-    if (!xs.length || !ys.length) { G.scale = 1; G.ox = 0; G.oy = 0; dibujarGrafo(); return; }
+    if (!xs.length || !ys.length) { G.scale = 1; G.ox = 0; G.oy = 0; drawGraph(); return; }
     const q = (arr, p) => arr[Math.min(arr.length - 1, Math.max(0, Math.floor(p * (arr.length - 1))))];
     const minX = q(xs, 0.05), maxX = q(xs, 0.95), minY = q(ys, 0.05), maxY = q(ys, 0.95);
     const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
@@ -782,10 +782,10 @@
     G.oy = -((minY + maxY) / 2) * G.scale;
     if (!isFinite(G.ox)) G.ox = 0;
     if (!isFinite(G.oy)) G.oy = 0;
-    dibujarGrafo();
+    drawGraph();
   }
 
-  function vecino(a, b) {
+  function areNeighbors(a, b) {
     return G.aristas.some((e) => (e.src === a && e.dst === b) || (e.src === b && e.dst === a));
   }
 
@@ -793,7 +793,7 @@
     return getComputedStyle(document.body).getPropertyValue(name).trim() || "#8ab4f8";
   }
 
-  function nodoEn(mx, my) {
+  function nodeAt(mx, my) {
     for (let i = G.nodos.length - 1; i >= 0; i--) {
       const p = toScreen(G.nodos[i]);
       const r = (4 + (G.nodos[i].m.importance || 0.3) * 7) * Math.max(0.6, Math.min(1.6, G.scale)) + 3;
@@ -802,18 +802,18 @@
     return null;
   }
 
-  function engancharGrafo() {
+  function bindGraphEvents() {
     const c = G.canvas;
     c.onpointerdown = (e) => {
       const rect = c.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const n = nodoEn(mx, my);
+      const n = nodeAt(mx, my);
       if (n) {
-        G.sel = n.id; detalle(n.m);
+        G.sel = n.id; renderDetail(n.m);
         // In neighborhood mode, clicking a node recenters the neighborhood on it.
-        if (NBHD) { MAPFOCO = n.id; renderGraph(visibles()); return; }
+        if (NBHD) { MAP_FOCUS = n.id; renderGraph(visibleMemories()); return; }
         G.drag = { node: n, dx: 0, dy: 0 };
-        correrSim();
+        runSimulation();
       } else { G.drag = { pan: true, sx: mx - G.ox, sy: my - G.oy }; G.sel = null; $("graph-detail").classList.add("hidden"); }
       c.setPointerCapture(e.pointerId);
     };
@@ -821,32 +821,32 @@
       const rect = c.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       if (G.drag) {
-        if (G.drag.pan) { G.camTouched = true; G.ox = mx - G.drag.sx; G.oy = my - G.drag.sy; dibujarGrafo(); }
-        else { const n = G.drag.node; n.x = (mx - G.w / 2 - G.ox) / G.scale; n.y = (my - G.h / 2 - G.oy) / G.scale; n.vx = n.vy = 0; GPOS.set(n.id, { x: n.x, y: n.y }); dibujarGrafo(); }
+        if (G.drag.pan) { G.camTouched = true; G.ox = mx - G.drag.sx; G.oy = my - G.drag.sy; drawGraph(); }
+        else { const n = G.drag.node; n.x = (mx - G.w / 2 - G.ox) / G.scale; n.y = (my - G.h / 2 - G.oy) / G.scale; n.vx = n.vy = 0; GPOS.set(n.id, { x: n.x, y: n.y }); drawGraph(); }
         return;
       }
       // HOVER without dragging: highlight the node and its neighbors; dim the rest.
-      const n = nodoEn(mx, my);
+      const n = nodeAt(mx, my);
       const id = n ? n.id : null;
       c.style.cursor = n ? "pointer" : "default";
-      if (id !== G.hover) { G.hover = id; if (!G.raf || G.alpha <= 0.02) dibujarGrafo(); }
+      if (id !== G.hover) { G.hover = id; if (!G.raf || G.alpha <= 0.02) drawGraph(); }
     };
-    c.onpointerleave = () => { if (G.hover) { G.hover = null; dibujarGrafo(); } };
-    c.onpointerup = () => { const drag = G.drag; G.drag = null; correrSim(drag && !drag.pan ? 0.15 : null); };
+    c.onpointerleave = () => { if (G.hover) { G.hover = null; drawGraph(); } };
+    c.onpointerup = () => { const drag = G.drag; G.drag = null; runSimulation(drag && !drag.pan ? 0.15 : null); };
     c.ondblclick = (e) => {
       const rect = c.getBoundingClientRect();
-      if (!nodoEn(e.clientX - rect.left, e.clientY - rect.top)) encuadrar();
+      if (!nodeAt(e.clientX - rect.left, e.clientY - rect.top)) fitGraph();
     };
     c.onwheel = (e) => {
       e.preventDefault();
       G.camTouched = true;
       const f = e.deltaY < 0 ? 1.1 : 0.9;
       G.scale = Math.max(0.2, Math.min(4, G.scale * f));
-      dibujarGrafo();
+      drawGraph();
     };
   }
 
-  function detalle(m) {
+  function renderDetail(m) {
     const d = $("graph-detail");
     d.classList.remove("hidden");
     d.innerHTML = `<div class="head"><span class="id">#${m.id}</span>`
@@ -869,7 +869,7 @@
     c.innerHTML = orden.map((m) => {
       const s = Math.max(0, Math.min(1, m.strength || 0));
       const col = nsColor(m.namespace);
-      const flag = m.dormant ? L.tlLatente : (prontoLatente(m) ? L.tlPronto : "");
+      const flag = m.dormant ? L.tlLatente : (soonDormant(m) ? L.tlPronto : "");
       return `<div class="tl">`
         + `<span class="tl-date">${fecha(m.last_access)}</span>`
         + `<span class="tl-bar"><span class="tl-fill" style="width:${(s * 100).toFixed(0)}%;background:${col}"></span></span>`
@@ -884,7 +884,7 @@
   let AX = null;
   function renderAxes(items) {
     const canvas = $("axes-canvas");
-    ajustarCanvasSimple(canvas);
+    resizeSimpleCanvas(canvas);
     const ctx = canvas.getContext("2d");
     const r = canvas.getBoundingClientRect();
     const pad = 40, W = r.width, H = r.height;
@@ -925,7 +925,7 @@
     canvas.onpointerleave = () => $("axes-tip").classList.add("hidden");
   }
 
-  function ajustarCanvasSimple(c) {
+  function resizeSimpleCanvas(c) {
     const r = c.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr);
@@ -941,7 +941,7 @@
     if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
     return (n / 1048576).toFixed(1) + " MB";
   }
-  const semaforo = (ok) => `<span class="sem ${ok ? "ok" : "no"}">${ok ? "●" : "○"}</span>`;
+  const statusLight = (ok) => `<span class="sem ${ok ? "ok" : "no"}">${ok ? "●" : "○"}</span>`;
 
   function renderStatus(s) {
     const c = $("view-status");
@@ -1175,25 +1175,25 @@
   // ==========================================================================
   // Tabs, search, and messages.
   // ==========================================================================
-  const PIDE = {
+  const REQUEST_VIEW = {
     status: () => vscode.postMessage({ type: "status-request" }),
     tokens: () => vscode.postMessage({ type: "tokens-request" }),
     log: () => vscode.postMessage({ type: "log-request" }),
     ideas: () => vscode.postMessage({ type: "ideas-request" }),
     facts: () => vscode.postMessage({ type: "facts-request" }),
   };
-  const PLACEHOLDER_VACIO = { status: renderStatus, tokens: renderTokens, log: renderLog,
+  const EMPTY_PLACEHOLDER = { status: renderStatus, tokens: renderTokens, log: renderLog,
     ideas: renderIdeas, facts: renderFacts };
 
-  function activarVista(v) {
+  function activateView(v) {
     VIEW = v;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === v));
     document.querySelectorAll(".view").forEach((s) => s.classList.toggle("active", s.id === "view-" + v));
-    if (PIDE[v]) {
+    if (REQUEST_VIEW[v]) {
       $("empty").classList.add("hidden");
-      PLACEHOLDER_VACIO[v](null);   // "Loading…"
-      PIDE[v]();
-    } else repintar();
+      EMPTY_PLACEHOLDER[v](null);   // "Loading…"
+      REQUEST_VIEW[v]();
+    } else repaint();
   }
 
   const PLACEHOLDER = {
@@ -1204,15 +1204,15 @@
     muse: L.phMuse,
   };
 
-  function actualizarModo(foco) {
+  function updateMode(foco) {
     const m = $("mode").value;
     $("q").placeholder = PLACEHOLDER[m] || PLACEHOLDER.text;
     if (foco) $("q").focus();
   }
 
-  function lanzarBusquedaAgente() {
+  function runAgentSearch() {
     const q = $("q").value.trim();
-    if (!q) { HITS = null; repintar(); return; }   // No seed: repaint displays guidance.
+    if (!q) { HITS = null; repaint(); return; }   // No seed: repaint displays guidance.
     $("scope").textContent = L.buscandoCon($("mode").value);
     vscode.postMessage({ type: "search", query: q, mode: $("mode").value });
   }
@@ -1222,15 +1222,15 @@
     if (msg.type === "data") {
       MEM = msg.memories || []; EDGES = msg.edges || []; SCOPE = msg.scope || "";
       HITS = null; ACTIVE = null;
-      PAUSED = !!msg.paused; pintarPausa();
+      PAUSED = !!msg.paused; renderPause();
       const w = $("weave"); if (w) w.disabled = false;   // Re-enable after weaving.
-      pintarChips();
-      if (relanzarBusqueda) { relanzarBusqueda = false; lanzarBusquedaAgente(); return; }
-      if (PIDE[VIEW]) PIDE[VIEW]();   // Re-request status/tokens/log on every refresh.
-      else repintar();
+      renderChips();
+      if (relanzarBusqueda) { relanzarBusqueda = false; runAgentSearch(); return; }
+      if (REQUEST_VIEW[VIEW]) REQUEST_VIEW[VIEW]();   // Re-request status/tokens/log on every refresh.
+      else repaint();
     } else if (msg.type === "search-result") {
       HITS = msg.memories || [];
-      repintar();
+      repaint();
     } else if (msg.type === "status") {
       renderStatus(msg.data);
     } else if (msg.type === "tokens") {
@@ -1248,29 +1248,29 @@
   });
 
   // UI events.
-  document.querySelectorAll(".tab").forEach((t) => t.onclick = () => activarVista(t.dataset.view));
+  document.querySelectorAll(".tab").forEach((t) => t.onclick = () => activateView(t.dataset.view));
   $("q").addEventListener("input", () => {
-    if ($("mode").value === "text") repintar();   // Instant client-side filter.
+    if ($("mode").value === "text") repaint();   // Instant client-side filter.
   });
   $("q").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && $("mode").value !== "text") lanzarBusquedaAgente();
+    if (e.key === "Enter" && $("mode").value !== "text") runAgentSearch();
   });
   $("mode").addEventListener("change", () => {
     HITS = null;
-    actualizarModo(true);   // Change the placeholder and focus the input.
-    if ($("mode").value === "text") repintar(); else lanzarBusquedaAgente();
+    updateMode(true);   // Change the placeholder and focus the input.
+    if ($("mode").value === "text") repaint(); else runAgentSearch();
   });
-  $("kind").addEventListener("change", () => repintar());
-  $("sort").addEventListener("change", () => { if (VIEW === "list") repintar(); });
+  $("kind").addEventListener("change", () => repaint());
+  $("sort").addEventListener("change", () => { if (VIEW === "list") repaint(); });
   $("nbhd").addEventListener("change", () => {
     NBHD = $("nbhd").checked;
-    if (NBHD && MAPFOCO == null && G && G.sel) MAPFOCO = G.sel;
-    if (!NBHD) MAPFOCO = null;
-    if (VIEW === "graph") renderGraph(visibles());
+    if (NBHD && MAP_FOCUS == null && G && G.sel) MAP_FOCUS = G.sel;
+    if (!NBHD) MAP_FOCUS = null;
+    if (VIEW === "graph") renderGraph(visibleMemories());
   });
   $("hops").addEventListener("change", () => {
     HOPS = Number($("hops").value) || 2;
-    if (NBHD && VIEW === "graph") renderGraph(visibles());
+    if (NBHD && VIEW === "graph") renderGraph(visibleMemories());
   });
   // Refresh reloads from disk WITHOUT clearing the search. If an agent search was active,
   // a flag reruns it when data arrives. Clearing the input is a separate explicit action,
@@ -1286,7 +1286,7 @@
     const todos = [...new Set(MEM.map((m) => m.namespace))].sort();
     // Checking shows all; clearing isolates ONE and never leaves the screen empty.
     ACTIVE = ($("all").checked || !todos.length) ? null : new Set([todos[0]]);
-    pintarChips(); repintar();
+    renderChips(); repaint();
   });
   $("pause").addEventListener("click", () =>
     vscode.postMessage({ type: "setPaused", value: !PAUSED }));
@@ -1298,7 +1298,7 @@
     vscode.postMessage({ type: "reindex" });
   });
 
-  function pintarPausa() {
+  function renderPause() {
     $("paused-banner").classList.toggle("hidden", !PAUSED);
     const b = $("pause");
     b.textContent = PAUSED ? "▶️" : "⏸";
@@ -1307,11 +1307,11 @@
   }
 
   window.addEventListener("resize", () => {
-    if (VIEW === "graph" && G) { ajustarCanvas(G.canvas); dibujarGrafo(); }
-    else if (VIEW === "axes") repintar();
+    if (VIEW === "graph" && G) { resizeCanvas(G.canvas); drawGraph(); }
+    else if (VIEW === "axes") repaint();
   });
 
-  aplicarIdioma();
+  applyLanguage();
   $("all").checked = true;
   vscode.postMessage({ type: "ready" });
 })();

@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
-from helpers import ejecutar, memoria  # noqa: E402
+from helpers import run_tests, memory  # noqa: E402
 from hipercampo.core.vsa import (  # noqa: E402
     _TIEBREAK, D, bundle, hamming, random_hv, similarity,
 )
@@ -60,7 +60,7 @@ def test_forget_does_not_break_an_enclosing_transaction():
     fires from an atomised write — that half-committed the caller's work: the
     all-or-nothing stopped being all-or-nothing. Here a transaction is opened, a
     row written, forget called, and then a failure forced: NOTHING may survive."""
-    hc = memoria("forget_txn")
+    hc = memory("forget_txn")
     hc.remember("some earlier memory so that there is something to decay")
     before = len(hc.store.all(only_active=False, include_dormant=True))
 
@@ -80,14 +80,14 @@ def test_forget_does_not_break_an_enclosing_transaction():
 def test_autosleep_does_not_run_inside_a_transaction():
     """Maintenance must not run nested inside somebody else's write: it could
     consolidate the very atoms that transaction is still writing."""
-    hc = memoria("autosleep_txn")
+    hc = memory("autosleep_txn")
     with hc.store.transaction():
         assert hc._autosleep() is None, "autosleep must not run inside a transaction"
 
 
 # --- 3. _self_store returns a Store, not an error dictionary ------------------
 def test_self_store_returns_a_store():
-    hc = memoria("self_store")
+    hc = memory("self_store")
     assert isinstance(hc._self_store(), Store)
 
 
@@ -104,7 +104,7 @@ def test_learn_gives_a_readable_error_when_the_db_fails():
 
     import hipercampo.cycle.memory as M
 
-    hc = memoria("learn_broken_db")
+    hc = memory("learn_broken_db")
     hc._ss = None                                  # force it to open again
     original = M.Store
 
@@ -123,7 +123,7 @@ def test_learn_gives_a_readable_error_when_the_db_fails():
 def test_learn_still_works_on_repeated_use():
     """Identity has to survive ordinary repeated use — the path that goes through
     _self_store on every call."""
-    hc = memoria("learn_ok")
+    hc = memory("learn_ok")
     r1 = hc.learn("measure before believing", tipo="regla")
     assert r1.get("learned") is True
     r2 = hc.learn("measure before believing", tipo="regla")     # already known
@@ -134,7 +134,7 @@ def test_learn_still_works_on_repeated_use():
 def test_neighbors_all_matches_neighbors():
     """`neighbors_all` replaces N calls to `neighbors` in dream: same result (only
     confirmed links, no self-links, best weight per neighbour)."""
-    hc = memoria("neigh_all")
+    hc = memory("neigh_all")
     for i in range(8):
         hc.remember(f"note number {i} about associative memory and sparse vectors")
     rows = hc.store.all(only_active=False, include_dormant=True)
@@ -146,7 +146,7 @@ def test_neighbors_all_matches_neighbors():
 
 
 def test_get_many_matches_get():
-    hc = memoria("get_many")
+    hc = memory("get_many")
     for i in range(5):
         hc.remember(f"another memory unlike the previous one, number {i}, with its own text")
     ids = [r["id"] for r in hc.store.all(only_active=False)]
@@ -183,7 +183,7 @@ def test_legacy_spanish_identity_types_still_work():
 def test_learn_accepts_the_old_parameter_name_and_values():
     """`hc_learn(tipo="regla")` was the public signature. Both the old parameter
     name and the old values keep working; new rows are stored in English."""
-    hc = memoria("legacy_learn")
+    hc = memory("legacy_learn")
     r = hc.learn("a rule stored the old way", tipo="regla")
     assert r.get("learned") is True, r
     assert r["kind"] == "rule", r
@@ -192,4 +192,4 @@ def test_learn_accepts_the_old_parameter_name_and_values():
 
 
 if __name__ == "__main__":
-    raise SystemExit(ejecutar(dict(globals())))
+    raise SystemExit(run_tests(dict(globals())))

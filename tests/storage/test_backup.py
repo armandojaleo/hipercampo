@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria      # noqa: E402
+from helpers import run_tests, clean, memory      # noqa: E402
 from hipercampo.storage.backup import backup, restore       # noqa: E402
 from hipercampo.cycle.memory import Hipercampo            # noqa: E402
 
@@ -30,7 +30,7 @@ def _limpiar_copias():
 
 
 def test_la_copia_conserva_los_recuerdos():
-    hc = memoria("bk_basico")
+    hc = memory("bk_basico")
     hc.remember("el faro de alejandria fue uno de los siete prodigios", 0.8)
     hc.remember("la biblioteca de alejandria ardio y se perdio mucho saber", 0.8)
     _limpiar_copias()
@@ -47,7 +47,7 @@ def test_la_copia_conserva_los_recuerdos():
 
 def test_la_copia_es_consistente_con_la_memoria_en_uso():
     """La API de backup de SQLite copia en caliente: no hace falta parar el servidor."""
-    hc = memoria("bk_caliente")
+    hc = memory("bk_caliente")
     for i in range(20):
         hc.remember(f"recuerdo numero {i} escrito mientras se copia la memoria", 0.5)
     _limpiar_copias()
@@ -61,7 +61,7 @@ def test_la_copia_es_consistente_con_la_memoria_en_uso():
 
 
 def test_restaurar_devuelve_lo_que_habia():
-    hc = memoria("bk_ida_vuelta")
+    hc = memory("bk_ida_vuelta")
     hc.remember("dato original que hay que poder recuperar entero", 0.8)
     ruta = hc.store.path
     _limpiar_copias()
@@ -81,7 +81,7 @@ def test_restaurar_devuelve_lo_que_habia():
 
 def test_restaurar_guarda_lo_que_pisa():
     """Restaurar la copia equivocada es fácil: debe quedar red de seguridad."""
-    hc = memoria("bk_red")
+    hc = memory("bk_red")
     hc.remember("memoria viva que no quiero perder por un despiste", 0.9)
     ruta = hc.store.path
     _limpiar_copias()
@@ -102,7 +102,7 @@ def test_restaurar_guarda_lo_que_pisa():
 
 
 def test_no_restaura_un_fichero_que_no_es_una_memoria():
-    hc = memoria("bk_basura")
+    hc = memory("bk_basura")
     hc.remember("memoria buena que no debe destruirse por un fichero roto", 0.8)
     ruta = hc.store.path
     hc.store.close()
@@ -135,8 +135,8 @@ def test_avisa_si_no_hay_nada_que_respaldar():
 
 
 if __name__ == "__main__":
-    limpiar()
+    clean()
     _limpiar_copias()
-    codigo = ejecutar(dict(globals()))
+    codigo = run_tests(dict(globals()))
     _limpiar_copias()
     sys.exit(codigo)

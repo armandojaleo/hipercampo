@@ -4,7 +4,7 @@ El índice de navegación sobre el STORE real (`store.navgraph()`): recordar nav
 Las sondas probaron el algoritmo en abstracto; aquí se exige sobre datos PERSISTIDOS
 de verdad (recuerdos guardados + sus enlaces knn):
   - navegar el índice recupera casi lo mismo que el escaneo completo (la verdad),
-  - tocando solo una FRACCIÓN de la memoria (la semilla de la sublinealidad),
+  - tocando solo una FRACCIÓN de la memory (la semilla de la sublinealidad),
   - se monta desde lo ya guardado (los knn del mapa) + atajos internos del índice.
 
 Tambien fija el primer corte de b6 en el camino caliente: `recall(nav=True)`
@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria     # noqa: E402
+from helpers import run_tests, clean, memory     # noqa: E402
 from hipercampo.core.encoder import encode_text          # noqa: E402
 from hipercampo.core.vsa import similarity_batch          # noqa: E402
 
@@ -44,7 +44,7 @@ def _sembrar(hc, n_temas=40, por=20, seed=0):
 
 
 def test_navegar_recupera_como_escanear():
-    hc = memoria("navidx", namespace="proj")
+    hc = memory("navidx", namespace="proj")
     textos, tema = _sembrar(hc)
     hc.store.reindex_navgraph(M=12)                 # teje los knn (el mapa)
     g = hc.store.navgraph(shortcuts=2)              # monta el índice de navegación
@@ -78,7 +78,7 @@ def test_navegar_recupera_como_escanear():
 
 def test_indice_usa_los_knn_del_mapa():
     """El índice se monta desde los enlaces knn ya guardados, no de la nada."""
-    hc = memoria("navidx2", namespace="proj")
+    hc = memory("navidx2", namespace="proj")
     _sembrar(hc, n_temas=8, por=8, seed=5)
     g0 = hc.store.navgraph(shortcuts=0)             # sin knn aún: solo nodos, sin aristas
     aristas0 = g0.edge_count
@@ -92,7 +92,7 @@ def test_indice_usa_los_knn_del_mapa():
 def test_recall_opcional_puede_navegar_el_grafo_del_store():
     """b6: recall(nav=True) usa el grafo persistido como candidato medido,
     manteniendo el recall normal intacto como fallback."""
-    hc = memoria("nav_recall", namespace="proj")
+    hc = memory("nav_recall", namespace="proj")
     textos, _ = _sembrar(hc, n_temas=12, por=10, seed=41)
     objetivo = textos[37]
     consulta = " ".join(objetivo.split()[:4])
@@ -127,7 +127,7 @@ def test_cli_recall_expone_modo_nav():
     import os
     from hipercampo import cli
 
-    hc = memoria("nav_cli", namespace="proj")
+    hc = memory("nav_cli", namespace="proj")
     textos, _ = _sembrar(hc, n_temas=12, por=10, seed=42)
     consulta = " ".join(textos[31].split()[:4])
     db = hc.store.path
@@ -149,7 +149,7 @@ def test_cli_recall_expone_modo_nav():
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
 def test_recall_auto_navega_si_el_grafo_es_adecuado():
-    hc = memoria("nav_auto", namespace="proj")
+    hc = memory("nav_auto", namespace="proj")
     textos, _ = _sembrar(hc, n_temas=12, por=10, seed=43)
     consulta = " ".join(textos[44].split()[:4])
     hc.store.reindex_navgraph(M=6)
@@ -168,7 +168,7 @@ def test_cli_recall_expone_modo_nav_auto():
     import os
     from hipercampo import cli
 
-    hc = memoria("nav_cli_auto", namespace="proj")
+    hc = memory("nav_cli_auto", namespace="proj")
     textos, _ = _sembrar(hc, n_temas=12, por=10, seed=44)
     consulta = " ".join(textos[52].split()[:4])
     db = hc.store.path
@@ -191,7 +191,7 @@ def test_cli_recall_expone_modo_nav_auto():
 def test_remember_teje_knn_incremental_sin_reindex():
     """b6 escritura: recordar tambien alimenta el mapa navegable sin esperar
     mantenimiento O(N^2). Los enlaces knn no sustituyen evidencia lexical."""
-    hc = memoria("nav_write", namespace="proj")
+    hc = memory("nav_write", namespace="proj")
     textos = [
         "sensor solar plaza norte sombra ruta fresca",
         "riego humedad suelo lluvia ahorro agua",
@@ -214,7 +214,7 @@ def test_remember_teje_knn_incremental_sin_reindex():
 
 def test_grafo_incremental_sobrevive_al_reinicio():
     """Los KNN son memoria persistente: cerrar el robot no obliga a reindexar."""
-    hc = memoria("nav_restart", namespace="robot")
+    hc = memory("nav_restart", namespace="robot")
     textos = [f"sensor robot zona {i} temperatura bateria ruta segura" for i in range(12)]
     for texto in textos:
         assert hc.remember(texto, 0.8, 0.8)["stored"]
@@ -236,12 +236,12 @@ def test_grafo_incremental_sobrevive_al_reinicio():
 
 def test_grafo_incremental_no_cruza_namespaces():
     """El mapa navegable de un robot/proyecto nunca incorpora recuerdos ajenos."""
-    hc_a = memoria("nav_ns", namespace="robot-a")
+    hc_a = memory("nav_ns", namespace="robot-a")
     for i in range(8):
         assert hc_a.remember(f"robot alfa sensor motor {i} mantenimiento", 0.8, 0.8)["stored"]
     hc_a.close()
 
-    hc_b = memoria("nav_ns", namespace="robot-b")
+    hc_b = memory("nav_ns", namespace="robot-b")
     for i in range(8):
         assert hc_b.remember(f"robot beta camara rueda {i} navegacion", 0.8, 0.8)["stored"]
     ids_b = {r["id"] for r in hc_b.store.all(own_only=True)}
@@ -253,7 +253,7 @@ def test_grafo_incremental_no_cruza_namespaces():
 
 def test_grafo_residente_se_reutiliza_e_invalida_con_cambios_reales():
     """Recall repetido no reconstruye O(N); cambios locales/externos sí invalidan."""
-    hc = memoria("nav_cache", namespace="proj")
+    hc = memory("nav_cache", namespace="proj")
     _sembrar(hc, n_temas=8, por=8, seed=9)
     hc.store.reindex_navgraph(M=6)
 
@@ -286,7 +286,7 @@ def test_grafo_residente_se_reutiliza_e_invalida_con_cambios_reales():
 
 def test_carga_del_gps_no_materializa_volcados_completos():
     """Construir el índice solo lee ids, vectores y extremos KNN por SQL estrecho."""
-    hc = memoria("nav_lean_load", namespace="robot")
+    hc = memory("nav_lean_load", namespace="robot")
     for i in range(8):
         text = f"sensor robot {i}"
         hc.store.add(text, encode_text(text), 1.0, 0.8, 0.8)
@@ -305,7 +305,7 @@ def test_carga_del_gps_no_materializa_volcados_completos():
     assert graph._code_positions is not None and len(graph._code_positions) == 8
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
+    clean()
+    codigo = run_tests(dict(globals()))
+    clean()
     sys.exit(codigo)

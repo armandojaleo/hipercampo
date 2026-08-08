@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria     # noqa: E402
+from helpers import run_tests, clean, memory     # noqa: E402
 from hipercampo import cli                           # noqa: E402
 
 
@@ -33,7 +33,7 @@ def _facts_json(argv):
 
 
 def test_facts_json_del_contexto():
-    hc = memoria("facts_ns", namespace="proj-a")
+    hc = memory("facts_ns", namespace="proj-a")
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"})
     db = hc.store.path
     hc.close()
@@ -52,7 +52,7 @@ def test_facts_json_del_contexto():
 
 
 def test_facts_all_namespaces_y_validez_temporal():
-    hc = memoria("facts_all", namespace="proj-a")
+    hc = memory("facts_all", namespace="proj-a")
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"})
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "cartero"})
     db = hc.store.path
@@ -77,7 +77,7 @@ def test_facts_all_namespaces_y_validez_temporal():
 
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
+    clean()
+    codigo = run_tests(dict(globals()))
+    clean()
     sys.exit(codigo)

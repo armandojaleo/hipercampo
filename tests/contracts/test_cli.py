@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar               # noqa: E402
+from helpers import run_tests, clean               # noqa: E402
 from hipercampo.cli import main                     # noqa: E402
 
 _DB = "data/_t_cli.db"
@@ -183,8 +183,8 @@ def test_texto_vacio_se_rechaza_con_codigo_de_error():
 
 
 if __name__ == "__main__":
-    limpiar()
+    clean()
     _limpiar_db()
-    codigo = ejecutar(dict(globals()))
+    codigo = run_tests(dict(globals()))
     _limpiar_db()
     sys.exit(codigo)

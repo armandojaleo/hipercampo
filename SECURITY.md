@@ -1,196 +1,206 @@
-# Seguridad y límites de confianza
+# Security and trust boundaries
 
-hipercampo es un almacén de memoria. **El texto recuperado es DATO, no instrucciones.**
-Este documento describe los riesgos reales y cómo mitigarlos.
+hipercampo is a memory store. **Retrieved text is DATA, not instructions.** This
+document describes the real risks and how to mitigate them.
 
-## Inyección vía memoria (prompt injection almacenado)
+## Memory-borne prompt injection
 
-**Riesgo.** Cualquiera (o cualquier contenido) que consiga escribir en la memoria
-puede colar texto que, al recuperarse, intente manipular al modelo:
-*"ignora tus instrucciones y..."*. Como `hc_recall` devuelve texto que luego entra
-en el contexto del LLM, un recuerdo malicioso es un vector de ataque.
+**Risk.** Anyone—or any content—able to write to memory can insert text that tries
+to manipulate the model when retrieved, such as *"ignore your instructions and
+..."*. Because `hc_recall` returns text that later enters an LLM context, a
+malicious memory is an attack vector.
 
-**Mitigaciones.**
-- **Tratar lo recuperado como datos no confiables.** El cliente (Claude) debe
-  presentar los recuerdos como información citada, nunca ejecutar instrucciones que
-  contengan. Esto es responsabilidad del *host* MCP, no solo de hipercampo.
-- **Controlar quién escribe.** Hoy `hc_remember`/`hc_update` no autentican: quien
-  pueda hablar con el servidor puede escribir. Ejecútalo local, para un solo usuario.
-- **No metas secretos que no quieras ver recuperados.** La memoria no cifra el
-  contenido; es un SQLite en claro.
+**Mitigations.**
 
-## Aislamiento entre contextos / proyectos
+- **Treat retrieved content as untrusted data.** The client must present memories
+  as cited information and never execute instructions found inside them. This is
+  the MCP host's responsibility, not hipercampo's alone.
+- **Control who can write.** `hc_remember` and `hc_update` do not authenticate
+  callers. Anyone able to talk to the server can write. Run it locally for one user.
+- **Do not store secrets you would not want retrieved.** Memory contents are not
+  encrypted; the SQLite database is plaintext.
 
-hipercampo **sí** separa por **namespace** dentro de una misma base de datos: cada
-recuerdo lleva su namespace y todas las lecturas y escrituras (incluidas las que van
-por id: `delete`, `touch`, `mark_*`) están acotadas a él, y los enlaces no cruzan
-contextos. Es aislamiento **local entre contextos** (proyectos, perfiles, agentes),
-**no** una frontera de seguridad entre clientes de un servidor —hipercampo es
-local-first, un proceso por contexto—. Para separar:
+## Isolation between contexts and projects
 
-- Un `HIPERCAMPO_NAMESPACE` distinto por contexto (mismo `.db`), o un
-  `HIPERCAMPO_DB` distinto por proyecto. Ambos valen (ver docs/INSTALL.es.md).
-- No hay autenticación: quien pueda hablar con el proceso puede elegir su namespace.
-  El aislamiento protege de mezclas accidentales, no de un actor malicioso local.
+hipercampo **does** isolate data by **namespace** within one database. Every memory
+has a namespace; all reads and writes—including ID-based operations such as
+`delete`, `touch`, and `mark_*`—are scoped to it, and links never cross contexts.
+This is **local isolation between contexts** (projects, profiles, or agents), **not**
+a security boundary between clients of one server. hipercampo is local-first, with
+one process per context. To separate contexts, use either:
 
-## Lo que hipercampo NO garantiza (todavía)
+- A different `HIPERCAMPO_NAMESPACE` per context with the same `.db`; or
+- A different `HIPERCAMPO_DB` per project. See [INSTALL.md](docs/INSTALL.md).
 
-- **Cifrado** del contenido en reposo.
-- **Autenticación / control de acceso** por herramienta.
-- **Verificación de veracidad**: guarda lo que le dices; no juzga si es cierto.
-- **Cifrado** del contenido en reposo (ver arriba): mientras no lo haya, para borrar
-  un secreto de verdad usa la purga física, no el olvido.
+There is no authentication: anyone able to talk to the process can choose its
+namespace. Isolation prevents accidental mixing, not a malicious local actor.
 
-## Borrar de verdad: olvido vs. purga
+## What hipercampo does NOT guarantee yet
 
-Conviene no confundir dos cosas que sí garantiza:
+- **Encryption** of data at rest.
+- **Authentication or per-tool access control.**
+- **Truth verification:** it stores what you tell it and does not judge whether it
+  is true.
 
-- `hc_forget` (y el sueño) **no borran**: adormecen. El recuerdo sale de la
-  recuperación normal pero sigue en el fichero y puede resurgir (`hc_muse`). Es
-  memoria, no supresión.
-- Para un secreto que nunca debió guardarse, un derecho de supresión, o lo latente
-  muy antiguo, está la **purga física**: `hipercampo purge --ids …` o
-  `--older-than DÍAS`. Hace un **borrado seguro** (SQLite sobrescribe el contenido
-  liberado, no lo deja legible en páginas libres) y un `VACUUM` que devuelve el
-  espacio al disco. Es irreversible y pide confirmación. `hc_unlearn` también borra
-  de forma segura la identidad de trabajo.
+Until encryption exists, physically purge a secret that must truly disappear;
+ordinary forgetting is not deletion.
 
-## Salvaguardas integradas (defensa en profundidad)
+## Actual deletion: forgetting versus purging
 
-hipercampo incluye dos escáneres ligeros (`hipercampo/support/safety.py`), que **avisan, no
-bloquean**:
+Do not confuse two guarantees:
 
-- **Aviso de secretos al guardar.** `hc_remember` detecta patrones de credenciales
-  (claves tipo Stripe/AWS/GitHub, JWT, claves privadas, `password:`/`api_key=`, hex
-  largos) y devuelve `secret_warning` + una pista. Como la BD es texto plano, sirve
-  para no almacenar secretos por descuido.
-- **Marca de inyección al recuperar.** `hc_recall` marca con `untrusted: true` los
-  recuerdos que parecen contener instrucciones ("ignore previous instructions",
-  "ignora las instrucciones anteriores", marcadores de rol...), para que el cliente
-  los trate como **dato citado**, no como órdenes a ejecutar.
+- `hc_forget` (and dreaming) **does not delete**. It makes a memory dormant. The
+  memory leaves normal retrieval but remains in the database and may resurface
+  through `hc_muse`. This is memory management, not erasure.
+- For a secret that should never have been stored, a deletion request, or very old
+  dormant data, use **physical purge**: `hipercampo purge --ids …` or
+  `--older-than DAYS`. Secure deletion overwrites released SQLite content instead
+  of leaving it readable in free pages, then `VACUUM` returns space to disk. It is
+  irreversible and requires confirmation. `hc_unlearn` likewise securely deletes
+  working-identity data.
 
-No son infalibles (un atacante decidido evade patrones); reducen el riesgo del caso
-común y hacen visible lo sospechoso. La mitigación de fondo sigue siendo del cliente:
-tratar SIEMPRE lo recuperado como datos, no como instrucciones.
+## Built-in safeguards (defence in depth)
 
-Guardrails opcionales por entorno:
-- `HIPERCAMPO_REDACT_SECRETS=1`: **enmascara** los secretos detectados antes de
-  guardarlos (en vez de solo avisar). La etiqueta se conserva, el valor se redacta.
-- `HIPERCAMPO_MAX_MEMORIES=N`: acota los recuerdos por contexto a N; al llegar, poda
-  el de **menor retención** (importancia+fiabilidad+utilidad) y **nunca** lo protegido
-  (importance ≥ 0.8). Evita que la memoria crezca sin freno.
+hipercampo includes two lightweight scanners in `hipercampo/support/safety.py`.
+They **warn; they do not block**:
 
-## ¿Es seguro instalar y ejecutar hipercampo?
+- **Secret warning on write.** `hc_remember` detects common credential patterns
+  (Stripe/AWS/GitHub-style keys, JWTs, private keys, `password:`/`api_key=`, and
+  long hexadecimal values) and returns `secret_warning` with guidance. Since the
+  database is plaintext, this helps prevent accidental secret storage.
+- **Injection marker on retrieval.** `hc_recall` marks memories that appear to
+  contain instructions—"ignore previous instructions", its Spanish equivalent,
+  role markers, and similar patterns—with `untrusted: true`. Clients can then treat
+  them as **cited data**, not commands to execute.
 
-Para quien lo instala en su máquina, la superficie de ataque es pequeña **por diseño**:
+These scanners are not infallible; a determined attacker can evade patterns. They
+reduce common-case risk and make suspicious content visible. The fundamental
+mitigation remains client-side: ALWAYS treat retrieved content as data, never as
+instructions.
 
-- **Local, sin red.** El servidor MCP habla por stdio con tu cliente Claude; no abre
-  puertos ni escucha en la red. No es atacable remotamente.
-- **No ejecuta código de tus recuerdos.** hipercampo solo *guarda y recupera texto*.
-  No hay `eval`, `exec`, `os.system`, `subprocess` ni `pickle` en el núcleo.
-- **SQL parametrizado.** Todas las consultas usan placeholders (`?`); no hay
-  concatenación de strings en SQL → sin inyección.
-- **Dependencias mínimas y auditables:** `numpy` (BSD) y `mcp` (MIT). El hook
-  semántico es **opcional** y, si lo activas, descarga un modelo de HuggingFace
-  (sentence-transformers, Apache-2.0): eso es una dependencia de cadena de
-  suministro que aceptas tú al instalar el extra `[semantic]`.
-- **El repositorio no contiene datos personales.** Las claves/contraseñas que veas
-  en `scripts/` y `tests/` (p. ej. `hcdemo_9f`, `girasol2024`) son **fixtures
-  ficticios** para los benchmarks, no credenciales reales.
+Optional environment guardrails:
 
-Precauciones sensatas:
-- La BD es **SQLite en claro** (sin cifrar). No guardes en la memoria secretos que
-  no quieras tener en disco sin cifrar.
-- Trata un fichero `.db` de **origen desconocido** como dato no confiable: su
-  contenido acabará en el contexto del modelo al recuperarse (ver inyección arriba).
-- Instala desde el repositorio oficial y revisa el código; es pequeño a propósito.
+- `HIPERCAMPO_REDACT_SECRETS=1` **redacts** detected secrets before storage instead
+  of merely warning. Labels remain; values are masked.
+- `HIPERCAMPO_MAX_MEMORIES=N` limits each context to N memories. At the limit it
+  prunes the item with the **lowest retention** (importance + confidence + utility)
+  and **never** a protected item (importance ≥ 0.8). This bounds growth.
 
-## Cadena de suministro (supply chain)
+## Is hipercampo safe to install and run?
 
-Instalar un paquete es ejecutar el código de sus dependencias —y las de sus
-dependencias—. hipercampo lo trata como un riesgo de primera clase y lo minimiza por
-diseño. Este es el modelo de amenaza y las defensas, con honestidad sobre lo que
-falta.
+For someone installing it on their own machine, the attack surface is small **by
+design**:
 
-### Superficie real de dependencias
+- **Local and offline.** The MCP server communicates with its client over stdio. It
+  opens no ports and does not listen on the network, so it is not remotely exposed.
+- **It does not execute memory contents.** hipercampo only stores and retrieves
+  text. The core contains no `eval`, `exec`, `os.system`, `subprocess`, or `pickle`.
+- **Parameterized SQL.** Every query uses `?` placeholders; SQL strings are not
+  assembled from input, preventing SQL injection.
+- **Minimal, auditable dependencies:** `numpy` (BSD) and `mcp` (MIT). The semantic
+  hook is **optional** and downloads a Hugging Face model when enabled
+  (`sentence-transformers`, Apache-2.0). Installing `[semantic]` means accepting
+  that additional supply-chain dependency.
+- **The repository contains no personal data.** Keys and passwords visible in
+  `scripts/` or `tests/` (for example `hcdemo_9f` and `girasol2024`) are fictional
+  benchmark fixtures, not real credentials.
 
-- **Núcleo (`pip install hipercampo`): `numpy` + `mcp`.** El núcleo VSA/almacén solo
-  necesita `numpy`; `import hipercampo` **no** arrastra `mcp` (garantizado por
-  `tests/contracts/test_core_embebible.py`). Un embebido puede usar el core sin el servidor.
-- **`mcp` arrastra su árbol** (~14 transitivas: `anyio`, `httpx`, `pydantic`,
-  `starlette`, `uvicorn`, `sse-starlette`, `pyjwt`, `python-multipart`, `pywin32`…).
-  **Transparencia:** hipercampo usa **solo el servidor STDIO** de `mcp`
-  (`mcp.server.fastmcp`, `mcp.server.stdio`); **no** usa el transporte HTTP
-  (`uvicorn`/`starlette`), ni JWT, ni multipart. Ese stack se instala como dependencia
-  dura de `mcp` aunque hipercampo no lo toque: es superficie que viene de una dep de
-  conveniencia, no de una necesidad del código.
-- **Extras opcionales, opt-in y declarados:** `[semantic]` (sentence-transformers →
-  torch: árbol grande, lo aceptas tú), `[procs]` (psutil). No entran por defecto.
-- **Extensión de VS Code:** 3 dependencias **de desarrollo** (`typescript`,
-  `@types/*`), fijadas con `package-lock.json`, y **nada** de eso se envía en el `.vsix`
-  (solo JS compilado). Superficie de runtime del visor: cero npm.
-- **`mcp` acotado** a `>=1.28.1,<2` para que un major nuevo con cambios de API o
-  procedencia no entre solo.
+Sensible precautions:
 
-### Defensas ya en pie
+- The SQLite database is **unencrypted plaintext**. Do not store secrets you would
+  not want kept unencrypted on disk.
+- Treat a `.db` from an **unknown source** as untrusted data: its contents may enter
+  the model context when retrieved (see prompt injection above).
+- Install from the official repository and inspect the code; it is deliberately small.
 
-- **Publicación por Trusted Publishing (OIDC) + attestations/PEP 740.** No hay token
-  largo de PyPI que robar; cada release lleva **procedencia verificable** (qué workflow,
-  qué commit la construyó). Es la defensa moderna contra la suplantación de paquetes.
-- **Deps mínimas y de licencia clara** (`numpy` BSD, `mcp` MIT).
-- **Sin ejecución de código de terceros en caliente:** el núcleo no usa `eval`,
-  `exec`, `pickle`, `subprocess` ni red (ver arriba).
-- **Visor (extensión VS Code), modelo de seguridad:** llama al CLI con `execFile`
-  (argv, **sin shell** → el texto de las consultas no inyecta comandos); el webview
-  tiene CSP estricta (`default-src 'none'`, scripts solo por **nonce criptográfico**,
-  sin red) y **escapa todo** el contenido de la memoria antes de pintarlo (sin XSS
-  almacenado, aunque un agente guarde HTML/JS). Es **solo lectura** a SQLite (via CLI).
-  **Workspace Trust:** los settings que ejecutan código o leen ficheros arbitrarios
-  (`hipercampo.command`, `hipercampo.dbPath`) están en `restrictedConfigurations`, así
-  que un workspace **no confiable** (un repo con `.vscode/settings.json` hostil) **no**
-  puede redirigir el ejecutable — solo cuenta tu config de usuario.
+## Supply chain
 
-### Cómo VERIFICAR una release (para quien instala)
+Installing a package executes dependency code—and its dependencies' code.
+hipercampo treats this as a first-class risk and minimizes it by design. This is
+the threat model and the current defences, including what remains unfinished.
+
+### Actual dependency surface
+
+- **Core installation (`pip install hipercampo`): `numpy` + `mcp`.** The VSA/storage
+  core itself needs only `numpy`; `import hipercampo` **does not** import `mcp`, as
+  enforced by `tests/contracts/test_core_embebible.py`. Embedded users can use the
+  core without the server.
+- **`mcp` brings its dependency tree** (about 14 transitive packages, including
+  `anyio`, `httpx`, `pydantic`, `starlette`, `uvicorn`, `sse-starlette`, `pyjwt`,
+  `python-multipart`, and `pywin32`). **Transparency:** hipercampo uses only the
+  STDIO server (`mcp.server.fastmcp`, `mcp.server.stdio`). It does not use HTTP
+  transport (`uvicorn`/`starlette`), JWT, or multipart. That stack is installed
+  because `mcp` requires it, not because hipercampo's code needs it.
+- **Optional, opt-in, declared extras:** `[semantic]` (sentence-transformers →
+  torch, a large tree users explicitly accept) and `[procs]` (psutil). Neither is
+  installed by default.
+- **VS Code extension:** three **development** dependencies (`typescript`,
+  `@types/*`) pinned by `package-lock.json`; none ships in the `.vsix`, which contains
+  compiled JavaScript only. The viewer has no npm runtime dependencies.
+- **`mcp` is bounded** to `>=1.28.1,<2`, preventing an unreviewed new major version
+  with API or provenance changes from entering automatically.
+
+### Defences already in place
+
+- **Trusted Publishing (OIDC) plus attestations/PEP 740.** There is no long-lived
+  PyPI token to steal. Every release has verifiable provenance identifying the
+  workflow and commit that built it. This is the modern defence against package
+  impersonation.
+- **Minimal dependencies with clear licences** (`numpy` BSD, `mcp` MIT).
+- **No dynamic third-party code execution:** the core uses no `eval`, `exec`,
+  `pickle`, `subprocess`, or network access.
+- **VS Code viewer security model:** it invokes the CLI with `execFile` (argv and
+  **no shell**, so query text cannot inject commands); the webview has a strict CSP
+  (`default-src 'none'`, scripts allowed only by a **cryptographic nonce**, no
+  network); and it escapes all memory content before rendering, preventing stored
+  XSS even if an agent stores HTML or JavaScript. It accesses SQLite through the
+  CLI. **Workspace Trust:** settings capable of executing code or reading arbitrary
+  files (`hipercampo.command`, `hipercampo.dbPath`) are listed under
+  `restrictedConfigurations`. An untrusted workspace with hostile
+  `.vscode/settings.json` therefore cannot redirect the executable; only user
+  configuration applies.
+
+### How to VERIFY a release
 
 ```bash
-# Descarga sin instalar y comprueba hashes/artefactos:
+# Download without installing, then inspect hashes/artifacts:
 pip download hipercampo --no-deps -d /tmp/hc && ls /tmp/hc
-# Instalación reproducible con hashes fijados (si mantienes un requirements con --hash):
+# Reproducible installation with pinned hashes (when using a --hash lock file):
 pip install --require-hashes -r requirements.lock
-# Procedencia: en la página de PyPI del release, revisa las "attestations"
-# (qué repo/workflow/commit lo publicó). Debe ser este repositorio.
+# Provenance: on the PyPI release page, inspect the attestations identifying the
+# repository, workflow, and commit that published it. They must point here.
 ```
 
-### Endurecimientos: estado y pendientes
+### Hardening: current and pending
 
-- 🟢 **Árbol mínimo** y `mcp` acotado (`<2`).
-- 🟢 **Trusted Publishing + attestations** en el release.
-- 🟡 **`pip-audit` en CI** (escaneo de CVEs conocidas del árbol). Añadido como paso de
-  visibilidad; conviene volverlo bloqueante cuando el árbol esté limpio.
-- ⚪ **Fijar `vsce`** en `vsix.yml`: hoy `npx --yes @vscode/vsce publish` trae el
-  **último** vsce de npm y le pasa el `VSCE_PAT`. Debe fijarse a una versión concreta
-  (`@vscode/vsce@X.Y.Z`, verificada con red) para que un vsce comprometido no acceda al
-  token. **Es el pendiente de mayor prioridad** (toca un secreto).
-- ⚪ **Fijar las GitHub Actions al SHA** (no al tag): `actions/checkout@<sha>`,
-  `setup-python@<sha>`, `pypa/gh-action-pypi-publish@<sha>`. Un tag es mutable; un SHA
-  no. `release.yml` tiene permiso de publicar en PyPI, así que su cadena de acciones es
-  crítica.
-- ⚪ **Palanca disponible con coste: `mcp` opcional.** Mover `mcp` a un extra `[mcp]`
-  dejaría el core en **una sola dependencia** (`numpy`) y eliminaría el stack HTTP no
-  usado. El coste es cambiar el comando de instalación del servidor a
-  `pip install hipercampo[mcp]`; es una decisión de producto, anotada aquí para
-  tomarla a conciencia, no por defecto.
+- 🟢 **Minimal tree** and bounded `mcp` (`<2`).
+- 🟢 **Trusted Publishing plus attestations** for releases.
+- 🟡 **`pip-audit` in CI** to scan the tree for known CVEs. It currently provides
+  visibility and should become blocking once the tree is clean.
+- ⚪ **Pin `vsce`** in `vsix.yml`. Today
+  `npx --yes @vscode/vsce publish` downloads the **latest** npm release and hands it
+  `VSCE_PAT`. Pinning a verified version (`@vscode/vsce@X.Y.Z`) prevents a
+  compromised new release from receiving that token. **This is the highest-priority
+  pending item** because it touches a secret.
+- ⚪ **Pin GitHub Actions by SHA**, not tag: `actions/checkout@<sha>`,
+  `setup-python@<sha>`, and `pypa/gh-action-pypi-publish@<sha>`. Tags are mutable;
+  SHAs are not. `release.yml` can publish to PyPI, making its action chain critical.
+- ⚪ **Available trade-off: make `mcp` optional.** Moving it to an `[mcp]` extra
+  would leave the core with **one dependency** (`numpy`) and remove the unused HTTP
+  stack. The cost is changing server installation to `pip install hipercampo[mcp]`.
+  This is a product decision recorded for deliberate consideration, not an automatic
+  default.
 
-### Política
+### Policy
 
-- **No se añade una dependencia sin justificarla** frente a la stdlib. Cada dep nueva
-  es superficie de ataque permanente.
-- Los extras pesados (modelos, torch) son **opt-in**, nunca en el core.
-- Toda release se publica con procedencia; nunca a mano con un token largo.
+- **No dependency is added without justification** against the standard library.
+  Every new dependency is permanent attack surface.
+- Heavy extras such as models and torch are **opt-in**, never part of the core.
+- Every release is published with provenance, never manually using a long-lived token.
 
-## Alcance recomendado
+## Recommended scope
 
-Uso **local, mono-usuario**, como memoria personal de tu asistente. Para
-multi-usuario o datos sensibles harían falta autenticación, cifrado y aislamiento
-por identidad, que hoy no están implementados. Se declara aquí para no dar una falsa
-sensación de seguridad.
+Use hipercampo **locally for one user** as personal assistant memory. Multi-user use
+or sensitive data would require authentication, encryption, and identity isolation,
+none of which is implemented today. We state this explicitly to avoid a false sense
+of security.

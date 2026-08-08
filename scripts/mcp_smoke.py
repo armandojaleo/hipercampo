@@ -1,9 +1,9 @@
-"""Handshake MCP contra el servidor recién instalado: initialize, initialized y
- tools/list, leyendo respuesta a respuesta. Escribir las tres líneas de golpe y
+"""MCP handshake against the freshly installed server: initialize, initialized,
+and tools/list, reading one response at a time. Writing all three lines at once and
 cerrar stdin es una carrera: el servidor puede ver el EOF antes de contestar.
 
-El humo usa una BD temporal dentro de ``data/`` para no depender de HOME ni de
-permisos del entorno de release, y conserva stderr para diagnosticar fallos reales.
+The smoke test uses a temporary database under ``data/`` so it does not depend on
+HOME or release-environment permissions, and preserves stderr for diagnosis.
 """
 import json
 import os
@@ -43,7 +43,7 @@ def esperar(id_esperado):
         if r.get("id") == id_esperado:
             return r
     err = p.stderr.read() if p.stderr else ""
-    raise SystemExit("el servidor cerró sin responder" + (f": {err}" if err else ""))
+    raise SystemExit("the server exited without responding" + (f": {err}" if err else ""))
 
 
 try:
@@ -70,10 +70,10 @@ finally:
         except PermissionError:
             pass
 
-# Por defecto (HIPERCAMPO_TOOLS=auto) solo se anuncian las de uso DIARIO más la puerta
+# By default, HIPERCAMPO_TOOLS=auto advertises daily tools plus the catalog gateway.
 # `hc_tools`; el resto se activa en caliente.
 faltan = {"hc_remember", "hc_recall", "hc_assist", "hc_tools"} - set(tools)
 if faltan:
     raise SystemExit(f"faltan herramientas anunciadas por defecto: {sorted(faltan)} · "
                      f"hay {tools}")
-print(f"handshake MCP OK · {len(tools)} herramientas anunciadas (+ catálogo en hc_tools)")
+print(f"MCP handshake OK · {len(tools)} tools advertised (+ catalog in hc_tools)")

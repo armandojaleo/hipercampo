@@ -1,8 +1,8 @@
-"""Escala del grafo navegable integrado (SQLite + VSA + caché + beam).
+"""Scale the integrated navigable graph (SQLite + VSA + cache + beam).
 
 Ejecuta: python scripts/nav_scale.py 10000 [100000]
-Genera grupos VSA conocidos y vecinos locales sin pagar un reindexado O(N²).
-Mide precisión de grupo, visitas, latencia y coste frío/caliente del índice.
+Generate known VSA groups and local neighbors without paying for an O(N²) reindex.
+Measure group precision, visits, latency, and cold/warm index cost.
 """
 
 import statistics

@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
-from helpers import ROOT, ejecutar  # noqa: E402
+from helpers import ROOT, run_tests  # noqa: E402
 
 VIEWER = ROOT / "editor" / "media" / "viewer.js"
 
@@ -70,4 +70,4 @@ def test_tokens_summary_has_every_key_the_viewer_reads():
 
 
 if __name__ == "__main__":
-    raise SystemExit(ejecutar(dict(globals())))
+    raise SystemExit(run_tests(dict(globals())))

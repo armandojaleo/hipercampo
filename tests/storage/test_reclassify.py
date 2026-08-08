@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria     # noqa: E402
+from helpers import run_tests, clean, memory     # noqa: E402
 from hipercampo.storage.store import Store                  # noqa: E402
 
 
@@ -27,7 +27,7 @@ def _abrir(hc, ns):
 
 
 def test_mueve_los_propios_a_otro_contexto():
-    hc = memoria("rc_mueve", namespace="personal")
+    hc = memory("rc_mueve", namespace="personal")
     hc.remember("una nota de proyecto que cayó en personal", 0.7)
     ids = [m["id"] for m in hc.store.all(only_active=False)]
     n = hc.store.reclassify(ids, "proj-x")
@@ -40,7 +40,7 @@ def test_mueve_los_propios_a_otro_contexto():
 
 def test_solo_toca_lo_propio():
     """Pasar ids de OTRO contexto no los mueve: reclasificar es sobre lo propio."""
-    hc = memoria("rc_aisla", namespace="personal")
+    hc = memory("rc_aisla", namespace="personal")
     hc.remember("dato personal", 0.6)
     otro = _abrir(hc, "proj-y")
     from hipercampo.core.encoder import encode_text
@@ -56,7 +56,7 @@ def test_solo_toca_lo_propio():
 
 
 def test_enlace_con_ambos_extremos_movidos_se_muda():
-    hc = memoria("rc_enlace", namespace="personal")
+    hc = memory("rc_enlace", namespace="personal")
     a = hc.remember("windows rechaza rutas largas con 400", 0.7)["id"]
     b = hc.remember("los datos largos van por query string", 0.7)["id"]
     hc.store.link(a, b, weight=0.8, type="lexical"); hc.store.commit()
@@ -68,7 +68,7 @@ def test_enlace_con_ambos_extremos_movidos_se_muda():
 
 
 def test_enlace_que_cruzaria_contextos_se_corta():
-    hc = memoria("rc_corta", namespace="personal")
+    hc = memory("rc_corta", namespace="personal")
     a = hc.remember("recuerdo A", 0.7)["id"]
     b = hc.remember("recuerdo B asociado a A", 0.7)["id"]
     hc.store.link(a, b, weight=0.8, type="lexical"); hc.store.commit()
@@ -81,7 +81,7 @@ def test_enlace_que_cruzaria_contextos_se_corta():
 
 
 def test_destino_vacio_es_error():
-    hc = memoria("rc_err", namespace="personal")
+    hc = memory("rc_err", namespace="personal")
     hc.remember("algo", 0.6)
     ids = [m["id"] for m in hc.store.all(only_active=False)]
     movido = None
@@ -94,7 +94,7 @@ def test_destino_vacio_es_error():
 
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
+    clean()
+    codigo = run_tests(dict(globals()))
+    clean()
     sys.exit(codigo)

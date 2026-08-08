@@ -1,369 +1,374 @@
-# Roadmap hacia producción (local-first)
+# Roadmap to production (local-first)
 
-**Meta: la mejor memoria local para un agente.** Cada usuario aloja hipercampo en
-SU máquina, con SU fichero de memoria. No hay servidor central ni multiusuario: eso
-sería coste e infraestructura innecesarios. Local-first = privado por diseño, gratis
-de operar, sin datos de terceros que custodiar.
+**Goal: the best local memory for an agent.** Each user hosts hipercampo on their
+own machine, with their own memory file. There is no central or multi-user server:
+that would add unnecessary cost and infrastructure. Local-first means private by
+design, free to operate, and no third-party data to hold in trust.
 
-Por eso **queda fuera de alcance** (a propósito): autenticación, cifrado gestionado,
-Postgres compartido, transporte de red, hosting multiusuario. Si alguien quisiera un
-SaaS encima, sería otro proyecto; el núcleo se mantiene local y simple.
+The following are therefore **deliberately out of scope**: authentication, managed
+encryption, shared Postgres, network transport, and multi-user hosting. A SaaS built
+on top would be another project; this core stays local and simple.
 
-Estado: 🟢 hecho · 🟡 en marcha · ⚪ pendiente
-## Estado actual — v0.1.0b13 (6 ago 2026)
+Status: 🟢 done · 🟡 in progress · ⚪ pending
 
-La beta b13 está cerrada y publicada en PyPI tras CI multiplataforma y benchmarks verdes.
+## Current state — v0.1.0b13 (6 August 2026)
 
-- ✅ **CI multiplataforma:** suites completas en Windows, macOS y Ubuntu con Python 3.11–3.13.
-- ✅ **Puertas de calidad:** Ruff, Mypy y cobertura ejecutados en CI; benchmarks bloquean regresiones.
-- ✅ **MCP operativo:** dependencia compatible, smoke de release y herramientas acotables por presupuesto.
-- ✅ **Memoria navegable:** índice/grafo con navegación y fallback seguro a escaneo; `nav=auto` y `max_scan` expuestos por MCP.
-- ✅ **Fiabilidad Windows:** cierres SQLite, migraciones y procesos auxiliares cubiertos en CI.
-- ✅ **Publicación:** `v0.1.0b13` publicada mediante Trusted Publishing, attestations y
-  smoke independiente desde PyPI.
-- 🟡 **Calidad semántica:** el banco sintético marca el siguiente cuello de botella: sinónimos (global ~0.742 en modo léxico).
+Beta b13 is complete and published on PyPI after green multi-platform CI and
+benchmarks.
 
-### Siguiente tramo
+- ✅ **Multi-platform CI:** full suites on Windows, macOS, and Ubuntu with Python
+  3.11–3.13.
+- ✅ **Quality gates:** Ruff, Mypy, and coverage in CI; benchmarks block regressions.
+- ✅ **Working MCP:** compatible dependency, release smoke test, and budget-bounded tools.
+- ✅ **Navigable memory:** graph/index navigation with a safe scan fallback;
+  `nav=auto` and `max_scan` are exposed over MCP.
+- ✅ **Windows reliability:** SQLite closure, migrations, and helper processes covered in CI.
+- ✅ **Publishing:** `v0.1.0b13` released through Trusted Publishing with attestations
+  and an independent installation smoke test from PyPI.
+- 🟡 **Semantic quality:** the synthetic benchmark identifies synonyms as the next
+  bottleneck (overall lexical score ~0.742).
 
-1. ✅ Recuperación explicable (`score_components`) en core/MCP y tooltip visible en la
-   extensión; contrato protegido por tests.
-2. ✅ Grafo navegable persistente, incremental y jerárquico, aislado por namespace.
-   En 100.000 recuerdos estructurados: precisión de grupo@5=1,000, p50=6,07 ms,
-   p95=6,94 ms y 1,094% visitado; índice residente 141,5 MB y reutilización 0,073 ms.
-   La prueba reproducible vive en `scripts/nav_scale.py`.
-   **Validado también en corpus REAL** (`scripts/nav_real.py`: docstrings de la stdlib,
-   texto inglés difuso, offline): la **fidelidad navegar-vs-escaneo es 1.000** —navegar
-   recupera exactamente el mismo top-5 que escanear también en texto real, no solo en el
-   banco sintético—. Con 12/12 y atajos adaptados a la topología visita **42,6%** a
-   ese N (~650), frente al 81,3% del antiguo 48/48; el gate exige menos del 55%.
-   En grafos comunitarios o separados conserva los atajos small-world. A 10.000
-   recuerdos conserva precisión@5=1,000 visitando 1,751% (p95 ~2,2 ms). La
-   **precisión de grupo léxica es ~0.50** (igual navegando que escaneando):
-   la navegación no degrada la calidad; ese techo es del *encoding* léxico → cuello de los sinónimos (abajo 🟡).
-3. ✅ Integración multiagente: Claude y Codex comparten el MCP y el namespace del
-   proyecto; instrucciones seguras en el handshake, configuración y contrato probado.
-4. ✅ Continuidad de sorpresa entre procesos: estado incremental aislado por namespace,
-   persistente, acotado y atómico; una observación rechazada ya no se pierde al reiniciar.
-5. 🟡 El corpus real de la stdlib ya es un gate automático de fidelidad, latencia,
-   memoria y coste navegable; faltan datasets externos estándar.
-6. 🟡 Selección de namespace y UX estable de la extensión: localización EN/ES, icono,
-   manifiesto y contrato de CI ya están hechos. **Rediseño del visor (v0.9.15):** Mapa
-   "constelación" (color por estado cognitivo, glow, hover de vecinos, etiquetas solo en
-   foco, **modo vecindario** a N saltos), IA separada (buscar/filtrar vs operar),
-   simulación blindada contra divergencia (probada con el grafo real, cero NaN), Lista con
-   orden y filtro por tipo, coste de tokens por recall, y arreglos de Status/Tokens.
-   Faltan **capturas** y **validación manual del VSIX en ambos idiomas** antes de
-   etiquetarla como producto estable.
+### Next stretch
 
-## El próximo salto: de AÑADIR a DEMOSTRAR (fase de evidencia)
+1. ✅ Explainable retrieval (`score_components`) in core/MCP and a visible extension
+   tooltip, protected by a contract test.
+2. ✅ A persistent, incremental, hierarchical navigable graph isolated by namespace.
+   On 100,000 structured memories: group precision@5 = 1.000, p50 = 6.07 ms,
+   p95 = 6.94 ms, 1.094% visited, 141.5 MB resident index, and 0.073 ms reuse.
+   `scripts/nav_scale.py` reproduces this.
 
-Una revisión externa (ChatGPT, ago 2026) coincide con el rumbo de la casa y lo afila:
-hipercampo ya tiene **suficientes conceptos cognitivos** (VSA + sorpresa + semántico +
-grafo navegable + sueño + olvido + hechos temporales + muse + dream + bridges +
-observabilidad). El riesgo ya **no es tener pocas ideas, sino tantas que cueste demostrar
-cuál produce la ventaja**. Por eso `scripts/ablations.py` es de los ficheros más
-importantes del repo. El próximo salto **no** es "otra función", sino:
+   **Also validated on a REAL corpus** (`scripts/nav_real.py`: fuzzy English stdlib
+   docstrings, offline): **navigation-versus-scan fidelity is 1.000**—navigation
+   returns exactly the same top five as a scan on real text, not just synthetic data.
+   With 12/12 and topology-aware shortcuts it visits **42.6%** at N≈650, down from
+   81.3% with the old 48/48 configuration; the gate requires less than 55%. It
+   preserves small-world shortcuts on community or disconnected graphs. At 10,000
+   memories it keeps precision@5 = 1.000 while visiting 1.751% (p95 ~2.2 ms).
+   **Lexical group precision is ~0.50** for both navigation and scanning: navigation
+   does not degrade quality; the ceiling comes from lexical encoding and points to
+   the synonym bottleneck below.
+3. ✅ Multi-agent integration: Claude and Codex share the MCP server and project
+   namespace, with safe handshake instructions, configuration, and a tested contract.
+4. ✅ Surprise continuity across processes: incremental state is namespace-isolated,
+   persistent, bounded, and atomic; a rejected observation is no longer lost on restart.
+5. 🟡 The real stdlib corpus is now an automatic gate for fidelity, latency, memory,
+   and navigation cost; standard external datasets are still missing.
+6. 🟡 Stable extension namespace selection and UX: EN/ES localization, icon,
+   manifest, and CI contract are done. **Viewer redesign (v0.9.15):** constellation
+   map (cognitive-state color, glow, neighbor hover, focus-only labels, N-hop
+   **neighborhood mode**), separate browse/filter and agent-operation modes, a
+   divergence-proof simulation tested on the real graph with zero NaNs, list sorting
+   and kind filtering, per-recall token cost, and Status/Tokens fixes. **Screenshots**
+   and **manual VSIX validation in both languages** remain before calling it stable.
 
-> **«un agente con hipercampo recuerda mejor durante meses, usando menos memoria y menos
-> contexto» — demostrado de forma independiente y reproducible.**
+## The next leap: from ADDING to PROVING (evidence phase)
 
-Tres demostraciones, en orden de esfuerzo/valor:
+An external review (ChatGPT, August 2026) agrees with the direction and sharpens it.
+hipercampo already has **enough cognitive concepts**: VSA, surprise, semantics,
+navigable graph, dreaming, forgetting, temporal facts, muse, dream bridges, and
+observability. The risk is **not too few ideas, but so many that it becomes hard to
+prove which one creates the advantage**. This makes `scripts/ablations.py` one of
+the repository's most important files. The next leap is not another feature, but:
 
-1. 🟡 **LongMemEval completo (no solo el adaptador).** Ejecutar y publicar las 500
-   instancias oficiales, reproducibles, comparando contra **Mem0, Letta/MemGPT,
-   Zep/Graphiti, RAG clásico y embeddings+reranker**. Separando *evidence-session recall*
-   de la calidad de respuesta del LLM (el runner ya lo hace). Hoy bloqueado por dato/red.
-2. ⚪ **Experimento longitudinal (el definitivo).** 100k–1M eventos sobre meses simulados:
-   cambios de preferencia, contradicciones, hechos que caducan, ruido repetitivo, eventos
-   excepcionales, recuerdos que reaparecen. Métricas: *useful memory/MB*, *useful
-   memory/token*, false recall, tasa de contradicción, corrección temporal, calidad del
-   olvido, calidad del *resurfacing*. Primero el **generador + las métricas** (medir antes
-   de creer), luego el número.
-3. ⚪ **Uso real prolongado (A/B).** Un Claude/Codex con hipercampo sobre un proyecto real
-   ~3 meses, contra el mismo agente sin él. La prueba más convincente y la más lenta;
-   empieza sola al usarlo en el día a día (dogfooding).
+> **An agent with hipercampo remembers better over months while using less memory
+> and context—demonstrated independently and reproducibly.**
 
-**Posicionamiento** (cuando haya evidencia): de *"experimental cognitive memory for AI
-agents"* a **"Auditable cognitive memory infrastructure for persistent AI agents"** —
-cuatro palabras: **persistent · local · adaptive · auditable**. La **memoria observable**
-(ver qué recuerda, por qué, de dónde salió, qué olvidó, qué asoció) es un diferenciador
-que una base vectorial no responde con elegancia: puede pesar más que +2 de Recall@10.
+Three demonstrations, ordered by effort and value:
 
-**Disciplina:** pausar la adición de grandes conceptos cognitivos. Converger y **demostrar**,
-no ampliar. Las features de producto (visibilidad de valor, Ideas accionables) van en
-ramas; los conceptos nuevos, al backlog hasta que la evidencia lo pida.
+1. 🟡 **Complete LongMemEval, not just the adapter.** Run and publish all 500 official
+   instances reproducibly against **Mem0, Letta/MemGPT, Zep/Graphiti, classic RAG,
+   and embeddings + reranker**. Separate evidence-session recall from LLM answer
+   quality, as the runner already does. Currently blocked on data/network access.
+2. ⚪ **Longitudinal experiment (the definitive one).** Simulate 100k–1M events over
+   months: preference changes, contradictions, expiring facts, repetitive noise,
+   exceptional events, and resurfacing memories. Metrics: useful memory/MB, useful
+   memory/token, false recall, contradiction rate, temporal correctness, forgetting
+   quality, and resurfacing quality. Build the **generator and metrics first**, then
+   produce the number.
+3. ⚪ **Long-running real-world A/B.** Use Claude or Codex with hipercampo on a real
+   project for about three months and compare it with the same agent without memory.
+   This is the most persuasive and slowest test; ordinary dogfooding starts it.
 
-## ¿Y el camino a "la panacea"? (triaje honesto de la crítica externa)
+**Positioning**, once evidence exists: move from *"experimental cognitive memory for
+AI agents"* to **"Auditable cognitive memory infrastructure for persistent AI
+agents"**—four words: **persistent · local · adaptive · auditable**. Observable
+memory—what it remembers, why, where it came from, what it forgot, and what it
+associated—is a differentiator a vector database does not answer elegantly and may
+matter more than two extra Recall@10 points.
 
-Revisiones externas (jul 2026) proponen cinco saltos. No todos valen lo mismo:
+**Discipline:** pause large new cognitive concepts. Converge and **prove** rather
+than expand. Product features (visible value, actionable Ideas) belong on branches;
+new concepts stay in the backlog until evidence calls for them.
 
-1. **Índice sublineal para >100k recuerdos** — SÍ, es el límite real medido
-   (escaneo lineal: ~164 ms con 10k). Pero la respuesta local-first no es HNSW
-   genérico: para Hamming binario basta un índice **multi-index hashing** (trocear
-   el hipervector en bandas y precribar por banda exacta), que es simple, exacto
-   en el re-rank y sin dependencias. ⚪ Fase 4.
-2. **Sinónimos nativos sin embeddings (random indexing léxico)** — MEDIDO Y
-   DESCARTADO. Se prototipó random indexing (co-ocurrencia por ventana) sobre un
-   corpus REAL de 354k palabras: la señal es marginal —media coseno sinónimos 0.095
-   vs azar 0.052, y solo **1 de 8** pares supera el p95 del ruido—. Aprender sinónimos
-   de la co-ocurrencia necesita escala tipo word2vec (millones-miles de millones de
-   palabras); una memoria personal no la tiene, y ni un corpus técnico de 350k separó.
-   Conclusión honesta: **la vía de sinónimos es el hook semántico OPCIONAL** (`[semantic]`),
-   no reimplementar word2vec a medias en el core. El léxico da typo/morfología gratis
-   (trigramas, hit@1=1.0); el sinónimo puro es lo que resuelve un modelo semántico.
-3. **Aprender los pesos de retención (RL ligero)** — A MEDIAS. Aprender de la
-   utilidad real observada sí (ya se registra `access_count`); una red que decida
-   qué olvidar sin explicación, no: la retención transparente y auditable es una
-   característica, no una limitación. Se hará **ajuste medido**, no caja negra.
-4. **Vectores de tamaño dinámico** — NO por ahora: los 5 roles medidos bastan para
-   hechos atómicos, y la solución a "un contrato entero" no es un vector más
-   gordo, sino trocear en hechos (que ya existe). Coste alto, beneficio dudoso.
-5. **Multi-tenant cloud / cifrado homomórfico** — NO en este repo: fuera de
-   alcance por diseño (ver arriba). La vía honesta es un **spin-off con
-   financiación** si algún día llega — declarado en el README. El núcleo local
-   y MIT no cambia.
+## The road to a “panacea”: honest triage of external criticism
 
-La memoria entre proyectos (leer enlazado, escribir propio) está hecha: 🟢 abajo.
+External reviews (July 2026) proposed five leaps. They do not have equal value:
 
-## Fase 1 — Cimientos de fiabilidad y aislamiento
-- 🟢 **Memoria entre proyectos (contextos enlazados, solo lectura)**: `linked=` /
-  `HIPERCAMPO_LINKED` ("proy1,proy2" o `*`). recall/muse/dream leen los proyectos
-  enlazados y etiquetan el origen (`project`); toda escritura, refuerzo, olvido y
-  consolidación queda en el propio. Lo no enlazado sigue invisible.
-  Tests en `tests/storage/test_linked.py`.
-- 🟢 **Aislamiento por namespace/contexto**: cada contexto ve solo lo suyo, en TODAS
-  las operaciones (lecturas y escrituras por id: delete/touch/mark_*), y los enlaces
-  no cruzan contextos. Tests en `tests/storage/test_namespaces.py`.
-- 🟢 **Concurrencia base**: SQLite en modo WAL + `busy_timeout` (lecturas mientras
-  se escribe, sin corromper).
-- 🟢 **Transacciones atómicas** en operaciones compuestas (update, consolidate):
-  si algo falla a mitad, se revierte (`store.transaction()`).
-- 🟢 **Validación de entradas en el núcleo**: texto no vacío + longitud máxima,
-  `importance`/`confidence` acotados, `k`/`hops` acotados, namespace saneado.
-- 🟢 Migraciones versionadas (`PRAGMA user_version`, 7 pasos idempotentes,
-  copia previa, reanudables). Tests en `tests/storage/test_migration.py`.
-- 🟢 **Purga física / borrado seguro** (no confundir con el olvido, que solo adormece):
-  `hipercampo purge --ids …` / `--older-than DÍAS` para secretos, derecho de supresión
-  o latentes muy antiguos. Borrado seguro (SQLite sobrescribe, no deja el texto en
-  páginas libres) + `VACUUM`, con confirmación. `hc_unlearn` también borra seguro.
-  Tests en `tests/storage/test_purge.py` (verifica que el texto ya no está en los bytes del `.db`).
+1. **Sublinear index beyond 100k memories — YES.** Linear scanning was a measured
+   limit (~164 ms at 10k). The local-first answer need not be generic HNSW: binary
+   Hamming vectors can use **multi-index hashing**, splitting the hypervector into
+   bands for exact-band prefiltering and exact reranking. It is simple and adds no
+   dependency. ⚪ Phase 4.
+2. **Native synonyms without embeddings (lexical random indexing) — MEASURED AND
+   REJECTED.** A prototype on a real 354k-word corpus produced marginal signal:
+   mean synonym cosine 0.095 versus random 0.052, with only **1 of 8** pairs above
+   the noise p95. Learning synonyms from co-occurrence requires word2vec-scale data;
+   a personal memory does not have it, and even this 350k-word technical corpus did
+   not separate them. The honest synonym path is the OPTIONAL semantic hook
+   (`[semantic]`), not a partial word2vec reimplementation. Lexical encoding handles
+   typos/morphology for free (trigrams, hit@1 = 1.0); a semantic model handles pure
+   synonyms.
+3. **Learn retention weights (lightweight RL) — PARTLY.** Learn from observed utility,
+   already represented by `access_count`; do not use an unexplained network to decide
+   what to forget. Transparent, auditable retention is a feature. Use **measured
+   tuning**, not a black box.
+4. **Dynamic vector sizes — NOT NOW.** The measured five roles are sufficient for
+   atomic facts. A whole contract should be split into facts rather than encoded in
+   a larger vector. High cost, doubtful benefit.
+5. **Multi-tenant cloud / homomorphic encryption — NO in this repository.** This is
+   out of scope by design. The honest path would be a funded **spin-off**. The local
+   MIT core remains unchanged.
 
-## Fase 1b — Calibrar la sorpresa
-- 🟢 **Umbral adaptativo**: "predecible" = cuantil inferior de la sorpresa reciente
-  (respaldo absoluto con poco historial). Test que demuestra que el veto ES
-  alcanzable con secuencias realistas (`tests/cycle/test_calibration.py`).
-- 🟢 Aprender **después** del commit (el modelo no se adelanta a la BD si hay rollback)
-  y reforzar solo si es redundante (no por un match débil al vetar por predecible).
-- 🟢 **Persistencia real de la sorpresa por namespace**: unigramas/bigramas y la
-  ventana adaptativa de 300 observaciones sobreviven al reinicio, incluyendo lo
-  visto-y-rechazado. Los tokens se persisten como hashes, no como texto literal;
-  aprendizaje y memoria comparten transacción. Migración v7 y tests de continuidad,
-  aislamiento, rollback y crecimiento acotado.
-- 🟢 Calibrada la **abstención** midiendo la tasa de falsas recuperaciones al crecer N
-  (`scripts/calibrate.py`). Hallazgo: `MIN_RECALL_SCORE` era **inerte** (moverlo no cambia
-  ni MRR ni falsaRec); la palanca real, `ANSWER_MIN_SCORE`, estaba **por debajo** del
-  percentil 5 de las consultas ajenas, así que no filtraba nada. Recalibrado **0.08→0.19**
-  (léxico) y **0.05→0.17** (semántico): falsaRec **1.00→0.17** (léxico, estable en
-  N=20/100/500) y **~0.10** (semántico), manteniendo vivo el sinónimo. `RECALL_Z` resultó
-  inerte a escala. Se intentó normalizar por longitud y se **descartó tras medirlo** (a
-  falsaRec igualada perdía en los dos bancos; queda documentado como límite → trocear).
+Cross-project memory (read linked, write local) is complete: see Phase 1.
 
-## Fase 2 — Credibilidad: demostrar la calidad
-- 🟢 **Baselines** (`scripts/baselines.py`): BM25 y embeddings+coseno vs hipercampo.
-  Resultado medido: hipercampo+semántico gana en MRR global (0.95 vs 0.87 de
-  embeddings); en léxico ya supera a BM25 (erratas 0.95 vs 0.77). La abstención
-  (falsaRec) estaba en 1.00 por un umbral mal puesto; **calibrada a 0.17-0.20**, a la
-  par de embeddings (ver Fase 1b y `scripts/calibrate.py`).
-- 🟢 **Ablaciones aisladas y bloqueantes** (`scripts/ablations.py --check`): la
-  sorpresa reduce una corriente predecible de 100→46 recuerdos y conserva la
-  anomalía; la confianza mejora MRR 0,783→0,820; la propagación es neutral aquí
-  (0,820→0,820, por lo que no se le atribuye una mejora falsa); consolidar reduce
-  nodos activos 20→11 y mejora MRR de contenido 0,820→0,860. El CI falla si estas
-  relaciones se invierten o la consolidación degrada más de 0,02.
-- 🟡 Sobre datasets **estándar**: adaptador de retrieval para el JSON oficial de
-  LongMemEval listo y probado (`scripts/context_efficiency.py --longmemeval …`),
-  con recall de sesiones de evidencia y abstención; falta ejecutar y publicar las
-  500 instancias oficiales. MemoryAgentBench sigue pendiente.
-- 🟢 **Eficiencia de contexto bloqueante** (`scripts/context_efficiency.py --check`):
-  sobre 30 consultas positivas + 30 ajenas mide MRR, cobertura, precisión selectiva,
-  abstención, payload MCP estimado y latencia. Estado léxico: MRR 0,744, abstención
-  0,833, precisión selectiva 0,786, p95 401 tokens y p95 6,2 ms.
+## Phase 1 — Reliability and isolation foundations
 
-## Fase 3 — Rendimiento a escala
-- 🟢 **Escaneo vectorizado**: XOR de toda la matriz + popcount nativo (NumPy 2.0) con
-  tabla de respaldo. ~5× más rápido (10k: 224→47 ms). recall() 2k ~40ms, 10k ~164ms.
-- 🟢 **Índice navegable jerárquico a 100k**: landmarks por isla semántica + selección
-  VSA vectorizada + beam local. En el banco estructurado reproducible (30 consultas),
-  precisión de grupo@5 **1,000**, p50 **6,07 ms**, p95 **6,94 ms**, **1,094%** visitado.
-  La matriz VSA posicional, la carga streaming y la adyacencia CSR bajan la construcción de
-  14,6→**7,46 s**, el pico de 558,8→**189,7 MB** y dejan **141,5 MB residentes**;
-  reutilización 0,073 ms. La validación externa sigue abierta.
+- 🟢 **Cross-project memory (read-only linked contexts):** `linked=` /
+  `HIPERCAMPO_LINKED` accepts `project1,project2` or `*`. Recall, muse, and dream
+  read linked projects and label their origin (`project`); every write, reinforcement,
+  forgetting, and consolidation remains local. Unlinked contexts stay invisible.
+  Covered by `tests/storage/test_linked.py`.
+- 🟢 **Namespace/context isolation:** every operation sees only its context,
+  including ID-based reads and writes (`delete`, `touch`, `mark_*`), and links never
+  cross contexts. Covered by `tests/storage/test_namespaces.py`.
+- 🟢 **Basic concurrency:** SQLite WAL plus `busy_timeout` permits reads during writes
+  without corruption.
+- 🟢 **Atomic transactions** for compound operations such as update and consolidate;
+  failure rolls the whole operation back through `store.transaction()`.
+- 🟢 **Core input validation:** non-empty text and maximum length; bounded
+  `importance`, `confidence`, `k`, and `hops`; sanitized namespace.
+- 🟢 Versioned migrations (`PRAGMA user_version`, seven idempotent, resumable steps
+  with a prior backup), covered by `tests/storage/test_migration.py`.
+- 🟢 **Physical purge / secure deletion**, distinct from reversible forgetting:
+  `hipercampo purge --ids …` / `--older-than DAYS` for secrets, deletion rights, or
+  very old dormant data. SQLite overwrites freed content and `VACUUM` reclaims space;
+  confirmation is mandatory. `hc_unlearn` also deletes securely. The purge tests
+  verify that text is absent from the raw `.db` bytes.
 
-## Fase 4 — Aislamiento local de contextos (NO servidor multiusuario)
-Fuera de alcance auth/cifrado/Postgres/red: cada usuario es local. Lo útil aquí es
-separar contextos *dentro de una misma máquina*:
-- 🟢 **Namespaces integrales**: aislar proyectos/perfiles en una misma BD, en todas
-  las operaciones y en los enlaces. Ya implementado y probado.
-- ⚪ Selección de namespace cómoda (por proyecto) desde el cliente.
-- ⚪ Endurecer contra inyección vía memoria a nivel de cliente (ver [SECURITY.md](../SECURITY.md)).
+## Phase 1b — Calibrating surprise
 
-## Fase 5 — La ventaja diferencial (VSA de verdad)
-- 🟢 **Memoria composicional con roles** (`hipercampo/cycle/roles.py`): `SUJETO⊗ ·
-  PREDICADO⊗ · OBJETO⊗ · TIEMPO⊗ · FUENTE⊗`, con recuperación por *unbinding*
-  ("¿quién mordió a quién?"). Medido: recupera el valor correcto por rol con margen
-  claro (0.74 vs 0.54) y capacidad hasta 5 roles; distingue el hecho de su inverso.
-  Tests en `tests/cycle/test_roles.py`, demo en `scripts/roles_demo.py`.
-- 🟢 **Role-records integrados en el ciclo** (`RoleMemory` en `roles.py`): `remember_fact`/
-  `ask_role` en el core y por MCP (`hc_remember_fact`/`hc_ask_role`), persistidos en la
-  tabla `facts` y **aislados por namespace**. La item memory (cleanup) se **reconstruye
-  al abrir** desde los hechos guardados, así que persiste sin estado extra. Cada hecho
-  guarda su **sombra textual** (entra en recall/muse/consolidación/olvido) y lleva
-  **validez temporal**: un hecho nuevo con mismo sujeto+predicado y otro objeto CIERRA
-  al anterior (no lo borra) — historia, no sobrescritura. Tests en `test_roles.py`.
-- ✅ **Hechos visibles.** `hipercampo facts [--json]` y la pestaña **Facts** del visor
-  permiten consultar los role-records y su historia temporal sin salir de la UI.
-- ⚪ Consolidación con **resumen real** (summarizer LLM — el gancho ya existe),
-  detección de conflictos, procedencia y validez temporal (`valid_from`/`valid_to`).
-- ⚪ Relaciones tipadas y dirigidas (`supports`, `contradicts`, `updates`, `caused_by`).
+- 🟢 **Adaptive threshold:** “predictable” means the lower quantile of recent surprise,
+  with an absolute fallback for short histories. A calibration test proves realistic
+  sequences can reach the veto.
+- 🟢 Learn **after** commit so rollback cannot leave the model ahead of the database;
+  reinforce only true redundancy, not a weak match rejected as predictable.
+- 🟢 **Per-namespace persistent surprise:** unigram/bigram counts and the adaptive
+  300-observation window survive restarts, including seen-but-rejected input. Tokens
+  persist as hashes, not literal text; learning and memory share one transaction.
+  Migration v7 tests continuity, isolation, rollback, and bounded growth.
+- 🟢 Calibrated **abstention** by measuring false retrieval as N grows
+  (`scripts/calibrate.py`). `MIN_RECALL_SCORE` was **inert**: changing it affected
+  neither MRR nor false recall. The real control, `ANSWER_MIN_SCORE`, sat **below**
+  the 5th percentile of unrelated queries and filtered nothing. Recalibration from
+  **0.08→0.19** lexical and **0.05→0.17** semantic reduced false recall from
+  **1.00→0.17** lexical (stable at N=20/100/500) and to **~0.10** semantic while
+  retaining synonym hits. `RECALL_Z` was inert at scale. Length normalization was
+  measured and **rejected** because it lost on both benchmarks at matched false
+  recall; chunking remains the documented answer.
 
-## Fase 6 — Release y operación
-- 🟢 CI (GitHub Actions) con las suites + benchmarks en 3.11–3.13.
-- ✅ Linting + type-check (ruff/mypy) + cobertura en CI; compilación y smoke sintáctico
-  del webview añadidos como puerta independiente.
-- ✅ Recuperación **explicable**: `score_components` (similitud directa, boost por
-  asociación, factor de confianza, penalización por superado).
-- 🟢 Release v0.1.0-alpha publicada en **PyPI** (trusted publishing + attestations).
-- ⚪ Observabilidad: logging estructurado, métricas.
+## Phase 2 — Credibility: prove quality
 
-## Fase 7 — Madurez de ingeniería y camino a embebido
-El núcleo funciona; ahora toca que sea **serio para producción** y apto para
-sistemas embebidos y robots (SBC con Linux: Raspberry Pi, Jetson, ROS2). No es
-investigación: es fiabilidad, estructura y disciplina de release. Se lanza en
-**betas pequeñas, cada una con una promesa medible**, para que el camino se vea.
+- 🟢 **Baselines** (`scripts/baselines.py`): BM25 and embedding cosine versus
+  hipercampo. Measured result: semantic hipercampo wins overall MRR (0.95 versus
+  embedding 0.87); lexical hipercampo already beats BM25 on typos (0.95 versus
+  0.77). A misplaced abstention threshold once caused false recall 1.00; calibration
+  reduced it to 0.17–0.20, comparable to embeddings.
+- 🟢 **Isolated, blocking ablations** (`scripts/ablations.py --check`): surprise
+  reduces a predictable stream from 100 to 46 memories while keeping the anomaly;
+  confidence raises MRR 0.783→0.820; propagation is neutral here (0.820→0.820), so
+  no false improvement is claimed; consolidation cuts active nodes 20→11 and raises
+  content MRR 0.820→0.860. CI fails if these relationships reverse or consolidation
+  degrades more than 0.02.
+- 🟡 **Standard datasets:** the official LongMemEval JSON retrieval adapter is ready
+  and tested (`scripts/context_efficiency.py --longmemeval …`), including evidence-
+  session recall and abstention. Running and publishing all 500 official instances
+  remains; MemoryAgentBench also remains.
+- 🟢 **Blocking context efficiency** (`scripts/context_efficiency.py --check`): 30
+  positive plus 30 unrelated queries measure MRR, coverage, selective precision,
+  abstention, estimated MCP payload, and latency. Lexical state: MRR 0.744,
+  abstention 0.833, selective precision 0.786, p95 401 tokens, p95 6.2 ms.
 
-- 🟢 **`0.1.0b2` — El core se despega (la abstracción).** `mcp` solo se importa en
-  `server.py` (y perezosamente en el subcomando `serve`): `import hipercampo` no
-  arrastra `mcp` (medido en intérprete limpio). **Garantizado** por el test-guardia
-  `tests/contracts/test_core_embebible.py` (falla el CI si un módulo del núcleo importa
-  `mcp`/`.server`), y la **API pública del core** documentada en `__init__.py`.
-- 🟢 **`0.1.0b3` — Red de seguridad de CI.** Ruff (ya estaba) + **mypy** + cobertura
-  como **puertas**. Config de mypy en `pyproject.toml` (no `--strict`: caza Nones sin
-  comprobar y asignaciones incompatibles sin ahogar el numpy/dicts JSON). Suelo de
-  cobertura en 78% (total real 79%; no se sube el suelo para no dejarlo frágil). Y se
-  arregló un hueco: la matriz enumeraba los tests **a mano** y se dejaba fuera de
-  Windows/macOS cuatro ficheros (`list`, `budget`, `purge`, `core_embebible`) —justo
-  donde viven los bugs de plataforma—; ahora corre por **glob**. Falta: smoke del webview.
-- 🟢 **`0.1.0b4` — Idioma + mejoras del visor (extensión v0.6.0).** i18n del visor por
-  el idioma de VS Code (en/es): diccionario en el webview, `package.nls` para el
-  manifiesto, y el idioma inyectado desde `vscode.env.language`. Promesa cumplida: *el
-  visor arranca en inglés en un VS Code en inglés.* De paso, mejoras pedidas por el
-  dueño: pestaña **Ideas** (los puentes que propone el sueño —hipótesis— vía nuevo
-  `hipercampo dream --json`, dry-run: no contamina); en **Estado**, botón para abrir el
-  registro, identidad de cada **servidor MCP** (qué fichero de memoria sirve) y botón de
-  **backup**; y botón de **nueva issue** a GitHub. Falta: revisar los mensajes es/en
-  mezclados del *core* (el visor ya está).
-- 🟢 **`0.1.0b5` — Fiabilidad bajo estrés.** Lo que un robot exige: recall con **cota
-  de tiempo/RAM** (`max_scan=N`: mira solo los N recuerdos más vivos —fuerza y
-  recencia—; el registro dice cuántos miró y si acotó, sin caps silenciosos). Se midió
-  primero y la cota INGENUA salía **más lenta** (el `ORDER BY` sin índice costaba más
-  que escanear todo); se añadió el índice `idx_vivos` y entonces sí: a **10k recuerdos,
-  cota p50 ~35 ms vs ~200 ms completo (5–6×) y PLANA con N**. La BD corrupta/bloqueada/
-  llena ya estaba cubierta (`test_resilience`/`test_failures`). Tests en `test_bounded.py`;
-  latencia p50/p95/p99 publicada en CI (`scripts/latency.py`) — cierra hueco de Fase 2.
-  Cerrado en b6: `max_scan` también está expuesto por MCP (`hc_recall`) para que agentes/robots puedan acotar CPU/RAM sin depender de la API Python.
-- 🟢 **`0.1.0b6` — El núcleo recuerda como un cerebro: grafo navegable (BANDERA).**
-  El límite real medido no era la velocidad del escaneo, sino *escanear*. A 100k:
-  ~1,8 s y 542 MB — inviable para un robot. La idea (de Armando): no escanear, sino
-  **navegar un grafo de vecinos**, como un GPS; se recuerda por conexiones, no mirándolo
-  todo. Medido en sondas antes de construir:
-  - un grafo solo de vecinos NO es navegable (se rompe en islas, recall 0,12); los
-    **atajos débiles de largo alcance** lo vuelven navegable (recall **0,97-1,0**) —
-    small-world de Watts-Strogatz. Y esos atajos son los mismos que dan ideas (los
-    puentes del `dream`): **creatividad e índice son lo mismo**.
-  - **sublineal de verdad**: el % de memoria visitado ENCOGE con N (13,9%→**3,0%** de 2k
-    a 16k; ~log N). Extrapolado, 1M de recuerdos ≈ ~1000 nodos visitados (~0,1%).
-  - **insertar tampoco escanea**: se navega el grafo para colocar cada recuerdo
-    (~293 visitas, constante), estilo HNSW. recall del grafo así construido: 1,0.
-  Ya está integrado: `remember` mantiene vecinos KNN sin reindexado global y `recall`
-  navega con beam, expone `visited`/`recall_mode` y conserva el escaneo como fallback.
-  El grafo sobrevive al reinicio y no cruza namespaces; lo prueban `test_navgraph.py` y
-  `test_navindex.py`. La UI hace visible el modo y coste de cada recall. La búsqueda ya
-  devuelve resultados+visitas en una sola pasada y el índice queda residente e invalidado
-  ante cambios locales/externos. El salto de escala añade una capa jerárquica: detecta
-  islas semánticas, compara sus landmarks con popcount VSA vectorizado y navega localmente
-  desde las cuatro más cercanas. En 100.000 recuerdos estructurados (30 consultas):
-  precisión de grupo@5 **1,000** (antes **0,400** con una entrada), p50 **6,07 ms**,
-  p95 **6,94 ms** y **1,094%** visitado. Después, una matriz VSA única sin 100.000 vistas y la carga streaming evitan
-  materializar recuerdos/enlaces completos, y CSR compacta las calles del GPS: construcción
-  fría **14,6→7,46 s**, pico **558,8→189,7 MB**, residente **141,5 MB** y reutilización
-  0,073 ms. El coste frente a la versión CSR previa es +0,83 s de arranque por -15,7 MB
-  residentes. `scripts/nav_scale.py` lo reproduce. Siguiente reto: carga binaria por lotes y
-  validar recall@5 ≥0,9 en corpus externo, sin esconder el fallback.
-- ⚪ **`0.2.0b1` — Extensión seria.** Marketplace (publisher + `VSCE_PAT`), settings,
-  i18n dentro, y UX que salga de usarlo de verdad.
-- ⚪ **Benchmark en SBC real** (Liga A): latencia/RAM/consumo con 1k/10k/100k recuerdos
-  en una Pi/Jetson. Sin ese número, "sirve para robots" es humo. Sirve de puerta a `1.0`.
+## Phase 3 — Performance at scale
 
-**Fuera de alcance aquí** (sigue siendo otro proyecto): un core en C/Rust para
-microcontroladores sin Linux (Liga B). El álgebra VSA es popcount+XOR y cabría en
-pocos KB, pero es un spin-off; se anota, no se mete en este repo.
+- 🟢 **Vectorized scan:** XOR the whole matrix and use native NumPy 2.0 popcount,
+  with a lookup-table fallback. About 5× faster (10k: 224→47 ms); full recall at 2k
+  is ~40 ms and at 10k ~164 ms.
+- 🟢 **Hierarchical navigable index at 100k:** landmarks per semantic island,
+  vectorized VSA selection, and local beam search. On the reproducible structured
+  benchmark (30 queries): group precision@5 **1.000**, p50 **6.07 ms**, p95
+  **6.94 ms**, **1.094%** visited. A positional VSA matrix, streaming load, and CSR
+  adjacency reduced construction from 14.6 to **7.46 s**, peak memory from 558.8 to
+  **189.7 MB**, and resident memory to **141.5 MB**; reuse takes 0.073 ms. External
+  validation remains open.
 
-## Ideas (backlog vivo)
+## Phase 4 — Local context isolation (NOT a multi-user server)
 
-Aquí se quedan las ideas y se van **actualizando** — no es una promesa, es un depósito
-que evoluciona. Cuando una madura, sube a una fase con su medición.
+Authentication, encryption, Postgres, and networking remain out of scope because
+each user runs locally. The useful work separates contexts on one machine:
 
-- ✅ **Vista de hechos en el visor.** `hipercampo facts [--json]` y la pestaña **Facts**
-  de la extensión ya permiten explorar y consultar los hechos estructurados (el
-  diferenciador VSA, "¿quién muerde a quién?") de forma visual.
-- **Cadena de suministro (necesitan red):** fijar `vsce` a versión exacta en `vsix.yml`
-  (protege el `VSCE_PAT`) y las GitHub Actions al SHA. Detalle en [SECURITY.md](../SECURITY.md).
-- **Decisión abierta: `mcp` opcional** (`[mcp]`) → core de 1 dependencia (numpy). Reduce
-  superficie de ataque; coste: cambia el comando de instalación del servidor.
-- **Sinónimos:** medido que el random indexing no rinde a esta escala; la vía es el hook
-  semántico opcional. Idea a revisitar solo si aparece un recurso léxico compacto y libre.
-- **Consolidación con resumen real** (summarizer), relaciones tipadas
-  (`supports`/`contradicts`/`updates`), datasets externos estándar (LongMemEval…).
+- 🟢 **Complete namespaces:** isolate projects/profiles in one database across all
+  operations and links. Implemented and tested.
+- ⚪ Convenient per-project namespace selection from the client.
+- ⚪ Client-level hardening against memory-borne injection; see [SECURITY.md](../SECURITY.md).
 
-### Dirección de largo plazo (backlog técnico)
+## Phase 5 — The real VSA differentiator
 
-Ideas de más calado, filtradas con la regla de la casa (local-first, CPU, medir antes
-de creer). Cada una entra en una fase solo con su medición delante:
+- 🟢 **Compositional memory with roles** (`hipercampo/cycle/roles.py`):
+  `SUBJECT⊗ · PREDICATE⊗ · OBJECT⊗ · TIME⊗ · SOURCE⊗`, queried through unbinding
+  (“who bit whom?”). It retrieves the correct role value with a clear margin
+  (0.74 versus 0.54), supports up to five roles, and distinguishes a fact from its
+  inverse. See `tests/cycle/test_roles.py` and `scripts/roles_demo.py`.
+- 🟢 **Role records integrated into the cycle:** `remember_fact` / `ask_role` in the
+  core and `hc_remember_fact` / `hc_ask_role` over MCP, persisted in `facts` and
+  namespace-isolated. Cleanup item memory rebuilds from stored facts on open, needing
+  no extra persistent state. Each fact stores a textual shadow that participates in
+  recall/muse/consolidation/forgetting and has **temporal validity**. A new fact with
+  the same subject + predicate and a different object CLOSES the previous truth
+  without deleting it—history rather than overwrite.
+- ✅ **Visible facts:** `hipercampo facts [--json]` and the viewer's **Facts** tab expose
+  role records and temporal history.
+- ⚪ Consolidation with a **real summary** (LLM summarizer hook already exists),
+  conflict detection, provenance, and `valid_from` / `valid_to`.
+- ⚪ Typed directed relations: `supports`, `contradicts`, `updates`, `caused_by`.
 
-1. **Atomización** — 🟢 HECHO. Ataca el límite nº1 (dilución 1/√T en textos largos):
-   `remember()` trocea el texto en átomos (`hipercampo/core/atomize.py`, sin dependencias) y
-   guarda cada uno enlazado a su fuente (`type='atom'`). Medido (`scripts/atom_probe.py`):
-   un hecho enterrado en un texto de 64 ideas pasa de **acierto@1 0.15 (monolítico) a 1.00
-   (atomizado)**; end-to-end, una pista corta recupera el átomo exacto. Desactivable con
-   `HIPERCAMPO_NO_ATOMIZE=1`. Tests en `test_atomize.py` y `test_atomize_remember.py`.
-   **Encoding MULTICANAL — MEDIDO y NO justificado (para recuperación de texto).** Se
-   prototipó (contenido + lugar + tiempo por canal vs bundle único, con consultas por
-   aspecto): **empate a Recall@1 1.000**, incluso con contenido "confuso" que menciona
-   otros lugares. La dilución baja la similitud absoluta pero NO el ranking, y los
-   **bigramas** del encoder ya distinguen "almacen norte" (campo) de un "norte" suelto.
-   Un HV por canal sería un rediseño grande para cero ganancia medida en texto. Podría
-   tener sentido en multimodal (sensores/robots), pero eso es el spin-off, no el core.
-2. **Benchmarks externos multilingües** (LongMemEval, LoCoMo, MuSiQue, BEIR) — convertir
-   los claims en evidencia fuera del banco propio. Cierra el hueco "datasets estándar".
-3. **Meta-memoria: admisión por UTILIDAD+sorpresa** (no solo sorpresa, que no equivale a
-   utilidad y ni persiste hoy): features explícitas + regresión online / bandit
-   contextual **conservador y auditable** (nunca caja negra; los límites duros —secretos,
-   protegidos— siguen siendo política, no aprendizaje).
-4. **Abstención CALIBRADA** (conformal/isotónica sobre un conjunto de calibración
-   independiente): garantía de riesgo selectivo, no umbrales a ojo.
-5. **Consolidación con procedencia + contradicciones por afirmación** (no dar por cierto
-   un resumen de LLM) y **microclustering incremental** para quitar el O(N²).
-6. **Dimensionalidad configurable por perfil** (menos bits = menos RAM en edge) + MIH como
-   índice alternativo al grafo para el perfil micro.
-7. **Refactor a interfaces `Protocol`** (Encoder/Index/Store/AdmissionPolicy/…) para
-   experimentar sin romper; kernels en Rust vía PyO3 **solo tras perfilar**.
+## Phase 6 — Release and operations
 
-La visión que orienta esto: no "otra vector-DB", sino **memoria temporal, explicable y
-frugal que sigue funcionando sin cloud**. Un SaaS multi-tenant o robótica a escala serían
-un **spin-off con financiación** (otro proyecto); el núcleo se queda **MIT y local-first**.
+- 🟢 GitHub Actions suites and benchmarks on Python 3.11–3.13.
+- ✅ Ruff, Mypy, coverage, webview compilation, and syntax smoke gates in CI.
+- ✅ **Explainable retrieval:** `score_components` exposes direct similarity,
+  association boost, confidence factor, and superseded penalty.
+- 🟢 v0.1.0-alpha published on **PyPI** through Trusted Publishing and attestations.
+- ⚪ Observability: structured logging and metrics.
+
+## Phase 7 — Engineering maturity and the path to embedded use
+
+The core works; it now needs production discipline and suitability for Linux SBCs
+and robots (Raspberry Pi, Jetson, ROS2). This is reliability, structure, and release
+engineering rather than research. Small betas each carry one measurable promise.
+
+- 🟢 **`0.1.0b2` — Core separation.** Only `server.py` imports `mcp` (plus the lazy
+  `serve` subcommand). `import hipercampo` does not bring in `mcp`, enforced by
+  `test_core_embebible.py`; the public core API is documented in `__init__.py`.
+- 🟢 **`0.1.0b3` — CI safety net.** Ruff, Mypy, and coverage became gates. Mypy is
+  configured to catch unchecked `None` and incompatible assignments without drowning
+  NumPy/JSON code in `--strict` noise. Coverage floors at 78% against a measured 79%.
+  The CI matrix previously enumerated tests and omitted four files on Windows/macOS;
+  glob discovery now covers all of them.
+- 🟢 **`0.1.0b4` — Language and viewer improvements (extension v0.6.0).** Viewer i18n
+  follows VS Code's language through a webview dictionary, `package.nls`, and
+  `vscode.env.language`. The viewer starts in English on English VS Code. The Ideas
+  tab exposes dry-run dream bridges without contaminating memory; Status can open
+  the log, identify each MCP server and its database, create backups, and open a new
+  GitHub issue.
+- 🟢 **`0.1.0b5` — Reliability under stress.** `max_scan=N` bounds recall time/RAM by
+  examining only the N liveliest memories (strength and recency), while logging the
+  count and whether it was bounded. The naive bound was measured **slower** because
+  unindexed `ORDER BY` cost more than a full scan. Adding `idx_vivos` made it real:
+  at 10k, bounded p50 ~35 ms versus ~200 ms full (5–6×) and flat with N. Corrupt,
+  locked, and full databases already have resilience/failure coverage. b6 exposed
+  `max_scan` over MCP so agents and robots can bound CPU/RAM without the Python API.
+- 🟢 **`0.1.0b6` — Brain-like navigable graph (FLAGSHIP).** The measured limit was
+  scanning itself: at 100k, ~1.8 s and 542 MB. Navigation follows a neighbor graph
+  like GPS, recalling through connections rather than examining everything.
+  Measurements before integration showed:
+  - A neighbor-only graph breaks into islands and is not navigable (recall 0.12).
+    Weak long-range shortcuts make it navigable (recall **0.97–1.0**), a Watts–
+    Strogatz small world. The same shortcuts create dream ideas: **creativity and
+    indexing are the same structure**.
+  - **Actually sublinear:** the percentage visited shrinks with N, from 13.9% to
+    **3.0%** between 2k and 16k (~log N). Extrapolated to one million memories:
+    roughly 1,000 nodes (~0.1%).
+  - **Insertion does not scan either:** graph navigation places each memory in about
+    293 visits, approximately constant, HNSW-style; graph recall remains 1.0.
+
+  Integration keeps KNN neighbors incrementally, navigates with a beam, exposes
+  `visited`/`recall_mode`, retains scan fallback, survives restarts, and never crosses
+  namespaces. Retrieval returns results and visit stats in one pass; the resident
+  index invalidates on local or external changes. A hierarchical layer identifies
+  semantic islands, compares vectorized VSA landmarks, and searches locally from the
+  four nearest. At 100k structured memories: group precision@5 **1.000** (formerly
+  **0.400** with one entry), p50 **6.07 ms**, p95 **6.94 ms**, **1.094%** visited.
+  Streaming, one VSA matrix, and CSR cut cold construction **14.6→7.46 s**, peak
+  **558.8→189.7 MB**, resident memory to **141.5 MB**, and reuse to 0.073 ms. The
+  trade-off versus the previous CSR version is +0.83 s startup for -15.7 MB resident.
+  `scripts/nav_scale.py` reproduces it. Next: batched binary loading and external-
+  corpus recall@5 ≥ 0.9 without hiding fallback.
+- ⚪ **`0.2.0b1` — Serious extension.** Marketplace publisher and `VSCE_PAT`, settings,
+  complete i18n, and UX refined through real use.
+- ⚪ **Real SBC benchmark (League A).** Measure latency, RAM, and power at
+  1k/10k/100k memories on Pi/Jetson. Without this, “works for robots” is empty. This
+  gates `1.0`.
+
+**Out of scope here:** a C/Rust core for Linux-free microcontrollers (League B).
+VSA algebra is popcount + XOR and could fit in a few KB, but that is a spin-off,
+recorded rather than added to this repository.
+
+## Ideas (living backlog)
+
+Ideas stay here and evolve. This is a repository, not a promise. A mature idea moves
+into a phase together with its measurement.
+
+- ✅ **Facts in the viewer:** `hipercampo facts [--json]` and the extension's **Facts**
+  tab already expose structured role facts visually.
+- **Supply chain (requires network):** pin `vsce` exactly in `vsix.yml` to protect
+  `VSCE_PAT`, and pin GitHub Actions by SHA. See [SECURITY.md](../SECURITY.md).
+- **Open decision: optional `mcp`** (`[mcp]`) for a one-dependency (`numpy`) core.
+  It reduces attack surface but changes server installation.
+- **Synonyms:** random indexing was measured ineffective at this scale. The path is
+  the optional semantic hook unless a compact, free lexical resource appears.
+- **Real-summary consolidation**, typed `supports` / `contradicts` / `updates`
+  relations, and external standard datasets such as LongMemEval.
+
+### Long-term technical direction
+
+Large ideas filtered through the house rule—local-first, CPU-conscious, measure
+before believing. Each enters a phase only with its measurement:
+
+1. **Atomization — 🟢 DONE.** Addresses the main long-text limit, 1/√T dilution.
+   `remember()` splits text into dependency-free atoms and links each to its source.
+   A buried fact in 64 ideas improves from **hit@1 0.15 monolithic to 1.00 atomized**;
+   end-to-end a short cue retrieves the exact atom. Disable with
+   `HIPERCAMPO_NO_ATOMIZE=1`.
+
+   **MULTICHANNEL encoding — MEASURED and NOT justified for text retrieval.** A
+   prototype compared content/place/time channels with one bundle, including
+   aspect queries: both achieved Recall@1 1.000, even when content mentioned other
+   places. Dilution lowers absolute similarity but not ranking, and encoder bigrams
+   already distinguish a place field from a loose direction word. Per-channel HVs
+   would be a major redesign for zero measured text gain. Multimodal sensors may
+   justify it in a robotics spin-off, not this core.
+2. **External multilingual benchmarks** (LongMemEval, LoCoMo, MuSiQue, BEIR) to move
+   claims beyond the project's own benchmark.
+3. **Meta-memory: admission by UTILITY + surprise.** Use explicit features and a
+   conservative, auditable online regression/contextual bandit, never a black box.
+   Hard constraints for secrets and protected memories remain policy, not learning.
+4. **CALIBRATED abstention** using conformal/isotonic calibration on an independent
+   set, providing a selective-risk guarantee rather than hand-tuned thresholds.
+5. **Provenance-aware consolidation and claim-level contradictions**, never treating
+   an LLM summary as automatically true, plus incremental microclustering to remove
+   O(N²).
+6. **Profile-configurable dimensionality** (fewer bits for edge RAM) and MIH as an
+   alternate index for a micro profile.
+7. **Refactor around `Protocol` interfaces** (Encoder/Index/Store/AdmissionPolicy/...)
+   for experimentation without breakage; Rust kernels through PyO3 **only after profiling**.
+
+The guiding vision is not “another vector database”, but **temporal, explainable,
+frugal memory that keeps working without cloud infrastructure**. Multi-tenant SaaS
+or production-scale robotics would be a funded **spin-off**; this core remains
+**MIT and local-first**.
 
 ---
 
-**Regla de la casa**: cada fase se cierra con *medición*, no con opinión. Nada de
-afirmaciones fuertes sin un test o un benchmark que las respalde. Ver
-[ATTRIBUTION.md](ATTRIBUTION.md) y [SECURITY.md](../SECURITY.md).
+**House rule:** every phase closes with a *measurement*, not an opinion. No strong
+claim without a test or benchmark behind it. See [ATTRIBUTION.md](ATTRIBUTION.md)
+and [SECURITY.md](../SECURITY.md).

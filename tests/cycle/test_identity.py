@@ -14,14 +14,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria      # noqa: E402
+from helpers import run_tests, clean, memory      # noqa: E402
 from hipercampo.cycle.identity import SELF_NAMESPACE      # noqa: E402
 from hipercampo.cycle.memory import Hipercampo            # noqa: E402
 
 
 def test_lo_aprendido_sobrevive_a_cerrar_la_sesion():
     """El punto entero: continuidad entre sesiones."""
-    hc = memoria("id_sobrevive")
+    hc = memory("id_sobrevive")
     ruta = hc.store.path
     hc.learn("medir antes de creer, y decir la verdad de los límites", "regla")
     hc.store.close()
@@ -35,7 +35,7 @@ def test_lo_aprendido_sobrevive_a_cerrar_la_sesion():
 
 def test_se_comparte_entre_proyectos():
     """La identidad es del agente, no de un proyecto: se ve desde cualquiera."""
-    hc = memoria("id_compartida", namespace="proyecto_a")
+    hc = memory("id_compartida", namespace="proyecto_a")
     ruta = hc.store.path
     hc.learn("CI solo en Linux esconde bugs en una app local", "leccion")
     hc.close()
@@ -46,7 +46,7 @@ def test_se_comparte_entre_proyectos():
 
 
 def test_no_se_mezcla_con_la_memoria_del_mundo():
-    hc = memoria("id_separada")
+    hc = memory("id_separada")
     hc.learn("Armando prefiere respuestas directas, sin peloteo", "preferencia")
     hc.remember("el servidor de produccion esta alojado en Frankfurt", 0.7)
 
@@ -62,7 +62,7 @@ def test_no_entra_por_la_puerta_de_los_enlaces():
     """El agujero real: con HIPERCAMPO_LINKED='*' la identidad se colaba en recall
     como si fuera un proyecto más. '*' significa 'todos MIS PROYECTOS', no 'todo
     lo que hay en el fichero'."""
-    hc = memoria("id_enlaces", namespace="proyecto_a")
+    hc = memory("id_enlaces", namespace="proyecto_a")
     ruta = hc.store.path
     hc.learn("una leccion que no debe aparecer mezclada con el mundo", "leccion")
     hc.remember("un recuerdo normal del proyecto para que haya con que comparar", 0.6)
@@ -84,7 +84,7 @@ def test_no_entra_por_la_puerta_de_los_enlaces():
 
 def test_una_leccion_no_se_olvida_por_desuso():
     """El olvido activo poda lo débil; una lección aprendida no es débil."""
-    hc = memoria("id_no_olvida")
+    hc = memory("id_no_olvida")
     hc.learn("no reintentar escrituras que quizá ya se confirmaron", "leccion")
     fila = hc._self_store().all(only_active=False)[0]
     assert fila["importance"] >= 0.8, (
@@ -94,7 +94,7 @@ def test_una_leccion_no_se_olvida_por_desuso():
 
 def test_repetir_una_regla_la_refuerza_en_vez_de_duplicarla():
     """Una regla que se repite es una regla que se confirma, no ruido."""
-    hc = memoria("id_refuerza")
+    hc = memory("id_refuerza")
     r1 = hc.learn("medir antes de creer y decir la verdad de los limites", "regla")
     r2 = hc.learn("medir antes de creer y decir la verdad de los limites", "regla")
     assert r1["learned"] is True
@@ -104,7 +104,7 @@ def test_repetir_una_regla_la_refuerza_en_vez_de_duplicarla():
 
 
 def test_los_tipos_se_validan():
-    hc = memoria("id_tipos")
+    hc = memory("id_tipos")
     r = hc.learn("algo con un tipo inventado", "chorrada")
     assert "error" in r and "valid" in r, r
     assert hc.identity()["n"] == 0, "guardó pese al tipo inválido"
@@ -113,7 +113,7 @@ def test_los_tipos_se_validan():
 
 def test_se_puede_desaprender():
     """Una regla puede dejar de valer: entonces se borra de verdad."""
-    hc = memoria("id_desaprende")
+    hc = memory("id_desaprende")
     r = hc.learn("una norma provisional que luego dejara de valer", "regla")
     assert hc.unlearn(r["id"])["unlearned"] == r["id"]
     assert hc.identity()["n"] == 0, "siguió guiando pese a estar desaprendida"
@@ -122,7 +122,7 @@ def test_se_puede_desaprender():
 
 
 def test_se_agrupa_por_tipo_para_leerlo_de_un_vistazo():
-    hc = memoria("id_formato")
+    hc = memory("id_formato")
     hc.learn("medir antes de creer", "regla")
     hc.learn("el nucleo se queda local-first", "decision")
     texto = hc.identity()["text"]
@@ -132,7 +132,7 @@ def test_se_agrupa_por_tipo_para_leerlo_de_un_vistazo():
 
 
 def test_el_contexto_reservado_no_se_pisa_con_uno_normal():
-    hc = memoria("id_reservado")
+    hc = memory("id_reservado")
     hc.learn("una regla cualquiera para ocupar el contexto reservado", "regla")
     assert hc._self_store().namespace == SELF_NAMESPACE
     assert hc.store.namespace != SELF_NAMESPACE
@@ -140,5 +140,5 @@ def test_el_contexto_reservado_no_se_pisa_con_uno_normal():
 
 
 if __name__ == "__main__":
-    limpiar()
-    sys.exit(ejecutar(dict(globals())))
+    clean()
+    sys.exit(run_tests(dict(globals())))

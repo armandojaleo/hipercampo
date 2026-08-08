@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria      # noqa: E402
+from helpers import run_tests, clean, memory      # noqa: E402
 
 # El contrato del servidor nunca debe abrir la memoria real del desarrollador.
 _SERVER_DB = Path("data/_t_api_server.db")
@@ -101,7 +101,7 @@ def test_todas_documentadas():
 # --- formas de respuesta (las claves que un cliente puede asumir) -----------
 
 def test_forma_de_remember():
-    hc = memoria("api_rem")
+    hc = memory("api_rem")
     r = hc.remember("un dato totalmente nuevo para el contrato", 0.6)
     assert {"stored", "id", "novelty", "surprise", "importance"} <= set(r), r
 
@@ -151,7 +151,7 @@ def test_hc_recall_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
 
 
 def test_forma_de_recall():
-    hc = memoria("api_rec")
+    hc = memory("api_rec")
     hc.remember("el faro de alejandria guiaba a los barcos de noche", 0.7)
     hits = hc.recall("faro que guiaba a los barcos")
     assert hits, "debió recordar"
@@ -192,7 +192,7 @@ def test_hc_assist_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
         "nav": "auto",
     }]
 def test_forma_de_stats_y_health():
-    hc = memoria("api_st")
+    hc = memory("api_st")
     s = hc.stats()
     assert {"active_episodic", "semantic", "archived", "dormant",
             "total", "total_physical", "db", "graph", "identity"} <= set(s), s
@@ -204,7 +204,7 @@ def test_forma_de_stats_y_health():
 
 
 def test_forma_de_error_resiliente():
-    hc = memoria("api_err")
+    hc = memory("api_err")
     hc.store.db.close()
     hc.store.path = "Z:/no/existe.db"
     r = hc.recall("lo que sea")
@@ -213,5 +213,5 @@ def test_forma_de_error_resiliente():
 
 
 if __name__ == "__main__":
-    limpiar()
-    sys.exit(ejecutar(dict(globals())))
+    clean()
+    sys.exit(run_tests(dict(globals())))

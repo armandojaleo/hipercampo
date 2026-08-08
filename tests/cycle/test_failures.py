@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ROOT, ejecutar, limpiar, memoria      # noqa: E402
+from helpers import ROOT, run_tests, clean, memory      # noqa: E402
 from hipercampo.cycle.memory import Hipercampo            # noqa: E402
 
 
@@ -37,7 +37,7 @@ def _unlink_db(db: str) -> None:
 # --- base de datos de SOLO LECTURA ------------------------------------------
 
 def test_bd_de_solo_lectura_avisa_sin_reintentar():
-    hc = memoria("fail_ro")
+    hc = memory("fail_ro")
     hc.remember("un recuerdo previo al bloqueo de escritura", 0.6)
     hc.close()
     ruta = hc.store.path
@@ -58,7 +58,7 @@ def test_bd_de_solo_lectura_avisa_sin_reintentar():
 # --- disco lleno (simulado en el punto exacto de la escritura) --------------
 
 def test_disco_lleno_avisa_y_no_corrompe():
-    hc = memoria("fail_full")
+    hc = memory("fail_full")
     hc.remember("lo que ya estaba guardado antes de llenarse el disco", 0.7)
 
     original = hc.store.add
@@ -103,7 +103,7 @@ def _matar_a_mitad(guion: str) -> None:
 
 
 def test_proceso_matado_escribiendo_no_corrompe():
-    limpiar()
+    clean()
     db = "data/_t_fail_kill.db"
     _unlink_db(db)
     raiz = str(ROOT)
@@ -143,7 +143,7 @@ hc.sleep()
 
 
 def test_proceso_matado_durmiendo_no_corrompe_y_retried():
-    limpiar()
+    clean()
     db = "data/_t_fail_sleep.db"
     _unlink_db(db)
     raiz = str(ROOT)
@@ -169,5 +169,5 @@ def test_proceso_matado_durmiendo_no_corrompe_y_retried():
 
 
 if __name__ == "__main__":
-    limpiar()
-    sys.exit(ejecutar(dict(globals())))
+    clean()
+    sys.exit(run_tests(dict(globals())))

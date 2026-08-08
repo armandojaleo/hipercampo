@@ -1,86 +1,84 @@
 """
-Utilidades compartidas por los tests. Antes cada fichero repetía su propio
-_open/_clean (15 de 19 ficheros): aquí vive una sola vez.
+Shared test utilities. Each file once repeated its own _open/_clean pair (15 of
+19 files); the implementation now lives in one place.
 
-    from helpers import memoria, limpiar
+    from helpers import memory, clean
 
-    hc = memoria("mi_test")        # BD temporal propia, cerrando la anterior
+    hc = memory("my_test")        # Isolated temporary database; closes the previous one.
     ...
-    limpiar()                      # cierra y borra (.db, -wal, -shm)
+    clean()                      # Close and delete .db, -wal, and -shm.
 """
 
 import os
 import sys
 from pathlib import Path
 
-# La raíz del repositorio, en UN solo sitio. Los tests viven repartidos en carpetas
-# por capa (core/, storage/, cycle/…), así que un `parent.parent` dentro de un test
-# ya no apunta a la raíz sino a `tests/`: quien necesite una ruta del repositorio
-# (pyproject, docs) importa esto y deja de depender de a qué profundidad esté.
+# Keep the repository root in ONE place. Tests live in per-layer folders, so
+# `parent.parent` inside a test now points to `tests/`, not the root. Importing ROOT
+# makes pyproject/docs paths independent of test nesting depth.
 ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(ROOT))
 
-# Hermeticidad: los tests no deben depender de la config ambiental de quien los corre.
-# Un desarrollador con HIPERCAMPO_LINKED=* (memoria cross-project) o HIPERCAMPO_PAUSED=1
-# en su shell vería fallos FALSOS: p.ej. un namespace "aislado" que de pronto ve a los
-# demás, o escrituras que no graban. CI no tiene estas variables y por eso pasa; el
-# desarrollador local, sí. Se limpian al importar; el test que necesite una, la pone él.
+# Hermeticity: tests must not depend on the runner's environment. A developer with
+# HIPERCAMPO_LINKED=* or HIPERCAMPO_PAUSED=1 would see FALSE failures: an isolated
+# namespace suddenly sees others, or writes do not persist. CI lacks these variables
+# and would pass. Clear them on import; a test that needs one sets it explicitly.
 for _v in ("HIPERCAMPO_LINKED", "HIPERCAMPO_PAUSED", "HIPERCAMPO_NAMESPACE", "HIPERCAMPO_DB"):
     os.environ.pop(_v, None)
 
 from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
-_abierta: Hipercampo | None = None
-_ruta: str | None = None
+_open_memory: Hipercampo | None = None
+_path: str | None = None
 
 
-def memoria(nombre: str, namespace: str = "test") -> Hipercampo:
-    """Abre una memoria limpia en una BD temporal propia de ese test."""
-    global _abierta, _ruta
-    limpiar()
-    _ruta = f"data/_t_{nombre}.db"
-    for suf in ("", "-wal", "-shm"):
+def memory(name: str, namespace: str = "test") -> Hipercampo:
+    """Open a clean, test-specific temporary database."""
+    global _open_memory, _path
+    clean()
+    _path = f"data/_t_{name}.db"
+    for suffix in ("", "-wal", "-shm"):
         try:
-            Path(_ruta + suf).unlink(missing_ok=True)
+            Path(_path + suffix).unlink(missing_ok=True)
         except PermissionError:
-            pass          # Windows: si sigue bloqueado, el test fallará de forma visible
-    _abierta = Hipercampo(_ruta, namespace=namespace)
-    return _abierta
+            pass          # A remaining Windows lock will make the test fail visibly.
+    _open_memory = Hipercampo(_path, namespace=namespace)
+    return _open_memory
 
 
-def limpiar() -> None:
-    """Cierra la memoria abierta y borra sus ficheros (Windows bloquea si no)."""
-    global _abierta, _ruta
-    if _abierta is not None:
+def clean() -> None:
+    """Close the open memory and delete its files (required on Windows)."""
+    global _open_memory, _path
+    if _open_memory is not None:
         try:
-            _abierta.store.close()
+            _open_memory.store.close()
         except Exception:
             pass
-        _abierta = None
-    if _ruta:
-        for suf in ("", "-wal", "-shm"):
+        _open_memory = None
+    if _path:
+        for suffix in ("", "-wal", "-shm"):
             try:
-                Path(_ruta + suf).unlink(missing_ok=True)
+                Path(_path + suffix).unlink(missing_ok=True)
             except PermissionError:
-                pass          # otro handle vivo (Windows): se limpiará a la próxima
+                pass          # Another live Windows handle; retry on the next cleanup.
 
 
-def ejecutar(globs) -> int:
-    """Runner común: ejecuta las funciones test_* del módulo y resume."""
+def run_tests(globs) -> int:
+    """Run this module's test_* functions and print a compact summary."""
     fails = 0
-    for nombre, fn in sorted(globs.items()):
-        if nombre.startswith("test_") and callable(fn):
+    for name, fn in sorted(globs.items()):
+        if name.startswith("test_") and callable(fn):
             try:
                 fn()
-                print(f"ok   {nombre}")
+                print(f"ok   {name}")
             except AssertionError as e:
                 fails += 1
-                print(f"FAIL {nombre}: {e}")
+                print(f"FAIL {name}: {e}")
             except Exception as e:
                 fails += 1
-                print(f"ERROR {nombre}: {e}")
+                print(f"ERROR {name}: {e}")
             finally:
-                limpiar()
-    print(f"\n{'OK' if not fails else f'{fails} FALLARON'}")
+                clean()
+    print(f"\n{'OK' if not fails else f'{fails} FAILED'}")
     return 1 if fails else 0

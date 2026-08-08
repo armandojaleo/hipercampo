@@ -54,4 +54,4 @@ The suite mirrors those layers, so a failure points at the layer that broke:
 `tests/conftest.py` puts `tests/` on `sys.path` once, so every test can do
 `from helpers import ...` regardless of the folder it sits in. Each file also
 keeps a small bootstrap of its own so it can still be run directly
-(`python tests/core/test_vsa.py`) via the runner in `helpers.ejecutar`.
+(`python tests/core/test_vsa.py`) via the runner in `helpers.run_tests`.

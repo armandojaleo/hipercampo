@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar, memoria     # noqa: E402
+from helpers import run_tests, clean, memory     # noqa: E402
 from hipercampo.cycle import memory as _mem                # noqa: E402
 
 # Un DOCUMENTO largo (>500 chars, varios hechos): esto SÍ se atomiza. Una nota corta
@@ -35,7 +35,7 @@ _LARGO = ("El servidor de produccion esta alojado en Frankfurt desde el ultimo "
 
 
 def test_atomiza_y_enlaza_a_la_fuente():
-    hc = memoria("atom_rem")
+    hc = memory("atom_rem")
     r = hc.remember(_LARGO, 0.7)
     assert r.get("atomized") is True, r
     n = r.get("atoms")
@@ -50,7 +50,7 @@ def test_atomiza_y_enlaza_a_la_fuente():
 
 def test_repetir_documento_reutiliza_fuente_y_atomos():
     """Reforzar el mismo documento no crea copias ni pierde la jerarquía."""
-    hc = memoria("atom_repetido")
+    hc = memory("atom_repetido")
     primero = hc.remember(_LARGO, 0.7)
     filas_antes = len(hc.store.all(only_active=False))
     segundo = hc.remember(_LARGO, 0.7)
@@ -67,7 +67,7 @@ def test_repetir_documento_reutiliza_fuente_y_atomos():
 def test_nota_corta_no_se_atomiza():
     """Una nota de pocas frases se guarda ENTERA: atomizarla la fragmentaría en trozos
     inútiles ('", consultable por rol.') que ensucian la memoria. Solo documentos largos."""
-    hc = memoria("atom_corta")
+    hc = memory("atom_corta")
     r = hc.remember("El servidor esta en Frankfurt. La reunion es a las nueve.", 0.7)
     assert not r.get("atomized"), r
     assert len(hc.store.all(only_active=False)) == 1
@@ -75,7 +75,7 @@ def test_nota_corta_no_se_atomiza():
 
 
 def test_hecho_enterrado_se_recupera():
-    hc = memoria("atom_buried")
+    hc = memory("atom_buried")
     hc.remember(_LARGO, 0.7)
     for pista, esperado in [("clave del wifi", "girasol2024"),
                             ("logistica maritima", "logistica maritima"),
@@ -87,7 +87,7 @@ def test_hecho_enterrado_se_recupera():
 
 
 def test_una_sola_idea_no_se_fragmenta():
-    hc = memoria("atom_uno")
+    hc = memory("atom_uno")
     r = hc.remember("el faro de alejandria guiaba a los barcos de noche", 0.7)
     assert not r.get("atomized"), r
     assert len(hc.store.all(only_active=False)) == 1
@@ -98,7 +98,7 @@ def test_se_puede_desactivar():
     previo = _mem.ATOMIZE_ON_REMEMBER
     _mem.ATOMIZE_ON_REMEMBER = False
     try:
-        hc = memoria("atom_off")
+        hc = memory("atom_off")
         r = hc.remember(_LARGO, 0.7)
         assert not r.get("atomized"), "con atomización OFF, un texto largo es un recuerdo"
         assert len(hc.store.all(only_active=False)) == 1
@@ -109,7 +109,7 @@ def test_se_puede_desactivar():
 
 def test_atomiza_solo_el_texto_que_puede_persistir():
     """Nada posterior al límite de la fuente puede filtrarse como átomo suelto."""
-    hc = memoria("atom_limite")
+    hc = memory("atom_limite")
     prefijo = (_LARGO + " ") * ((_mem.MAX_TEXT_LEN // len(_LARGO)) + 2)
     marcador = "MARCADOR_QUE_ESTA_FUERA_DEL_LIMITE"
     r = hc.remember(prefijo[:_mem.MAX_TEXT_LEN] + marcador, 0.7)
@@ -125,7 +125,7 @@ def test_tope_de_memoria_conserva_fuente_y_grupo_coherente():
     previo = _mem.MAX_MEMORIES
     _mem.MAX_MEMORIES = 4
     try:
-        hc = memoria("atom_cap")
+        hc = memory("atom_cap")
         r = hc.remember(_LARGO, 0.7)
         filas = hc.store.all(only_active=False)
         ids = {row["id"] for row in filas}
@@ -143,7 +143,7 @@ def test_tope_de_memoria_conserva_fuente_y_grupo_coherente():
 
 def test_fallo_de_enlace_revierte_toda_la_atomizacion():
     """Fuente y átomos no deben sobrevivir como una escritura parcial."""
-    hc = memoria("atom_rollback")
+    hc = memory("atom_rollback")
     link_real = hc.store.link
 
     def link_con_fallo(src, dst, weight=1.0, type="lexical"):
@@ -158,7 +158,7 @@ def test_fallo_de_enlace_revierte_toda_la_atomizacion():
     hc.close()
 
 if __name__ == "__main__":
-    limpiar()
-    codigo = ejecutar(dict(globals()))
-    limpiar()
+    clean()
+    codigo = run_tests(dict(globals()))
+    clean()
     sys.exit(codigo)

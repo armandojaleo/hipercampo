@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar                         # noqa: E402
+from helpers import run_tests                         # noqa: E402
 from scripts import nav_real  # noqa: E402
 from scripts.nav_real import current_rss_mb, evaluate, percentile  # noqa: E402
 
@@ -86,4 +86,4 @@ def test_rss_disponible_en_la_plataforma():
 
 
 if __name__ == "__main__":
-    raise SystemExit(ejecutar(dict(globals())))
+    raise SystemExit(run_tests(dict(globals())))

@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
-from helpers import ejecutar, limpiar  # noqa: E402
+from helpers import run_tests, clean  # noqa: E402
 from hipercampo.cycle.memory import Hipercampo  # noqa: E402
 
 _DB = "data/_t_linked.db"
@@ -33,7 +33,7 @@ def _limpiar_db():
 
 def _sembrar():
     """Dos proyectos con saberes distintos + uno que nadie enlaza."""
-    limpiar()
+    clean()
     _limpiar_db()
     a = Hipercampo(_DB, namespace="player")
     a.remember("IIS rechaza con 400 los segmentos de ruta de mas de 260 caracteres", 0.8)
@@ -130,8 +130,8 @@ def test_asterisco_enlaza_todos_los_demas():
 
 
 if __name__ == "__main__":
-    limpiar()
+    clean()
     _limpiar_db()
-    codigo = ejecutar(dict(globals()))
+    codigo = run_tests(dict(globals()))
     _limpiar_db()
     sys.exit(codigo)

@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
-from helpers import ROOT, ejecutar  # noqa: E402
+from helpers import ROOT, run_tests  # noqa: E402
 
 # The package layers, bottom to top. A layer may import from the ones BELOW it,
 # never from the ones above.
@@ -110,4 +110,4 @@ def test_layers_do_not_look_upwards():
 
 
 if __name__ == "__main__":
-    raise SystemExit(ejecutar(dict(globals())))
+    raise SystemExit(run_tests(dict(globals())))
