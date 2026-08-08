@@ -1,7 +1,5 @@
 {
-  "env": {
-    "HIPERCAMPO_LINKED": "*"
-  },
+  "env": {},
   "hooks": {
     "SessionStart": [
       {
