@@ -26,6 +26,8 @@ editor/node_modules/
 editor/out/
 editor/*.vsix
 editor/tools/preview-out/
+editor/test-results/
+editor/playwright-report/
 .coverage
 
 # Volcados de bash al petar en comandos pesados (Windows)

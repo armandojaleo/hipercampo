@@ -28,10 +28,12 @@ jobs:
           cache-dependency-path: editor/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Install browser for viewer tests
+        run: npx playwright install --with-deps chromium
       - name: Check webview JavaScript
         run: node --check media/viewer.js
       - name: Build and test the extension
-        run: npm test
+        run: npm run test:all
 
   test:
     # hipercampo is a LOCAL app: Windows and macOS are not optional. Testing only on

@@ -303,8 +303,9 @@ engineering rather than research. Small betas each carry one measurable promise.
   trade-off versus the previous CSR version is +0.83 s startup for -15.7 MB resident.
   `scripts/nav_scale.py` reproduces it. Next: batched binary loading and external-
   corpus recall@5 ≥ 0.9 without hiding fallback.
-- ⚪ **`0.2.0b1` — Serious extension.** Marketplace publisher and `VSCE_PAT`, settings,
-  complete i18n, and UX refined through real use.
+- 🟡 **`0.2.0b1` — Serious extension.** Settings, complete i18n, real-browser release
+  tests and UX refined through real use are in place. Marketplace publisher and
+  `VSCE_PAT` still require one-time owner-side confirmation before the first tag.
 - ⚪ **Real SBC benchmark (League A).** Measure latency, RAM, and power at
   1k/10k/100k memories on Pi/Jetson. Without this, “works for robots” is empty. This
   gates `1.0`.
@@ -320,8 +321,9 @@ into a phase together with its measurement.
 
 - ✅ **Facts in the viewer:** `hipercampo facts [--json]` and the extension's **Facts**
   tab already expose structured role facts visually.
-- **Supply chain (requires network):** pin `vsce` exactly in `vsix.yml` to protect
-  `VSCE_PAT`, and pin GitHub Actions by SHA. See [SECURITY.md](../SECURITY.md).
+- ✅ **Supply chain:** `vsce` is pinned exactly in `vsix.yml`, GitHub Actions are pinned
+  by SHA, and Playwright gates the webview before `VSCE_PAT` reaches the publish step.
+  See [SECURITY.md](../SECURITY.md).
 - **Open decision: optional `mcp`** (`[mcp]`) for a one-dependency (`numpy`) core.
   It reduces attack surface but changes server installation.
 - **Synonyms:** random indexing was measured ineffective at this scale. The path is

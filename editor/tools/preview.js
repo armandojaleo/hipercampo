@@ -122,7 +122,9 @@ function buildStandalone(lang, view, data, theme) {
   const js = fs.readFileSync(path.join(MEDIA, "viewer.js"), "utf8");
   const scope = lang === "es" ? "todos los contextos" : "all contexts";
   const dataMsg = { type: "data", memories: data.nodes, edges: data.edges, scope, paused: false };
-  const stub = "window.acquireVsCodeApi = () => ({ postMessage(){}, getState(){return null;}, setState(){} });";
+  const stub = "window.__vscodeMessages = []; window.acquireVsCodeApi = () => ({"
+    + " postMessage(m){ window.__vscodeMessages.push(m); },"
+    + " getState(){return null;}, setState(){} });";
   const feed = "window.dispatchEvent(new MessageEvent('message', { data: " + JSON.stringify(dataMsg) + " }));"
     + (view !== "list" ? " var _t=document.querySelector('[data-view=\"" + view + "\"]'); if(_t&&_t.onclick) _t.onclick();" : "");
   return html
@@ -166,4 +168,6 @@ function main() {
   console.log("navegador:", browser || "(ninguno)");
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { SAMPLE, buildStandalone, findBrowser };

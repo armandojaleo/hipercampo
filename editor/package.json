@@ -113,11 +113,14 @@
   "scripts": {
     "compile": "tsc -p ./",
     "test": "npm run compile && node tests/i18n.test.js",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:e2e",
     "preview": "node tools/preview.js --all",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm test"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.0",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.4.0"

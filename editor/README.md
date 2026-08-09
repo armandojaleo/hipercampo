@@ -74,10 +74,16 @@ also set an explicit command.
 cd editor
 npm install
 npm test
+npx playwright install chromium
+npm run test:e2e
 ```
 
 Open `editor/` in VS Code and press **F5** to launch an Extension Development Host.
 Marketplace release instructions are in [PUBLISHING.md](PUBLISHING.md).
+
+`npm test` compiles and checks the manifest/localisation contract. `npm run test:e2e`
+executes the standalone webview in Chromium, including rendering, filters, the map,
+extension messages and stored-markup escaping. CI runs both with `npm run test:all`.
 
 ## Data boundary
 
