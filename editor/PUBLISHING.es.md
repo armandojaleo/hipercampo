@@ -36,24 +36,37 @@ Con eso, el workflow de abajo publica solo.
 El workflow `.github/workflows/vsix.yml` publica al empujar un tag `viewer-vX.Y.Z`:
 
 ```bash
-# sube la versión en editor/package.json ("version": "0.2.0" -> "0.2.1")
-git tag viewer-v0.2.1
-git push origin viewer-v0.2.1
+# la versión del tag debe coincidir con editor/package.json
+git tag -a viewer-v0.9.19 -m "hipercampo viewer 0.9.19"
+git push origin viewer-v0.9.19
 ```
 
 Comprueba la versión: el tag debe coincidir con `editor/package.json`.
+
+Antes de la primera publicación, confirma que existen el publisher `armandojaleo` y
+el secreto de Actions (GitHub muestra el nombre, nunca el valor):
+
+```bash
+gh secret list --app actions
+```
+
+La salida debe incluir `VSCE_PAT`. Si no aparece, añádelo en **Settings → Secrets and
+variables → Actions** antes de crear el tag. El workflow compila, ejecuta los contratos
+de localización y los tests Playwright en Chromium antes de publicar.
 
 ## Publicar a mano (sin workflow)
 
 ```bash
 cd editor
 npm ci
-npm run compile
-npx @vscode/vsce publish -p <TU_PAT>
+npx playwright install chromium
+npm run test:all
+# Con VSCE_PAT cargado de forma segura en el entorno, sin pasarlo por argv:
+npx @vscode/vsce publish
 ```
 
 ## Presentación antes de publicar
 
 - El icono 128×128 y `galleryBanner` ya están integrados en `package.json`.
-- Faltan capturas actuales en el README para que la ficha luzca.
+- El README incluye capturas actuales del Mapa y la Lista en tema oscuro.
 - Revisar `LICENSE` (MIT del repo) y `repository` en `package.json`.

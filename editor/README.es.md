@@ -81,11 +81,17 @@ en el ajuste `hipercampo.command`.
 ```bash
 cd editor
 npm install
-npm run compile
+npm test
+npx playwright install chromium
+npm run test:e2e
 ```
 
 Abre `editor/` en VS Code y **F5** (Run Extension). Publicación al Marketplace: ver
 [PUBLISHING.es.md](PUBLISHING.es.md).
+
+`npm test` compila y valida el contrato de manifiesto/localización. `npm run test:e2e`
+ejecuta el webview autónomo en Chromium: renderizado, filtros, mapa, mensajes de la
+extensión y escape de markup almacenado. CI ejecuta ambos con `npm run test:all`.
 
 ## Cómo lee los datos
 

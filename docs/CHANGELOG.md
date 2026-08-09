@@ -7,7 +7,7 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [0.1.0b14] — 2026-08-09
 
-### Changed
+### Changed — core and compatibility
 - **The package is organised in layers.** `hipercampo/core/` (algebra and encoding),
   `support/` (paths, logging, budget, warnings), `storage/` (SQLite), `cycle/` (the
   memory itself). Each layer only looks downwards, which is what keeps the core
@@ -15,8 +15,8 @@ All notable changes to this project are documented here. Format loosely based on
   package root because they are public paths, and `hipercampo.encoder` and
   `hipercampo.roles` still import exactly as documented; `tests/contracts/
   test_public_paths.py` holds all of that in place.
-- **Everything a contributor reads is now in English** (package, docs, scripts,
-  viewer, tests). Spanish is deliberately kept where it is the thing under test:
+- **Production code and the primary contributor documentation are now in English.**
+  Spanish is deliberately kept where it is the thing under test:
   the recall corpus, the injection strings that exercise the Spanish patterns in
   `support/safety.py`, and the viewer's Spanish localisation.
 - **`hc_learn(tipo=…)` is now `hc_learn(kind=…)`** in the MCP tool, with English
@@ -69,7 +69,7 @@ All notable changes to this project are documented here. Format loosely based on
   a constant PowerShell query, PID validated before use — but the sentence was false.
   Three items listed as pending were already done and are now marked as such.
 
-### Changed
+### Changed — viewer
 - **Viewer redesign (extension v0.9.15) — constellation map, clearer information
   architecture, and a stable simulation.** Map nodes are now colored by cognitive
   state (episodic / semantic / atom / superseded / dormant) with a soft glow;
@@ -86,6 +86,11 @@ All notable changes to this project are documented here. Format loosely based on
   box. The List gains sort and type filters (client-side); recall/muse show the
   estimated MCP payload token cost of the current result. Status rows align on a
   reserved status-dot column; token history bars reveal their value on hover.
+- **The release path now executes the webview in Chromium.** Playwright covers real DOM
+  rendering, EN/ES localisation, filtering, map activation, the VS Code message contract,
+  and stored-markup escaping in both main CI and the Marketplace tag workflow. It found
+  and fixed a counter that included hidden atom fragments and an atom filter that could
+  select fragments only for the list to hide them again.
 
 ## [0.1.0b13] — 2026-08-06
 

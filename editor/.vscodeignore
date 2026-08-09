@@ -1,7 +1,10 @@
 .vscode/**
 src/**
 tests/**
+test-results/**
+playwright-report/**
 tools/**
+playwright.config.js
 PUBLISHING*.md
 node_modules/**
 tsconfig.json

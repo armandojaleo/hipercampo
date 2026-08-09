@@ -143,9 +143,9 @@ the threat model and the current defences, including what remains unfinished.
 - **Optional, opt-in, declared extras:** `[semantic]` (sentence-transformers →
   torch, a large tree users explicitly accept) and `[procs]` (psutil). Neither is
   installed by default.
-- **VS Code extension:** three **development** dependencies (`typescript`,
-  `@types/*`) pinned by `package-lock.json`; none ships in the `.vsix`, which contains
-  compiled JavaScript only. The viewer has no npm runtime dependencies.
+- **VS Code extension:** development dependencies (`typescript`, `@types/*`, and
+  Playwright) are pinned by `package-lock.json`; none ships in the `.vsix`, which
+  contains compiled JavaScript only. The viewer has no npm runtime dependencies.
 - **`mcp` is bounded** to `>=1.28.1,<2`, preventing an unreviewed new major version
   with API or provenance changes from entering automatically.
 

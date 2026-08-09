@@ -311,6 +311,21 @@
     strength: (a, b) => (b.strength || 0) - (a.strength || 0),
   };
 
+  // The browsing list hides atom fragments by default, but an explicit atom filter
+  // must reveal them. Keep this transformation separate so the counter, empty state,
+  // and rendered cards all describe the same set.
+  function listMemories(items) {
+    if (HITS === null) {
+      if ((($("kind") && $("kind").value) || "") !== "atom") {
+        const children = atomSetGlobal();
+        if (children.size) items = items.filter((m) => !children.has(m.id));
+      }
+      const compare = SORTERS[($("sort") && $("sort").value) || "recent"];
+      if (compare) items = [...items].sort(compare);
+    }
+    return items;
+  }
+
   // --- static labels, applied in the selected language at startup -----------
   function applyLanguage() {
     $("q").placeholder = L.filtrar;
@@ -415,7 +430,8 @@
 
   function repaint() {
     if (REQUEST_VIEW[VIEW]) return;   // Status/tokens/log are not rendered from here.
-    const items = visibleMemories();
+    let items = visibleMemories();
+    if (VIEW === "list") items = listMemories(items);
     const vacio = items.length === 0;
     $("empty").classList.toggle("hidden", !vacio);
     if (vacio) $("empty").querySelector("p").textContent = emptyMessage();
@@ -495,12 +511,6 @@
     // "', queryable by role." is not a memory. Show its coherent SOURCE instead. The atom
     // remains available for precise recall and appears on the Map (green edge). Apply the
     // chosen SORT too; recall relevance remains untouched.
-    if (HITS === null) {
-      const hijos = atomSetGlobal();
-      if (hijos.size) items = items.filter((m) => !hijos.has(m.id));
-      const cmp = SORTERS[($("sort") && $("sort").value) || "recent"];
-      if (cmp) items = [...items].sort(cmp);
-    }
     const c = $("view-list");
     c.innerHTML = "";
     const frag = document.createDocumentFragment();

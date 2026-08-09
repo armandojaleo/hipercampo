@@ -36,19 +36,31 @@ The `.github/workflows/vsix.yml` workflow publishes tags shaped as `viewer-vX.Y.
 The tag must exactly match `editor/package.json`:
 
 ```bash
-git tag viewer-v0.9.10
-git push origin viewer-v0.9.10
+git tag -a viewer-v0.9.19 -m "hipercampo viewer 0.9.19"
+git push origin viewer-v0.9.19
 ```
 
 Before publishing, the workflow installs locked dependencies, compiles TypeScript, runs
-the localization/icon contract, checks the tag version and only then calls `vsce publish`.
+the localization/icon contract and Playwright webview tests in Chromium, checks the tag
+version and only then calls `vsce publish`.
+
+For the first Marketplace release, confirm the publisher and secret before tagging:
+
+```bash
+gh secret list --app actions
+```
+
+GitHub only exposes the secret name, not its value. If the command returns nothing, add
+the token in **Settings → Secrets and variables → Actions**. A missing publisher or
+secret is not recoverable inside the workflow; fix it first, then create the tag.
 
 ## Build and inspect locally
 
 ```bash
 cd editor
 npm ci
-npm test
+npx playwright install chromium
+npm run test:all
 npx @vscode/vsce package
 npx @vscode/vsce ls
 ```
@@ -56,6 +68,6 @@ npx @vscode/vsce ls
 Install the resulting file through **Extensions → … → Install from VSIX…**. Verify both
 an English and Spanish VS Code profile before creating the release tag.
 
-The Marketplace icon is `media/icon.png` (128×128) and the Activity Bar uses the
-theme-aware monochrome `media/brain.svg`. The next presentation improvement is adding
-current screenshots to the Marketplace README.
+The Marketplace icon is `media/icon.png` (128×128), the Activity Bar uses the
+theme-aware monochrome `media/brain.svg`, and current dark-theme Map/List screenshots
+are included in the Marketplace README.
