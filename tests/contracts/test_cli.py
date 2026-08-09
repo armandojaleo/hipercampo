@@ -1,12 +1,11 @@
 """
-Tests del CLI — la puerta por la que entra el HOOK en cada turno.
+CLI tests for the HOOK entry point used on every turn.
 
-Si `hipercampo hook` falla o tarda, no rompe la conversación pero la deja sin
-memoria y sin avisar. Aquí se comprueba que responde el JSON exacto que Claude
-Code espera, que se calla cuando no tiene nada que decir, y que ningún comando
-revienta ante una entrada rara.
+If `hipercampo hook` fails or stalls, the conversation continues but silently loses
+memory. These tests verify Claude Code's exact JSON contract, quiet abstention when
+nothing should be said, and safe handling of unusual input.
 
-Ejecuta:  python tests/test_cli.py
+Run: python tests/contracts/test_cli.py
 """
 
 import io
@@ -30,60 +29,60 @@ def _limpiar_db():
 
 
 def _correr(*args) -> tuple[int, str]:
-    """Ejecuta el CLI contra una BD de prueba y devuelve (código, salida)."""
+    """Run the CLI against a test database and return (code, output)."""
     os.environ["HIPERCAMPO_DB"] = _DB
     os.environ["HIPERCAMPO_LOG"] = "0"
     buf = io.StringIO()
     with redirect_stdout(buf):
-        codigo = main(list(args))
-    return codigo, buf.getvalue()
+        code = main(list(args))
+    return code, buf.getvalue()
 
 
 def _hook(prompt: str) -> dict:
-    """Simula el hook: stdin es el JSON que manda Claude Code."""
+    """Simulate the hook with Claude Code's JSON on stdin."""
     original = sys.stdin
     sys.stdin = io.StringIO(json.dumps({"prompt": prompt}))
     try:
-        _, salida = _correr("hook")
+        _, output = _correr("hook")
     finally:
         sys.stdin = original
-    return json.loads(salida)
+    return json.loads(output)
 
 
-# --- el contrato del hook ---------------------------------------------------
+# --- hook contract ----------------------------------------------------------
 
-def test_el_hook_devuelve_el_json_que_espera_claude_code():
+def test_hook_returns_json_expected_by_claude_code():
     _limpiar_db()
     _correr("remember", "el servidor de produccion esta alojado en Frankfurt")
     r = _hook("¿donde esta alojado el servidor de produccion?")
     salida = r.get("hookSpecificOutput", {})
     assert salida.get("hookEventName") == "UserPromptSubmit", r
     assert "Frankfurt" in salida.get("additionalContext", ""), r
-    assert r.get("suppressOutput") is True, "no debe ensuciar el transcript"
+    assert r.get("suppressOutput") is True, "must not pollute the transcript"
     _limpiar_db()
 
 
-def test_el_hook_se_calla_cuando_no_sabe_nada():
+def test_hook_stays_quiet_when_nothing_is_known():
     _limpiar_db()
     _correr("remember", "algo totalmente ajeno sobre jardineria y macetas")
     r = _hook("¿cual es la capital de Mongolia?")
-    assert r == {}, f"debió callarse en vez de inventar contexto: {r}"
+    assert r == {}, f"should abstain instead of inventing context: {r}"
     _limpiar_db()
 
 
-def test_el_hook_ignora_el_ruido_del_ide():
-    """Los bloques que inyecta el IDE no son palabras del usuario."""
+def test_hook_ignores_ide_noise():
+    """Blocks injected by the IDE are not the user's words."""
     _limpiar_db()
     r = _hook("<ide_opened_file>C:/algo/fichero.py</ide_opened_file>")
-    assert r == {}, f"decidió sobre ruido del IDE: {r}"
+    assert r == {}, f"made a decision based on IDE noise: {r}"
     _limpiar_db()
 
 
-def test_el_hook_nunca_revienta_con_entrada_basura():
+def test_hook_never_crashes_on_garbage_input():
     _limpiar_db()
     for basura in ("", "   ", "\x00\x01", "{" * 500):
         r = _hook(basura)
-        assert isinstance(r, dict), f"no devolvió JSON con {basura!r}"
+        assert isinstance(r, dict), f"did not return JSON for {basura!r}"
     original = sys.stdin
     sys.stdin = io.StringIO("esto no es json en absoluto")
     try:
@@ -94,8 +93,8 @@ def test_el_hook_nunca_revienta_con_entrada_basura():
     _limpiar_db()
 
 
-def test_el_hook_de_arranque_inyecta_la_identidad():
-    """SessionStart: al empezar no hay pregunta, lo que toca es recordar quién eres."""
+def test_startup_hook_injects_identity():
+    """SessionStart has no query, so the hook should restore identity."""
     _limpiar_db()
     os.environ["HIPERCAMPO_DB"] = _DB
     from hipercampo.cycle.memory import Hipercampo
@@ -117,7 +116,7 @@ def test_el_hook_de_arranque_inyecta_la_identidad():
     _limpiar_db()
 
 
-def test_el_arranque_sin_identidad_se_calla():
+def test_startup_without_identity_stays_quiet():
     _limpiar_db()
     original = sys.stdin
     sys.stdin = io.StringIO(json.dumps({"hook_event_name": "SessionStart"}))
@@ -129,26 +128,25 @@ def test_el_arranque_sin_identidad_se_calla():
     _limpiar_db()
 
 
-# --- comandos ---------------------------------------------------------------
+# --- commands ---------------------------------------------------------------
 
-def test_remember_y_recall_por_terminal():
+def test_remember_and_recall_through_cli():
     _limpiar_db()
     codigo, salida = _correr("remember", "las ballenas azules son los mayores animales")
     assert codigo == 0 and '"stored": true' in salida.lower(), salida
-    # Consulta con vocabulario COMPARTIDO. Antes se preguntaba "cual es el animal mas
-    # grande", que es un sinónimo puro: con el suelo de abstención ya calibrado
-    # (ANSWER_MIN_SCORE, medido en scripts/calibrate.py) la memoria se calla ahí, y hace
-    # bien — en modo léxico el parafraseo sin palabras comunes es justo lo que no cubre.
-    # Este test comprueba la FONTANERÍA del terminal, no la calidad semántica.
+    # Query with SHARED vocabulary. The old query used a pure synonym; with the
+    # calibrated ANSWER_MIN_SCORE floor, memory correctly abstains because lexical
+    # mode does not cover paraphrases without common words. This test covers CLI
+    # PLUMBING, not semantic quality.
     codigo, salida = _correr("recall", "cuales son los mayores animales", "--plain")
     assert codigo == 0 and "ballenas" in salida, salida
     _limpiar_db()
 
 
-def test_recall_se_calla_ante_un_sinonimo_puro_en_modo_lexico():
-    """El reverso honesto del test de arriba: sin palabras en común, el modo léxico
-    NO responde, y eso es la abstención funcionando, no un fallo. Queda escrito para
-    que si algún día responde sea una decisión medida y no una regresión silenciosa."""
+def test_recall_abstains_on_pure_synonym_in_lexical_mode():
+    """The honest inverse of the test above: without shared words, lexical mode
+    abstains. If that changes, it must be a measured decision rather than a silent
+    regression."""
     _limpiar_db()
     _correr("remember", "las ballenas azules son los mayores animales")
     codigo, salida = _correr("recall", "cual es el animal mas grande", "--plain")
@@ -157,7 +155,7 @@ def test_recall_se_calla_ante_un_sinonimo_puro_en_modo_lexico():
     _limpiar_db()
 
 
-def test_stats_y_doctor_informan_sin_fallar():
+def test_stats_and_doctor_report_without_failure():
     _limpiar_db()
     _correr("remember", "un dato cualquiera para que haya algo que contar")
     codigo, salida = _correr("stats")
@@ -168,17 +166,17 @@ def test_stats_y_doctor_informan_sin_fallar():
     _limpiar_db()
 
 
-def test_version_y_ayuda():
+def test_version_and_help():
     codigo, salida = _correr("version")
     assert codigo == 0 and salida.strip(), salida
     codigo, salida = _correr()
     assert codigo == 0 and "hipercampo" in salida
 
 
-def test_texto_vacio_se_rechaza_con_codigo_de_error():
+def test_empty_text_is_rejected_with_error_code():
     _limpiar_db()
     codigo, _ = _correr("remember")
-    assert codigo != 0, "guardar sin texto debe fallar, no guardar basura"
+    assert codigo != 0, "remembering without text must fail rather than store garbage"
     _limpiar_db()
 
 

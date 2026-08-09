@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 from helpers import run_tests, clean, memory      # noqa: E402
 
 
-def test_health_dice_que_esta_sana():
+def test_health_reports_healthy():
     hc = memory("res_health")
     h = hc.health()
     assert h["healthy"] is True, h
@@ -19,7 +19,7 @@ def test_health_dice_que_esta_sana():
     assert h["writable"] is True
 
 
-def test_recall_se_recupera_de_una_conexion_caida():
+def test_recall_recovers_from_dropped_connection():
     hc = memory("res_recall")
     hc.remember("el servidor de produccion esta alojado en Frankfurt", 0.7)
     hc.store.db.close()                       # simula una caída de la BD
@@ -27,7 +27,7 @@ def test_recall_se_recupera_de_una_conexion_caida():
     assert isinstance(hits, list) and hits, "debió reconectar y responder"
 
 
-def test_remember_se_recupera_de_una_conexion_caida():
+def test_remember_recovers_from_dropped_connection():
     hc = memory("res_remember")
     hc.remember("primer recuerdo antes de la caida", 0.6)
     hc.store.db.close()
@@ -35,7 +35,7 @@ def test_remember_se_recupera_de_una_conexion_caida():
     assert r.get("stored") is True, r
 
 
-def test_stats_se_recupera():
+def test_stats_recovers():
     hc = memory("res_stats")
     hc.remember("algo que contar en las estadisticas", 0.5)
     hc.store.db.close()
@@ -43,7 +43,7 @@ def test_stats_se_recupera():
     assert s.get("total", 0) >= 1, s
 
 
-def test_un_fallo_irrecuperable_devuelve_error_legible():
+def test_unrecoverable_failure_returns_readable_error():
     hc = memory("res_error")
     hc.remember("recuerdo previo al desastre", 0.5)
     # rompemos la conexión Y la ruta: la reconexión también fallará

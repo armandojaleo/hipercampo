@@ -1,10 +1,9 @@
 """
-El coste en tokens es una promesa, así que se comprueba como tal.
+Token cost is a promise, so test it as one.
 
-Una memoria que crece sin techo acaba comiéndose la ventana de contexto del
-usuario. Estos tests fijan el suelo: que el presupuesto se respete, que el recorte
-se DIGA en vez de esconderse, y que hipercampo no interrumpa cuando nadie le ha
-preguntado y no tiene nada claramente relevante que decir.
+Unbounded memory eventually consumes the user's context window. These tests set the
+minimum contract: respect the budget, DISCLOSE truncation instead of hiding it, and
+do not interrupt when nobody asked and nothing is clearly relevant.
 """
 
 import json
@@ -53,54 +52,53 @@ def _memoria():
 
 # --- estimación -------------------------------------------------------------
 
-def test_estimar_es_proporcional_al_texto():
+def test_estimate_is_proportional_to_text():
     corto = budget.estimate_tokens("hola")
     largo = budget.estimate_tokens("hola " * 100)
     assert 0 < corto < largo
     assert budget.estimate_tokens("") == 0
 
 
-def test_se_admite_que_es_una_estimacion():
-    """La cuenta es SIEMPRE aproximada, también con tiktoken instalado.
+def test_estimate_is_explicitly_approximate():
+    """The count is ALWAYS approximate, even when tiktoken is installed.
 
-    tiktoken/cl100k_base es el tokenizador de OpenAI y aquí se mide lo que cuesta
-    en Claude, cuyo tokenizador no es público: con él la estimación mejora, pero
-    no se vuelve exacta. Antes se declaraba exacta, que es justo lo que este
-    proyecto no hace."""
+    tiktoken/cl100k_base is OpenAI's tokenizer, while this measures Claude cost and
+    Claude's tokenizer is not public. It improves the estimate but cannot make it
+    exact. This project must not claim otherwise."""
     assert budget.is_estimate() is True
-    assert budget.method(), "hay que poder DECIR con qué se ha contado"
+    assert budget.method(), "the counting method must be DISCLOSED"
 
 
-def test_se_dice_con_que_se_ha_contado():
+def test_counting_method_is_reported():
     m = budget.method()
     assert ("tiktoken" in m) == (budget._real_tokenizer() is not None)
     if budget._real_tokenizer() is not None:
-        assert "OpenAI" in m, "no puede callar de quién es el tokenizador"
+        assert "OpenAI" in m, "the tokenizer owner must be disclosed"
 
 
 # --- recorte ----------------------------------------------------------------
 
-def test_truncar_respeta_el_limite_y_marca_el_corte():
+def test_truncate_respects_limit_and_marks_cut():
     texto = "palabra " * 200
     corto = budget.truncate(texto, 20)
     assert budget.estimate_tokens(corto) <= 25          # margen del marcador
-    assert corto.endswith("[…]"), "un corte silencioso se lee como texto corrupto"
+    assert corto.endswith("[…]"), "a silent cut looks like corrupted text"
 
 
-def test_truncar_no_parte_palabras_por_la_mitad():
+def test_truncate_does_not_split_words():
     texto = "supercalifragilisticoespialidoso " * 20
     corto = budget.truncate(texto, 10).replace(" […]", "")
     for palabra in corto.split():
-        assert palabra in texto, "cortó a mitad de palabra"
+        assert palabra in texto, "split a word in half"
 
 
-def test_texto_corto_no_se_toca():
+def test_short_text_is_unchanged():
     assert budget.truncate("dos palabras", 500) == "dos palabras"
 
 
 # --- ajuste al presupuesto --------------------------------------------------
 
-def test_ajustar_respeta_el_presupuesto():
+def test_fit_respects_budget():
     lineas = ["[cabecera]"] + [f"- recuerdo largo numero {i} " + "relleno " * 60
                                for i in range(10)]
     salida, informe = budget.fit_budget(lineas, 200)
@@ -108,10 +106,10 @@ def test_ajustar_respeta_el_presupuesto():
     assert informe["original"] > 1000, "el caso de prueba no era grande"
 
 
-def test_el_aviso_de_omision_cabe_dentro_del_presupuesto():
-    """El aviso también cuesta tokens. Se añade al final, así que si no se reserva
-    antes el presupuesto se incumple justo al aplicarlo (medido: 40 -> 52, un 30%
-    de más). Un presupuesto que se pasa no es un presupuesto."""
+def test_omission_notice_fits_inside_budget():
+    """The notice also costs tokens. Reserve space before appending it or the final
+    step breaks the budget (measured: 40 -> 52, a 30% overrun). A budget that is
+    exceeded is not a budget."""
     for tope in (30, 40, 60, 120, 350):
         lineas = ["[cabecera]"] + [f"- dato util numero {i} para el equipo"
                                    for i in range(4)] + ["x " * 400]
@@ -121,12 +119,12 @@ def test_el_aviso_de_omision_cabe_dentro_del_presupuesto():
         assert informe["tokens"] == real, "el informe no cuadra con la salida real"
 
 
-def test_la_cabecera_siempre_entra():
+def test_header_always_fits():
     salida, _ = budget.fit_budget(["[cabecera]", "x " * 5000], 30)
     assert salida[0] == "[cabecera]"
 
 
-def test_la_omision_se_dice_y_se_dice_como_recuperarla():
+def test_omission_and_recovery_method_are_reported():
     salida, informe = budget.fit_budget(["[cabecera]"] + ["y " * 400] * 5, 100)
     assert informe["omitted"]
     aviso = "\n".join(salida)
@@ -134,9 +132,9 @@ def test_la_omision_se_dice_y_se_dice_como_recuperarla():
     assert "hc_recall" in aviso, "hay que decir cómo recuperar lo que falta"
 
 
-def test_los_recuerdos_entran_enteros_o_no_entran():
-    """Un recuerdo cortado por la mitad parece información y no lo es: quien lo
-    lee responde con confianza sobre un dato mutilado."""
+def test_memories_fit_whole_or_are_omitted():
+    """A memory cut in half looks informative but is not; its reader may answer
+    confidently from mutilated data."""
     entero = "- dato critico: la clave vive en el gestor de secretos, nunca en git"
     salida, _ = budget.fit_budget(["[cabecera]", entero, "x " * 500], 60)
     cuerpo = [ln for ln in salida if ln.startswith("- ")]
@@ -144,13 +142,13 @@ def test_los_recuerdos_entran_enteros_o_no_entran():
     assert not any("[…]" in ln for ln in salida), "quedó un muñón de recuerdo"
 
 
-def test_uno_corto_puede_colarse_donde_no_cabia_uno_largo():
+def test_short_item_can_fit_when_long_item_cannot():
     largo, corto = "- " + "relleno " * 200, "- dato breve pero util"
     salida, _ = budget.fit_budget(["[cabecera]", largo, corto], 60)
     assert corto in salida and largo not in salida
 
 
-def test_sin_presupuesto_no_se_omite_nada():
+def test_no_budget_omits_nothing():
     lineas = ["[cabecera]", "z " * 2000]
     salida, informe = budget.fit_budget(lineas, 0)
     assert salida == lineas and informe["omitted"] == 0
@@ -158,9 +156,9 @@ def test_sin_presupuesto_no_se_omite_nada():
 
 # --- no interrumpir sin motivo ---------------------------------------------
 
-def test_no_interrumpe_cuando_nadie_pregunta_y_no_hay_nada_claro():
-    """El caso medido que motivó todo esto: una orden técnica cualquiera hacía
-    inyectar cientos de tokens de contexto que no venían a cuento."""
+def test_does_not_interrupt_without_question_or_clear_relevance():
+    """Measured motivating case: an ordinary technical instruction injected
+    hundreds of irrelevant context tokens."""
     hc = _memoria()
     for ruido in ["arregla el bug del boton", "commitea los cambios",
                   "gracias, buen trabajo", "ponme un ejemplo en python"]:
@@ -168,36 +166,32 @@ def test_no_interrumpe_cuando_nadie_pregunta_y_no_hay_nada_claro():
         assert r["action"] == "nothing", f"interrumpió con: {ruido} -> {r}"
 
 
-def test_si_preguntan_sigue_respondiendo():
-    """El filtro anterior no puede volver muda a la memoria: preguntar es
-    justamente el caso en el que debe hablar."""
+def test_still_responds_when_asked():
+    """The filter must not silence memory when a question is exactly when it should speak."""
     hc = _memoria()
     r = _decide(hc, "¿donde esta alojado el servidor de produccion?", k=3)
     assert r["action"] == "recall" and r["result"], r
 
 
-def test_la_similitud_directa_viaja_en_cada_resultado():
-    """El filtro se apoya en ella, así que si desaparece hay que enterarse aquí y
-    no en producción."""
+def test_direct_similarity_is_in_every_result():
+    """The filter relies on direct similarity, so detect its absence here, not in production."""
     hc = _memoria()
     hits = hc.recall("despliegues de los martes", k=3)
     assert hits and all("sim" in h for h in hits)
     assert all(0.0 <= h["sim"] <= 1.0 for h in hits)
 
 
-def test_un_que_atono_no_cuela_como_pregunta():
-    """El agujero por el que seguía entrando el ruido: el interrogativo SIN tilde.
+def test_unaccented_que_does_not_pass_as_question():
+    """The hole that still admitted noise: the unaccented interrogative.
 
-    «que» átono es de las palabras más frecuentes del español, así que "espera que
-    termine" o "creo que esto está mal" se clasificaban como preguntas y entraban
-    por la rama que inyecta memoria SIN exigir relevancia alta. Medido en una
-    sesión real: 2 de 3 turnos inyectaron memoria de otro proyecto sin que nadie
-    preguntase nada.
+    Unaccented «que» is extremely common in Spanish, so statements such as "espera
+    que termine" were classified as questions and entered the injection branch
+    WITHOUT requiring high relevance. In a measured session, two of three turns
+    injected another project's memory without a question.
 
-    Ojo: el listón es de RELEVANCIA, no de gramática. Un mensaje con «que» átono
-    que además va del tema (ej. "haz lo que te digo con el servidor") sí responde,
-    y debe: ahí la memoria encaja de verdad. Lo que se cierra es inyectar cuando
-    ni preguntó ni viene a cuento."""
+    The threshold concerns RELEVANCE, not grammar. A topical message with unaccented
+    «que» may still answer because memory genuinely fits. This only prevents
+    injection when the user neither asked nor supplied relevant context."""
     hc = _memoria()
     for atono in ["espera que termine la sesion que estamos mejorando",
                   "creo que esto esta mal",
@@ -207,9 +201,9 @@ def test_un_que_atono_no_cuela_como_pregunta():
         assert r["action"] == "nothing", f"coló como pregunta: {atono} -> {r}"
 
 
-def test_una_pregunta_de_verdad_sigue_respondiendo():
-    """Cerrar el agujero no puede volver muda a la memoria: con tilde o con signos,
-    es una pregunta y hay que contestarla."""
+def test_real_question_still_gets_answered():
+    """Closing the hole must not silence memory: accents or question marks identify
+    a real question that should be answered."""
     hc = _memoria()
     for clara in ["¿donde esta alojado el servidor de produccion?",
                   "qué sabes del servidor de produccion",
@@ -218,9 +212,9 @@ def test_una_pregunta_de_verdad_sigue_respondiendo():
         assert r["action"] == "recall" and r["result"], f"se calló ante: {clara}"
 
 
-def test_una_pregunta_dudosa_responde_si_encaja_de_sobra():
-    """Sin tilde no sabemos si preguntó, así que se le exige el listón de hablar
-    sin que nadie pregunte: si la memoria encaja claramente, contesta igual."""
+def test_ambiguous_question_answers_only_when_highly_relevant():
+    """Without an accent the intent is ambiguous, so require the unsolicited-speech
+    threshold. A clearly relevant memory may still answer."""
     hc = _memoria()
     r = _decide(hc, "donde esta alojado el servidor de produccion", k=3)
     if r["action"] == "recall":
@@ -228,9 +222,9 @@ def test_una_pregunta_dudosa_responde_si_encaja_de_sobra():
             "una pregunta dudosa no puede inyectar por debajo del listón"
 
 
-def test_una_variable_de_entorno_ilegible_no_tumba_el_arranque():
-    """budget se importa desde el servidor MCP: un int() suelto al importar
-    convierte un typo en .mcp.json en 'no arranca', con stacktrace."""
+def test_invalid_environment_variable_does_not_break_startup():
+    """budget is imported by the MCP server; an unchecked int() would turn a typo
+    in .mcp.json into a startup failure with a stack trace."""
     # PYTHONIOENCODING=utf-8: el aviso "no es un número" lleva 'ú'. Sin esto, en
     # Windows el hijo lo escribiría en cp1252 (byte 0xFA) y el padre, que lee utf-8,
     # reventaría al decodificar. En Linux ya es utf-8; esto solo iguala Windows.
@@ -246,9 +240,9 @@ def test_una_variable_de_entorno_ilegible_no_tumba_el_arranque():
     assert "is not a number" in r.stderr, "hay que AVISAR de que se ignoró el valor"
 
 
-def test_presupuesto_persistido_y_precedencia():
-    """El presupuesto se puede fijar y persiste junto al .db; el hook (proceso nuevo)
-    lo respeta al turno siguiente. La variable de entorno manda por encima."""
+def test_persisted_budget_and_precedence():
+    """The budget persists next to the database and a new hook process respects it
+    on the next turn. The environment variable has higher precedence."""
     from hipercampo.support import config
     os.environ["HIPERCAMPO_DB"] = _DB
     os.environ.pop("HIPERCAMPO_HOOK_BUDGET", None)
@@ -276,7 +270,7 @@ def test_presupuesto_persistido_y_precedencia():
         os.environ.pop("HIPERCAMPO_DB", None)
 
 
-def test_el_umbral_de_interrupcion_es_mas_exigente_que_el_de_respuesta():
+def test_interruption_threshold_is_stricter_than_answer_threshold():
     from hipercampo.cycle.policy import VOLUNTEER_MIN_SCORE
     assert VOLUNTEER_MIN_SIM > VOLUNTEER_MIN_SCORE, \
         "si nadie ha preguntado, callarse es gratis y equivocarse cuesta tokens"
@@ -292,7 +286,7 @@ def _hook(prompt: str, env: dict) -> str:
     return d.get("hookSpecificOutput", {}).get("additionalContext", "")
 
 
-def test_el_hook_no_se_pasa_del_presupuesto():
+def test_hook_stays_within_budget():
     hc = _memoria()
     # Seis recuerdos LARGOS y DISTINTOS ENTRE SÍ. Antes eran seis variantes de la misma
     # frase (solo cambiaba el índice) y `remember` descartaba cinco por redundantes: el
@@ -322,10 +316,10 @@ def test_el_hook_no_se_pasa_del_presupuesto():
     assert budget.estimate_tokens(ctx) <= 160, budget.estimate_tokens(ctx)
 
 
-def test_si_no_cabe_ni_un_recuerdo_se_calla_en_vez_de_avisar_a_secas():
-    """Medido en la memoria real: 46 tokens de cabecera + "hay 1 que no cabe", sin
-    un solo dato. Se paga igual que un recuerdo útil, no aporta nada y el modelo ni
-    siquiera sabe qué pedir. Callarse es gratis."""
+def test_hook_stays_quiet_when_no_memory_fits():
+    """Measured in real memory: a 46-token heading plus an omission notice with no
+    actual fact. It costs as much as useful memory, adds nothing, and gives the model
+    no actionable retrieval cue. Silence is free."""
     hc = Hipercampo(_DB, namespace="nocabe")
     # Nota de UN solo átomo (sin fin de oración ni conectores): así el atomizador no la
     # trocea y sigue siendo un único recuerdo demasiado grande para el presupuesto — que
@@ -339,9 +333,9 @@ def test_si_no_cabe_ni_un_recuerdo_se_calla_en_vez_de_avisar_a_secas():
     assert ctx == "", f"inyectó {budget.estimate_tokens(ctx)} tok sin un solo dato: {ctx!r}"
 
 
-def test_una_sugerencia_de_guardar_no_se_confunde_con_estar_vacio():
-    """El cuerpo útil no son solo recuerdos: si assist recomienda guardar algo, esa
-    sugerencia ES el contenido y tiene que llegar."""
+def test_save_suggestion_is_not_mistaken_for_empty_output():
+    """Useful content is not limited to memories: a save suggestion from assist IS
+    content and must be delivered."""
     env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_NAMESPACE="sugerencia",
                HIPERCAMPO_LOG="0")
     env.pop("HIPERCAMPO_LINKED", None)
@@ -349,7 +343,7 @@ def test_una_sugerencia_de_guardar_no_se_confunde_con_estar_vacio():
     assert "suggestion" in ctx, f"se comió la recomendación de guardar: {ctx!r}"
 
 
-def test_el_presupuesto_se_puede_desactivar():
+def test_budget_can_be_disabled():
     env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_NAMESPACE="presupuesto",
                HIPERCAMPO_HOOK_BUDGET="0", HIPERCAMPO_LOG="0")
     env.pop("HIPERCAMPO_LINKED", None)
@@ -407,7 +401,7 @@ def _tools(env: dict) -> list[str]:
             p.wait(timeout=5)
 
 
-def test_por_defecto_solo_se_anuncia_el_nucleo():
+def test_only_core_tools_are_advertised_by_default():
     env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_LOG="0")
     env.pop("HIPERCAMPO_TOOLS", None)
     nombres = _tools(env)
@@ -417,7 +411,7 @@ def test_por_defecto_solo_se_anuncia_el_nucleo():
     assert len(nombres) <= 8, nombres
 
 
-def test_pedir_todas_devuelve_el_contrato_completo():
+def test_requesting_all_returns_full_contract():
     """Quien dependa de la superficie antigua tiene que poder recuperarla entera."""
     env = dict(os.environ, HIPERCAMPO_DB=_DB, HIPERCAMPO_LOG="0",
                HIPERCAMPO_TOOLS="all")
@@ -430,9 +424,9 @@ def test_pedir_todas_devuelve_el_contrato_completo():
         assert imprescindible in nombres, imprescindible
 
 
-def test_nada_se_pierde_lo_no_anunciado_sigue_en_el_catalogo():
-    """Reducir la superficie no puede significar perder capacidades: lo que no se
-    anuncia tiene que seguir estando, listo para activarse."""
+def test_unadvertised_tools_remain_in_catalog():
+    """Reducing the advertised surface must not remove capabilities; unadvertised
+    tools remain available for activation."""
     import importlib
 
     os.environ["HIPERCAMPO_DB"] = _DB
@@ -446,10 +440,10 @@ def test_nada_se_pierde_lo_no_anunciado_sigue_en_el_catalogo():
     assert len(catalogo) == 12, sorted(catalogo)
 
 
-def test_activar_en_caliente_registra_y_ejecuta_a_la_vez():
-    """La activación se ejecuta EN LA MISMA llamada a propósito: si el cliente
-    ignora la notificación tools/list_changed, la herramienta seguiría siendo
-    inalcanzable. Ejecutándola aquí, la capacidad está garantizada igual."""
+def test_hot_activation_registers_and_executes_at_once():
+    """Activation deliberately executes in the SAME call. If the client ignores
+    tools/list_changed, the tool would otherwise remain unreachable; execution here
+    guarantees the capability regardless."""
     import asyncio
     import importlib
 
@@ -468,7 +462,7 @@ def test_activar_en_caliente_registra_y_ejecuta_a_la_vez():
     assert "hc_health" in server._ACTIVATED
 
 
-def test_activar_algo_que_no_existe_no_revienta():
+def test_activating_unknown_tool_does_not_crash():
     import asyncio
     import importlib
 

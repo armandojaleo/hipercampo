@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
+from helpers import run_tests  # noqa: E402
 from hipercampo.cycle.memory import Hipercampo   # noqa: E402
 from hipercampo.storage.store import Store         # noqa: E402
 
@@ -36,7 +37,7 @@ def _texto_en_fichero(fragmento: str) -> bool:
     return fragmento.encode("utf-8") in datos
 
 
-def test_purga_por_ids_borra_de_verdad_del_fichero():
+def test_purge_by_ids_really_deletes_from_file():
     _clean()
     hc = Hipercampo(_DB, namespace="p")
     secreto = "TOKEN_SECRETO_hcdemo_no_debio_guardarse_1234567890"
@@ -62,7 +63,7 @@ def test_purga_por_ids_borra_de_verdad_del_fichero():
     assert not any("banco" in t for t in quedan)
 
 
-def test_dry_run_no_borra_nada():
+def test_dry_run_deletes_nothing():
     _clean()
     hc = Hipercampo(_DB, namespace="p")
     mid = hc.remember("algo que NO se debe borrar en un ensayo", 0.6)["id"]
@@ -73,7 +74,7 @@ def test_dry_run_no_borra_nada():
     assert mid in vivos, "el ensayo no debía borrar"
 
 
-def test_purga_por_antiguedad_solo_toca_latentes_viejos():
+def test_age_purge_only_touches_old_dormant_memories():
     _clean()
     hc = Hipercampo(_DB, namespace="p")
     viejo = hc.remember("latente viejo que ya no va a resurgir", 0.5)["id"]
@@ -96,7 +97,7 @@ def test_purga_por_antiguedad_solo_toca_latentes_viejos():
     assert activo in vivos, "un recuerdo activo nunca se purga por antigüedad"
 
 
-def test_exige_exactamente_un_criterio():
+def test_requires_exactly_one_criterion():
     _clean()
     hc = Hipercampo(_DB, namespace="p")
     hc.remember("da igual", 0.5)
@@ -106,7 +107,7 @@ def test_exige_exactamente_un_criterio():
     assert "error" in ni_uno and "error" in ambos
 
 
-def test_purga_no_cruza_namespace():
+def test_purge_does_not_cross_namespace():
     _clean()
     a = Hipercampo(_DB, namespace="alice")
     mid = a.remember("secreto de alice", 0.6)["id"]
@@ -122,7 +123,7 @@ def test_purga_no_cruza_namespace():
     assert any("alice" in t for t in sigue), "bob no debía poder purgar a alice"
 
 
-def test_vacuum_no_rompe_dentro_de_transaccion():
+def test_vacuum_does_not_break_inside_transaction():
     _clean()
     s = Store(_DB, namespace="p")
     try:
@@ -131,3 +132,11 @@ def test_vacuum_no_rompe_dentro_de_transaccion():
             s.vacuum()
     finally:
         s.close()
+
+
+if __name__ == "__main__":
+    try:
+        code = run_tests(dict(globals()))
+    finally:
+        _clean()
+    raise SystemExit(code)

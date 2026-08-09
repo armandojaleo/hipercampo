@@ -43,7 +43,7 @@ def _sembrar(hc, n_temas=40, por=20, seed=0):
     return textos, np.array(tema)
 
 
-def test_navegar_recupera_como_escanear():
+def test_navigation_retrieves_like_scan():
     hc = memory("navidx", namespace="proj")
     textos, tema = _sembrar(hc)
     hc.store.reindex_navgraph(M=12)                 # teje los knn (el mapa)
@@ -76,7 +76,7 @@ def test_navegar_recupera_como_escanear():
     hc.close()
 
 
-def test_indice_usa_los_knn_del_mapa():
+def test_index_uses_map_knn_links():
     """El índice se monta desde los enlaces knn ya guardados, no de la nada."""
     hc = memory("navidx2", namespace="proj")
     _sembrar(hc, n_temas=8, por=8, seed=5)
@@ -89,7 +89,7 @@ def test_indice_usa_los_knn_del_mapa():
     hc.close()
 
 
-def test_recall_opcional_puede_navegar_el_grafo_del_store():
+def test_optional_recall_can_navigate_store_graph():
     """b6: recall(nav=True) usa el grafo persistido como candidato medido,
     manteniendo el recall normal intacto como fallback."""
     hc = memory("nav_recall", namespace="proj")
@@ -120,7 +120,7 @@ def test_recall_opcional_puede_navegar_el_grafo_del_store():
     assert nav[0].get("recall_mode") == "nav", nav[0]
     assert isinstance(nav[0].get("visited"), int) and nav[0]["visited"] > 0
 
-def test_cli_recall_expone_modo_nav():
+def test_cli_recall_exposes_nav_mode():
     import contextlib
     import io
     import json
@@ -148,7 +148,7 @@ def test_cli_recall_expone_modo_nav():
         os.environ.pop("HIPERCAMPO_DB", None)
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
-def test_recall_auto_navega_si_el_grafo_es_adecuado():
+def test_auto_recall_navigates_when_graph_is_suitable():
     hc = memory("nav_auto", namespace="proj")
     textos, _ = _sembrar(hc, n_temas=12, por=10, seed=43)
     consulta = " ".join(textos[44].split()[:4])
@@ -161,7 +161,7 @@ def test_recall_auto_navega_si_el_grafo_es_adecuado():
     assert isinstance(hits[0].get("visited"), int)
     assert hits[0]["visited"] < 0.8 * len(textos), hits[0]
 
-def test_cli_recall_expone_modo_nav_auto():
+def test_cli_recall_exposes_auto_nav_mode():
     import contextlib
     import io
     import json
@@ -188,7 +188,7 @@ def test_cli_recall_expone_modo_nav_auto():
         os.environ.pop("HIPERCAMPO_DB", None)
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
-def test_remember_teje_knn_incremental_sin_reindex():
+def test_remember_weaves_incremental_knn_without_reindex():
     """b6 escritura: recordar tambien alimenta el mapa navegable sin esperar
     mantenimiento O(N^2). Los enlaces knn no sustituyen evidencia lexical."""
     hc = memory("nav_write", namespace="proj")
@@ -212,7 +212,7 @@ def test_remember_teje_knn_incremental_sin_reindex():
     hc.close()
 
 
-def test_grafo_incremental_sobrevive_al_reinicio():
+def test_incremental_graph_survives_restart():
     """Los KNN son memoria persistente: cerrar el robot no obliga a reindexar."""
     hc = memory("nav_restart", namespace="robot")
     textos = [f"sensor robot zona {i} temperatura bateria ruta segura" for i in range(12)]
@@ -234,7 +234,7 @@ def test_grafo_incremental_sobrevive_al_reinicio():
     reabierta.close()
 
 
-def test_grafo_incremental_no_cruza_namespaces():
+def test_incremental_graph_does_not_cross_namespaces():
     """El mapa navegable de un robot/proyecto nunca incorpora recuerdos ajenos."""
     hc_a = memory("nav_ns", namespace="robot-a")
     for i in range(8):
@@ -251,7 +251,7 @@ def test_grafo_incremental_no_cruza_namespaces():
     hc_b.close()
 
 
-def test_grafo_residente_se_reutiliza_e_invalida_con_cambios_reales():
+def test_resident_graph_is_reused_and_invalidated_on_real_changes():
     """Recall repetido no reconstruye O(N); cambios locales/externos sí invalidan."""
     hc = memory("nav_cache", namespace="proj")
     _sembrar(hc, n_temas=8, por=8, seed=9)
@@ -284,7 +284,7 @@ def test_grafo_residente_se_reutiliza_e_invalida_con_cambios_reales():
     assert g4 is not g3 and len(g4) == len(g3) + 1
     hc.close()
 
-def test_carga_del_gps_no_materializa_volcados_completos():
+def test_gps_loading_does_not_materialize_full_dumps():
     """Construir el índice solo lee ids, vectores y extremos KNN por SQL estrecho."""
     hc = memory("nav_lean_load", namespace="robot")
     for i in range(8):

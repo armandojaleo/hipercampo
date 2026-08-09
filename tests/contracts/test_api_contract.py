@@ -77,13 +77,13 @@ def _tools():
     return {n: f for n, f in vars(server).items() if n.startswith("hc_")}
 
 
-def test_estan_todas_y_ninguna_de_mas():
+def test_all_tools_present_with_no_extras():
     vivas = set(_tools())
     assert vivas == set(HERRAMIENTAS), (
         f"faltan: {set(HERRAMIENTAS) - vivas} · sobran: {vivas - set(HERRAMIENTAS)}")
 
 
-def test_los_parametros_no_cambian_sin_querer():
+def test_parameters_do_not_change_accidentally():
     for nombre, fn in _tools().items():
         firma = inspect.signature(fn)
         params = {p.name: (p.default is not inspect.Parameter.empty)
@@ -100,14 +100,14 @@ def test_todas_documentadas():
 
 # --- formas de respuesta (las claves que un cliente puede asumir) -----------
 
-def test_forma_de_remember():
+def test_remember_shape():
     hc = memory("api_rem")
     r = hc.remember("un dato totalmente nuevo para el contrato", 0.6)
     assert {"stored", "id", "novelty", "surprise", "importance"} <= set(r), r
 
 
 
-def test_hc_recall_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
+def test_hc_recall_mcp_exposes_nav_budget_and_passes_it_to_core():
     import hipercampo.server as server
 
     class FakeHC:
@@ -150,7 +150,7 @@ def test_hc_recall_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
     assert fake.calls[-1]["nav"] == "auto"
 
 
-def test_forma_de_recall():
+def test_recall_shape():
     hc = memory("api_rec")
     hc.remember("el faro de alejandria guiaba a los barcos de noche", 0.7)
     hits = hc.recall("faro que guiaba a los barcos")
@@ -160,7 +160,7 @@ def test_forma_de_recall():
 
 
 
-def test_hc_assist_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
+def test_hc_assist_mcp_exposes_nav_budget_and_passes_it_to_core():
     import hipercampo.server as server
 
     class FakeHC:
@@ -191,7 +191,7 @@ def test_hc_assist_mcp_expone_presupuesto_nav_y_lo_pasa_al_core():
         "max_scan": 1,
         "nav": "auto",
     }]
-def test_forma_de_stats_y_health():
+def test_stats_and_health_shape():
     hc = memory("api_st")
     s = hc.stats()
     assert {"active_episodic", "semantic", "archived", "dormant",
@@ -203,7 +203,7 @@ def test_forma_de_stats_y_health():
             "writable", "healthy"} <= set(h), h
 
 
-def test_forma_de_error_resiliente():
+def test_resilient_error_shape():
     hc = memory("api_err")
     hc.store.db.close()
     hc.store.path = "Z:/no/existe.db"

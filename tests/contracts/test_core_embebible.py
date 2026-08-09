@@ -41,7 +41,7 @@ _PROHIBIDO = ("mcp",)          # módulos que el núcleo no puede arrastrar
 
 
 def _modulos_nucleo():
-    for p in sorted(_PAQUETE.glob("*.py")):
+    for p in sorted(_PAQUETE.rglob("*.py")):
         if p.name not in _TRANSPORTE:
             yield p
 
@@ -61,7 +61,7 @@ def _imports_de(path: Path):
     return nombres
 
 
-def test_ningun_modulo_del_nucleo_importa_mcp():
+def test_no_core_module_imports_mcp():
     """La frontera dura: ni un `import mcp` colado arriba de memory.py/store.py/…"""
     culpables = {}
     for p in _modulos_nucleo():
@@ -73,13 +73,13 @@ def test_ningun_modulo_del_nucleo_importa_mcp():
         "El núcleo debe poder embeberse sin mcp.")
 
 
-def test_el_nucleo_no_importa_el_servidor():
+def test_core_does_not_import_server():
     """El núcleo tampoco puede depender de .server (que sí arrastra mcp)."""
     culpables = {p.name for p in _modulos_nucleo() if ".server" in _imports_de(p)}
     assert not culpables, f"el núcleo importa .server en: {culpables}"
 
 
-def test_importar_hipercampo_no_carga_mcp():
+def test_importing_hipercampo_does_not_load_mcp():
     """La prueba viva: importar el paquete no debe traer mcp a memoria, ni siquiera
     con mcp instalado en el entorno. Se mide en un intérprete LIMPIO."""
     codigo = (
@@ -94,13 +94,13 @@ def test_importar_hipercampo_no_carga_mcp():
     assert "OK" in r.stdout
 
 
-def test_la_api_del_nucleo_esta_completa():
+def test_core_api_is_complete():
     """Lo que un embebido puede llamar: el ciclo de memoria entero, sin mcp de por medio."""
     faltan = [m for m in _API_NUCLEO if not callable(getattr(Hipercampo, m, None))]
     assert not faltan, f"faltan métodos del núcleo: {faltan}"
 
 
-def test_el_paquete_expone_hipercampo():
+def test_package_exposes_hipercampo():
     """La superficie pública mínima del paquete."""
     assert hasattr(hipercampo, "Hipercampo")
     assert "Hipercampo" in getattr(hipercampo, "__all__", [])

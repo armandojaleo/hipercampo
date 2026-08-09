@@ -26,7 +26,7 @@ def fresh():
     return _cur
 
 
-def test_update_reemplaza_el_hecho_viejo():
+def test_update_replaces_old_fact():
     hc = fresh()
     hc.remember("el servidor de producción está alojado en Frankfurt", 0.7)
     r = hc.update("dónde está alojado el servidor de producción",
@@ -50,7 +50,7 @@ def test_lo_superado_queda_pero_demovido():
     assert viejo["superseded"] == 1
 
 
-def test_remember_avisa_de_posible_actualizacion():
+def test_remember_warns_about_possible_update():
     hc = fresh()
     hc.remember("Armando prefiere respuestas honestas y directas", 0.8)
     r = hc.remember("Armando prefiere respuestas honestas y directas y breves", 0.8)
@@ -58,7 +58,7 @@ def test_remember_avisa_de_posible_actualizacion():
     assert "similar_to" in r, "debería avisar de un recuerdo parecido"
 
 
-def test_hechos_distintos_no_se_pisan():
+def test_distinct_facts_do_not_overwrite_each_other():
     hc = fresh()
     hc.remember("el servidor de producción está en Frankfurt", 0.7)
     r = hc.remember("el servidor de pruebas se reinicia los domingos", 0.7)

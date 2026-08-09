@@ -36,7 +36,7 @@ def _unlink_db(db: str) -> None:
 
 # --- base de datos de SOLO LECTURA ------------------------------------------
 
-def test_bd_de_solo_lectura_avisa_sin_reintentar():
+def test_read_only_database_reports_without_retrying():
     hc = memory("fail_ro")
     hc.remember("un recuerdo previo al bloqueo de escritura", 0.6)
     hc.close()
@@ -57,7 +57,7 @@ def test_bd_de_solo_lectura_avisa_sin_reintentar():
 
 # --- disco lleno (simulado en el punto exacto de la escritura) --------------
 
-def test_disco_lleno_avisa_y_no_corrompe():
+def test_full_disk_reports_and_does_not_corrupt():
     hc = memory("fail_full")
     hc.remember("lo que ya estaba guardado antes de llenarse el disco", 0.7)
 
@@ -102,7 +102,7 @@ def _matar_a_mitad(guion: str) -> None:
     p.wait(timeout=30)
 
 
-def test_proceso_matado_escribiendo_no_corrompe():
+def test_killed_writer_process_does_not_corrupt():
     clean()
     db = "data/_t_fail_kill.db"
     _unlink_db(db)
@@ -142,7 +142,7 @@ hc.sleep()
 """
 
 
-def test_proceso_matado_durmiendo_no_corrompe_y_retried():
+def test_killed_sleep_process_does_not_corrupt_and_is_retried():
     clean()
     db = "data/_t_fail_sleep.db"
     _unlink_db(db)

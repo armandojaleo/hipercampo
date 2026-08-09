@@ -9,17 +9,17 @@ from hipercampo.core.encoder import encode_text
 from hipercampo.core.vsa import bind, bundle, random_hv, similarity
 
 
-def test_bind_es_reversible():
+def test_bind_is_reversible():
     a, b = random_hv(1), random_hv(2)
     assert (bind(bind(a, b), b) == a).all()
 
 
-def test_hv_distintos_son_casi_ortogonales():
+def test_distinct_hypervectors_are_nearly_orthogonal():
     a, b = random_hv(1), random_hv(2)
     assert 0.45 < similarity(a, b) < 0.55   # ~0.5 = no relacionados
 
 
-def test_bundle_se_parece_a_sus_componentes():
+def test_bundle_resembles_its_components():
     a, b, c = random_hv(1), random_hv(2), random_hv(3)
     mezcla = bundle([a, b, c])
     for x in (a, b, c):
@@ -32,7 +32,7 @@ def test_orden_importa():
     assert similarity(a, b) < 0.95           # mismas palabras, orden distinto
 
 
-def test_texto_identico_es_identico():
+def test_identical_text_is_identical():
     assert similarity(encode_text("hola mundo"), encode_text("hola mundo")) == 1.0
 
 

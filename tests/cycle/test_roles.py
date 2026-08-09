@@ -18,7 +18,7 @@ def _mundo(*valores):
     return im
 
 
-def test_recupera_por_rol():
+def test_retrieves_by_role():
     im = _mundo("perro", "hombre", "muerde")
     f = encode_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"}, im)
     assert query_role(f, "subject", im)[0][0] == "perro"
@@ -26,7 +26,7 @@ def test_recupera_por_rol():
     assert query_role(f, "predicate", im)[0][0] == "muerde"
 
 
-def test_distingue_el_inverso():
+def test_distinguishes_inverse():
     """Lo que un embedding NO puede: mismos valores, roles cruzados = respuestas opuestas."""
     im = _mundo("perro", "hombre", "muerde")
     f1 = encode_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"}, im)

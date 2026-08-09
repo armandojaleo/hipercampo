@@ -29,7 +29,7 @@ def _limpiar_copias():
         p.unlink(missing_ok=True)
 
 
-def test_la_copia_conserva_los_recuerdos():
+def test_backup_preserves_memories():
     hc = memory("bk_basico")
     hc.remember("el faro de alejandria fue uno de los siete prodigios", 0.8)
     hc.remember("la biblioteca de alejandria ardio y se perdio mucho saber", 0.8)
@@ -45,7 +45,7 @@ def test_la_copia_conserva_los_recuerdos():
     _limpiar_copias()
 
 
-def test_la_copia_es_consistente_con_la_memoria_en_uso():
+def test_backup_is_consistent_with_live_memory():
     """La API de backup de SQLite copia en caliente: no hace falta parar el servidor."""
     hc = memory("bk_caliente")
     for i in range(20):
@@ -60,7 +60,7 @@ def test_la_copia_es_consistente_con_la_memoria_en_uso():
     _limpiar_copias()
 
 
-def test_restaurar_devuelve_lo_que_habia():
+def test_restore_returns_previous_contents():
     hc = memory("bk_ida_vuelta")
     hc.remember("dato original que hay que poder recuperar entero", 0.8)
     ruta = hc.store.path
@@ -79,7 +79,7 @@ def test_restaurar_devuelve_lo_que_habia():
     _limpiar_copias()
 
 
-def test_restaurar_guarda_lo_que_pisa():
+def test_restore_backs_up_replaced_data():
     """Restaurar la copia equivocada es fácil: debe quedar red de seguridad."""
     hc = memory("bk_red")
     hc.remember("memoria viva que no quiero perder por un despiste", 0.9)
@@ -101,7 +101,7 @@ def test_restaurar_guarda_lo_que_pisa():
     _limpiar_copias()
 
 
-def test_no_restaura_un_fichero_que_no_es_una_memoria():
+def test_does_not_restore_non_memory_file():
     hc = memory("bk_basura")
     hc.remember("memoria buena que no debe destruirse por un fichero roto", 0.8)
     ruta = hc.store.path
@@ -121,7 +121,7 @@ def test_no_restaura_un_fichero_que_no_es_una_memoria():
     _limpiar_copias()
 
 
-def test_avisa_si_no_hay_nada_que_respaldar():
+def test_warns_when_there_is_nothing_to_back_up():
     try:
         backup("data/_t_no_importa.db", src="data/_t_no_existe_jamas.db")
         raise AssertionError("debió avisar de que no hay memoria que respaldar")

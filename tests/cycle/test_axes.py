@@ -34,7 +34,7 @@ def _envejecer(hc, dias):
 
 
 # FIABILIDAD afecta al RANKING de recuperación --------------------------------
-def test_fiabilidad_sube_el_ranking():
+def test_confidence_improves_ranking():
     hc = fresh()
     r = hc.remember("el número de soporte es el 900 123 456", importance=0.5,
                     confidence=0.2)
@@ -47,7 +47,7 @@ def test_fiabilidad_sube_el_ranking():
 
 
 # UTILIDAD (uso real) protege del OLVIDO --------------------------------------
-def test_utilidad_protege_del_olvido():
+def test_utility_protects_from_forgetting():
     hc = fresh()
     a = hc.remember("nota trivial: la sala grande es la B", importance=0.2)["id"]
     b = hc.remember("nota trivial: la sala pequeña es la C", importance=0.2)["id"]
@@ -62,7 +62,7 @@ def test_utilidad_protege_del_olvido():
 
 
 # IMPORTANCIA protege del OLVIDO (independiente del uso) -----------------------
-def test_importancia_protege_aunque_no_se_use():
+def test_importance_protects_even_without_use():
     hc = fresh()
     imp = hc.remember("dato crítico: el disyuntor general está en el sótano", 0.9)["id"]
     triv = hc.remember("dato trivial: hoy hubo niebla", 0.2)["id"]
@@ -73,7 +73,7 @@ def test_importancia_protege_aunque_no_se_use():
 
 
 # Los ejes se EXPONEN en el recall --------------------------------------------
-def test_recall_expone_los_ejes():
+def test_recall_exposes_axes():
     hc = fresh()
     hc.remember("el wifi de invitados es abierto", importance=0.4, confidence=0.9)
     h = hc.recall("wifi de invitados", k=1)[0]
