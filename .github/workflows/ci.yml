@@ -82,11 +82,20 @@ jobs:
       # release, not scroll past in a log. If it ever blocks on something genuinely
       # un-actionable, `--ignore-vuln <ID>` documents the exception by name instead of
       # blinding the whole check. Policy in SECURITY.md.
+      #
+      # NOT `--strict`, and the reason is structural: `--strict` also fails on
+      # dependencies it could not audit, and the project itself is installed here in
+      # editable mode at a version that is not on PyPI yet. Every version bump would
+      # have broken CI until that version was published — a release that cannot go
+      # green until it is released. Measured: without `--strict` a real vulnerability
+      # still exits 1 (22 found on a machine with a vulnerable urllib3), which is the
+      # behaviour we actually want; `--strict` only added the unauditable-dependency
+      # failure. `--skip-editable` keeps our own source out of the report.
       - name: Supply-chain audit (pip-audit)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |
           pip install pip-audit
-          pip-audit --strict --desc
+          pip-audit --desc --skip-editable
 
       - name: Test suite (every suite, generative ones included)
         shell: bash
