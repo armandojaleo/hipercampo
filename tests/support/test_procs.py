@@ -11,10 +11,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 
+import helpers  # noqa: E402,F401  (imported for its side effects: scrubs the
+# environment and opens the per-project opt-in gate, since a test is not a project)
 from hipercampo.support import procs                          # noqa: E402
 
 
-def test_reconoce_a_los_nuestros_y_solo_a_los_nuestros():
+def test_recognizes_only_our_processes():
     assert procs._matches("C:/Python313/python.exe -m hipercampo.server")
     assert procs._matches("/usr/bin/python3 -m hipercampo.server")
     assert procs._matches("python -X utf8 -m hipercampo.server --algo")
@@ -25,7 +27,7 @@ def test_reconoce_a_los_nuestros_y_solo_a_los_nuestros():
     assert not procs._matches("python -m hipercampo.cli stats")
 
 
-def test_listar_no_revienta_y_devuelve_forma_esperada():
+def test_listing_does_not_crash_and_returns_expected_shape():
     procesos = procs.list_servers()                          # puede haber 0: es válido
     assert isinstance(procesos, list)
     for p in procesos:
@@ -34,25 +36,25 @@ def test_listar_no_revienta_y_devuelve_forma_esperada():
         assert "hipercampo" in p["cmd"]
 
 
-def test_listar_viene_ordenado_del_mas_viejo_al_mas_nuevo():
+def test_listing_is_ordered_oldest_to_newest():
     # el más viejo es el más sospechoso de arrastrar código caducado: va primero
     tiempos = [p["started_at"] or 0 for p in procs.list_servers()]
     assert tiempos == sorted(tiempos)
 
 
-def test_nunca_se_incluye_a_si_mismo():
+def test_never_includes_itself():
     import os
     assert os.getpid() not in {p["pid"] for p in procs.list_servers()}
 
 
-def test_terminar_con_pid_inexistente_no_lanza():
+def test_terminating_missing_pid_does_not_raise():
     # 2**31-1 no existe; la función debe informar del fallo, nunca propagarlo
     estado = procs.terminate([2**31 - 1], wait=0)
     assert set(estado) == {2**31 - 1}
     assert isinstance(estado[2**31 - 1], str)
 
 
-def test_terminar_sin_pids_no_hace_nada():
+def test_terminating_without_pids_does_nothing():
     assert procs.terminate([], wait=0) == {}
 
 

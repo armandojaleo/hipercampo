@@ -43,7 +43,7 @@ def _trio(hc):
     return a, b
 
 
-def test_dream_propone_por_asociado_comun():
+def test_dream_proposes_through_common_associate():
     hc = _open()
     _trio(hc)
     res = hc.dream(max_bridges=5)
@@ -52,7 +52,7 @@ def test_dream_propone_por_asociado_comun():
 
 
 # --- lo esencial: una hipótesis NO contamina la memoria --------------------
-def test_dry_run_no_escribe_nada():
+def test_dry_run_writes_nothing():
     hc = _open()
     a, b = _trio(hc)
     antes = len(hc.store.neighbors(a))
@@ -62,7 +62,7 @@ def test_dry_run_no_escribe_nada():
     _clean()
 
 
-def test_hipotesis_registrada_no_propaga_hasta_confirmar():
+def test_recorded_hypothesis_does_not_propagate_until_confirmed():
     hc = _open()
     a, b = _trio(hc)
     hc.dream(dry_run=False)                       # registra como 'proposed'
@@ -75,7 +75,7 @@ def test_hipotesis_registrada_no_propaga_hasta_confirmar():
     _clean()
 
 
-def test_aceptar_una_hipotesis_la_convierte_en_asociacion():
+def test_accepting_hypothesis_turns_it_into_association():
     hc = _open()
     a, b = _trio(hc)
     hc.dream(dry_run=False)
@@ -85,7 +85,7 @@ def test_aceptar_una_hipotesis_la_convierte_en_asociacion():
     _clean()
 
 
-def test_rechazar_una_hipotesis_la_desactiva():
+def test_rejecting_hypothesis_disables_it():
     hc = _open()
     a, b = _trio(hc)
     hc.dream(dry_run=False)
@@ -95,7 +95,7 @@ def test_rechazar_una_hipotesis_la_desactiva():
     _clean()
 
 
-def test_aceptar_dos_veces_es_idempotente():
+def test_accepting_twice_is_idempotent():
     hc = _open()
     a, b = _trio(hc)
     hc.dream(dry_run=False)
@@ -107,7 +107,7 @@ def test_aceptar_dos_veces_es_idempotente():
 
 
 # --- la puntuación creativa: pico en el ideal, cero fuera de banda ---------
-def test_creative_fit_maximo_en_el_ideal():
+def test_creative_fit_is_maximum_at_ideal():
     from hipercampo.cycle.memory import DREAM_HIGH, DREAM_IDEAL, DREAM_LOW, creative_fit
     assert creative_fit(DREAM_IDEAL) == 1.0
     assert creative_fit(DREAM_IDEAL) > creative_fit(DREAM_IDEAL - 0.05)
@@ -118,7 +118,7 @@ def test_creative_fit_maximo_en_el_ideal():
     assert creative_fit(0.50) == 0.0, "lo ajeno no es creativo"
 
 
-def test_dream_sin_pares_no_falla():
+def test_dream_without_pairs_does_not_fail():
     hc = _open()
     hc.remember("un unico recuerdo aislado sin pareja posible", 0.5)
     assert hc.dream()["bridges"] == []

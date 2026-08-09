@@ -21,7 +21,7 @@ def report():
     return _REPORT
 
 
-def test_ablaciones_miden_aporte_y_limites_reales():
+def test_ablations_measure_real_contribution_and_limits():
     measured = report()
     assert ablations.evaluate(measured) == []
     surprise = measured["surprise"]
@@ -37,7 +37,7 @@ def test_ablaciones_miden_aporte_y_limites_reales():
     assert consolidation["full"]["mrr"]["global"] >= 0.80
 
 
-def test_gate_detecta_una_regresion_por_mecanismo():
+def test_gate_detects_regression_by_mechanism():
     mutations = []
     broken = copy.deepcopy(report())
     broken["surprise"]["full"]["routine_stored"] = 100
@@ -55,7 +55,7 @@ def test_gate_detecta_una_regresion_por_mecanismo():
         assert any(expected in failure for failure in ablations.evaluate(candidate))
 
 
-def test_cli_json_expone_resultado_y_fallos():
+def test_cli_json_exposes_result_and_failures():
     measured = report()
     original = ablations.run
     ablations.run = lambda: measured

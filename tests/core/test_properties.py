@@ -1,12 +1,11 @@
 """
-Pruebas GENERATIVAS ESPONTÁNEAS (estilo property-based).
+SPONTANEOUS GENERATIVE tests in a property-based style.
 
-En vez de casos escritos a mano, estas pruebas FABRICAN datos nuevos en cada
-ejecución (con una semilla distinta por ronda) y comprueban que las PROMESAS del
-sistema se cumplen SIEMPRE, no solo en ejemplos afortunados. Si alguna invariante
-se rompe con algún dato generado, el test falla y te enseña el contraejemplo.
+Instead of hand-written cases, these tests GENERATE new data on each run with a
+different seed per round. They verify that system PROMISES hold ALWAYS, not only
+for fortunate examples. A broken invariant reports its counterexample.
 
-Ejecuta:  python tests/test_properties.py
+Run: python tests/core/test_properties.py
 """
 
 import random
@@ -49,34 +48,34 @@ def fresh() -> Hipercampo:
 
 
 # ---------------------------------------------------------------------------
-# INVARIANTE 1: un duplicado exacto NUNCA crea un segundo recuerdo.
+# INVARIANT 1: an exact duplicate NEVER creates a second memory.
 # ---------------------------------------------------------------------------
 def prop_duplicado_no_crece(rng):
     hc = fresh()
     f = frase(rng)
     hc.remember(f, 0.5)
     for _ in range(5):
-        hc.remember(f, 0.5)             # el mismo, cinco veces
-    assert hc.stats()["total"] == 1, f"un duplicado se duplicó: «{f}»"
+        hc.remember(f, 0.5)             # The same fact five times.
+    assert hc.stats()["total"] == 1, f"duplicate created another memory: «{f}»"
 
 
 # ---------------------------------------------------------------------------
-# INVARIANTE 2: re-escribir algo idéntico es MENOS novedoso que algo nuevo.
-# (la sorpresa mide de verdad la novedad relativa)
+# INVARIANT 2: rewriting identical text is LESS novel than new text.
+# Surprise genuinely measures relative novelty.
 # ---------------------------------------------------------------------------
 def prop_novedad_ordena_bien(rng):
     hc = fresh()
     base = frase(rng)
     hc.remember(base, 0.5)
     nov_dup = hc.remember(base, 0.5)["novelty"]
-    # una frase con sujeto/verbo/objeto distintos debería ser más novedosa
+    # A sentence with different subject, verb, and object should be more novel.
     nueva = "el planeta orbitó una estrella lejana silenciosamente"
     nov_new = hc.remember(nueva, 0.5)["novelty"]
     assert nov_new > nov_dup, f"novedad mal ordenada: dup={nov_dup} new={nov_new}"
 
 
 # ---------------------------------------------------------------------------
-# INVARIANTE 3: una "aguja" plantada se recupera entre muchos distractores.
+# INVARIANT 3: a planted "needle" is retrieved among many distractors.
 # ---------------------------------------------------------------------------
 def prop_aguja_en_el_pajar(rng):
     hc = fresh()
@@ -90,7 +89,7 @@ def prop_aguja_en_el_pajar(rng):
 
 
 # ---------------------------------------------------------------------------
-# INVARIANTE 4: el olvido NUNCA borra un recuerdo importante (>=0.8).
+# INVARIANT 4: forgetting NEVER deletes an important memory (>=0.8).
 # ---------------------------------------------------------------------------
 def prop_olvido_respeta_importancia(rng):
     hc = fresh()
@@ -101,7 +100,7 @@ def prop_olvido_respeta_importancia(rng):
         r = hc.remember(f, imp)
         if r.get("stored") and imp >= 0.8:
             criticos.append(r["id"])
-    # envejecer todo un año y forzar el olvido
+    # Age everything by one year and force forgetting.
     hc.store.db.execute("UPDATE memories SET last_access = ?", (time.time() - 365 * 86400,))
     hc.store.commit()
     hc.forget(dry_run=False)
@@ -111,7 +110,7 @@ def prop_olvido_respeta_importancia(rng):
 
 
 # ---------------------------------------------------------------------------
-# INVARIANTE 5: consolidar NUNCA aumenta los episódicos activos (solo condensa).
+# INVARIANT 5: consolidation NEVER increases active episodes; it only condenses.
 # ---------------------------------------------------------------------------
 def prop_consolidar_no_crece(rng):
     hc = fresh()
@@ -124,7 +123,7 @@ def prop_consolidar_no_crece(rng):
 
 
 # ---------------------------------------------------------------------------
-# INVARIANTE 6 (VSA puro): bind es su propia inversa, para CUALQUIER par.
+# INVARIANT 6 (pure VSA): bind is its own inverse for ANY pair.
 # ---------------------------------------------------------------------------
 def prop_bind_involutivo(rng):
     a = random_hv(rng.randrange(2**31))
@@ -133,8 +132,8 @@ def prop_bind_involutivo(rng):
 
 
 # ---------------------------------------------------------------------------
-# INVARIANTE 7 (VSA puro): un bundle se parece a TODOS sus componentes más
-# que dos vectores al azar entre sí. (la superposición realmente "contiene")
+# INVARIANT 7 (pure VSA): a bundle resembles ALL its components more than two
+# random vectors resemble each other. The superposition genuinely "contains" them.
 # ---------------------------------------------------------------------------
 def prop_bundle_contiene(rng):
     comps = [random_hv(rng.randrange(2**31)) for _ in range(rng.randint(3, 7))]

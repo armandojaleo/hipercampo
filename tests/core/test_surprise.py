@@ -11,12 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tests/
 from hipercampo.core.surprise import SurpriseModel        # noqa: E402
 
 
-def test_frio_es_maxima_sorpresa():
+def test_cold_start_has_maximum_surprise():
     m = SurpriseModel()
     assert m.surprise("cualquier cosa nueva bajo el sol") > 0.9
 
 
-def test_repetir_reduce_sorpresa():
+def test_repetition_reduces_surprise():
     m = SurpriseModel()
     t = "el pipeline corre cada noche a las tres"
     s0 = m.surprise(t)
@@ -28,7 +28,7 @@ def test_repetir_reduce_sorpresa():
     assert s0 > s1 > s2, f"la sorpresa debe decrecer al aprender: {s0} {s1} {s2}"
 
 
-def test_lo_nuevo_sorprende_mas_que_lo_conocido():
+def test_new_text_is_more_surprising_than_known_text():
     m = SurpriseModel()
     conocido = "el equipo se reune los lunes por la manana"
     for _ in range(5):

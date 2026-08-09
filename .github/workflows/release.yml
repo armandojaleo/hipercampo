@@ -1,13 +1,13 @@
 name: Release to PyPI
 
-# Publica en PyPI al empujar un tag vX.Y.Z. Usa "trusted publishing" (OIDC): sin
-# tokens ni secretos. Requiere una configuración ÚNICA en PyPI (ver más abajo).
+# Publishes to PyPI when a vX.Y.Z tag is pushed. Uses trusted publishing (OIDC):
+# no tokens, no secrets. Requires a ONE-TIME setup on PyPI (below).
 #
-# Pasos de un solo uso (los hace el dueño del paquete):
-#   1. Crear el proyecto/nombre "hipercampo" en https://pypi.org
-#   2. En "Publishing", añadir un Trusted Publisher de GitHub Actions:
+# One-time steps (done by the package owner):
+#   1. Create the project/name "hipercampo" at https://pypi.org
+#   2. Under "Publishing", add a GitHub Actions Trusted Publisher:
 #        owner: armandojaleo   repo: hipercampo   workflow: release.yml
-#   3. A partir de ahí, cada tag vX.Y.Z publica solo.
+#   3. From then on, every vX.Y.Z tag publishes on its own.
 
 on:
   push:
@@ -18,7 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write        # necesario para trusted publishing (OIDC)
+      # A `permissions:` block sets every unlisted scope to `none`, so `contents`
+      # was implicitly none and checkout only worked because the repo is public.
+      # Stating it keeps the job working if the repo ever goes private, and keeps
+      # the grant explicit rather than accidental.
+      contents: read
+      id-token: write        # required for trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -29,18 +34,18 @@ jobs:
           pip install build twine
           python -m build
 
-      # Validar el ARTEFACTO antes de publicar: metadatos, que la version coincida
-      # con el tag, que el wheel instale en un entorno limpio, que importe, que el
-      # comando arranque y que el servidor MCP responda al handshake.
+      # Validate the ARTEFACT before publishing: metadata, that the version matches the
+      # tag, that the wheel installs in a clean environment, imports, that the command
+      # starts, and that the MCP server answers the handshake.
       - name: twine check
         run: twine check dist/*
-      - name: La versión debe coincidir con el tag
+      - name: Version must match the tag
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG=$(ls dist/*.whl | sed -E 's/.*hipercampo-([^-]+)-py3.*/\1/')
-          echo "tag=$TAG paquete=$PKG"
+          echo "tag=$TAG package=$PKG"
           test "$TAG" = "$PKG"
-      - name: Instalar el wheel en entorno limpio y comprobarlo
+      - name: Install the wheel in a clean environment and check it
         run: |
           python -m venv /tmp/venv
           /tmp/venv/bin/pip install --quiet dist/*.whl

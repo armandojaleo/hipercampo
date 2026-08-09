@@ -27,7 +27,7 @@ def fresh():
 
 
 # recall ABSTIENE ante ruido y NO refuerza falsos positivos ------------------
-def test_recall_se_abstiene_ante_ruido():
+def test_recall_abstains_on_noise():
     hc = fresh()
     hc.remember("el gato duerme en el sofá", 0.5)
     hc.remember("python es un lenguaje de programación", 0.5)
@@ -56,13 +56,13 @@ def _memoria_poblada():
     return hc
 
 
-def test_recall_responde_con_memoria_poblada():
+def test_recall_responds_with_populated_memory():
     hc = _memoria_poblada()
     for consulta in ("Armando", "tests de la api", "color de acento"):
         assert hc.recall(consulta, k=5), f"no debería abstenerse ante {consulta!r}"
 
 
-def test_recall_sigue_absteniendose_con_memoria_poblada():
+def test_recall_still_abstains_with_populated_memory():
     hc = _memoria_poblada()
     # Abrir la puerta no puede significar dejar pasar todo: ante ruido puro, donde
     # TODAS las activaciones se desploman a ~0, se sigue diciendo "no tengo nada".
@@ -70,7 +70,7 @@ def test_recall_sigue_absteniendose_con_memoria_poblada():
         assert hc.recall(consulta, k=5) == [], f"debería abstenerse ante {consulta!r}"
 
 
-def test_recall_no_refuerza_irrelevantes():
+def test_recall_does_not_reinforce_irrelevant_memories():
     hc = fresh()
     mid = hc.remember("la factura del cliente vence el día diez", 0.5)["id"]
     hc.recall("tema totalmente ajeno plutonio banana", k=3)   # no debe tocar nada
@@ -79,7 +79,7 @@ def test_recall_no_refuerza_irrelevantes():
 
 
 # hc_update SEGURO ------------------------------------------------------------
-def test_update_sin_match_no_pisa_nada():
+def test_update_without_match_overwrites_nothing():
     hc = fresh()
     victima = hc.remember("el color corporativo es azul", 0.6)["id"]
     r = hc.update("algo completamente distinto sobre cohetes lunares",
@@ -88,7 +88,7 @@ def test_update_sin_match_no_pisa_nada():
     assert hc.store.get(victima)["superseded"] == 0, "no debió tocar la víctima"
 
 
-def test_update_por_id_es_exacto():
+def test_update_by_id_is_exact():
     hc = fresh()
     a = hc.remember("dato uno", 0.5)["id"]
     b = hc.remember("dato dos completamente diferente", 0.5)["id"]
@@ -98,7 +98,7 @@ def test_update_por_id_es_exacto():
 
 
 # recall excluye historia por defecto ----------------------------------------
-def test_recall_excluye_superados_por_defecto():
+def test_recall_excludes_superseded_by_default():
     hc = fresh()
     hc.remember("el servidor está en Frankfurt", 0.6)
     hc.update("dónde está el servidor", "el servidor está en Dublín")
@@ -109,7 +109,7 @@ def test_recall_excluye_superados_por_defecto():
 
 
 # pesos de asociación acotados a <= 1 ----------------------------------------
-def test_pesos_de_link_acotados():
+def test_link_weights_are_bounded():
     hc = fresh()
     a = hc.remember("alfa bravo charlie delta", 0.5)["id"]
     b = hc.remember("alfa bravo charlie echo", 0.5)["id"]

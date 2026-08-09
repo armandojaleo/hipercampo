@@ -25,14 +25,19 @@ pip install -e .           # o: pip install -e ".[semantic]"
 Antes de abrir un PR, pasa todo:
 
 ```bash
-for t in vsa semantic surprise memory update axes hardening namespaces \
-         calibration roles safety factstore guardrails muse dream migration properties; do
-  python tests/test_$t.py || exit 1
-done
+python -m pytest -q              # la suite entera (tests/core, storage, cycle, support, contracts)
+python -m ruff check hipercampo/ tests/ scripts/ examples/
 python scripts/baselines.py      # calidad frente a BM25 (y embeddings con --semantic)
 ```
 
-El CI ejecuta lo mismo en Python 3.11–3.13, más los benchmarks y los ejemplos.
+Aquí había una lista de 17 tests enumerados a mano, y al agrupar la suite en carpetas
+todas esas rutas dejaron de existir. Enumerar a mano es justo lo que hace que un
+fichero nuevo no se ejecute nunca y nadie se entere: usa el descubrimiento.
+
+El CI ejecuta lo mismo en Python 3.11–3.13 sobre Linux, Windows y macOS, más los
+benchmarks y los ejemplos. Cada fichero de test también se puede correr suelto
+(`python tests/core/test_vsa.py`), que es como los ejecuta el CI para que un fallo
+dependiente de plataforma salga con nombre y apellidos.
 
 ### Qué hace bueno a un PR
 
@@ -86,8 +91,17 @@ cd hipercampo
 pip install -e .           # or: pip install -e ".[semantic]"
 ```
 
-Run the full suite before opening a PR (see the loop above); CI runs the same on
-Python 3.11–3.13 plus benchmarks and examples.
+Before opening a PR:
+
+```bash
+python -m pytest -q              # the whole suite (tests/core, storage, cycle, support, contracts)
+python -m ruff check hipercampo/ tests/ scripts/ examples/
+python scripts/baselines.py      # quality against BM25 (and embeddings with --semantic)
+```
+
+CI runs the same on Python 3.11–3.13 across Linux, Windows and macOS, plus benchmarks
+and examples. Every test file also runs on its own (`python tests/core/test_vsa.py`),
+which is how CI runs them so a platform-specific failure comes out named.
 
 ### What makes a good pull request
 

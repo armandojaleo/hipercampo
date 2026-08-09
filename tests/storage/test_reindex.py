@@ -1,15 +1,12 @@
 """
-`reindex_navgraph`: tejer el grafo de vecinos sobre el contexto propio.
+`reindex_navgraph`: weave the neighbor graph inside the current namespace.
 
-El mapa nacía disperso (solo enlazaban coincidencias léxicas fuertes): un montón de
-recuerdos sueltos, poco navegable y pobre para propagar. Reindex enlaza cada recuerdo
-con sus vecinos reales (k-NN). Lo que se exige:
-  - teje enlaces nuevos y densifica el grafo (mapa conectado),
-  - NO pisa los enlaces que ya había (enriquece, no reemplaza),
-  - recall NO empeora (la propagación gana asociaciones reales, no ruido) — MEDIDO,
-  - se queda en el propio contexto (no cruza namespaces).
+The map starts sparse because only strong lexical matches are linked. Reindex joins
+each memory to its actual k-NN neighbors. The contract requires new links and a denser
+connected graph, preservation of existing links, no measured recall degradation, and
+strict namespace isolation.
 
-Ejecuta:  python tests/test_reindex.py
+Run: python tests/storage/test_reindex.py
 """
 
 import sys
@@ -26,7 +23,7 @@ from hipercampo.storage.store import Store                   # noqa: E402
 
 
 def _sembrar(hc, n_temas=15, por=8, seed=0):
-    """Recuerdos con estructura (temas de vocabulario compartido), por el almacén."""
+    """Seed structured memories with shared topic vocabulary through the store."""
     rng = np.random.default_rng(seed)
     vocab = [f"palabra{i}" for i in range(200)]
     textos, tema = [], []
@@ -44,7 +41,7 @@ def _sembrar(hc, n_temas=15, por=8, seed=0):
 
 
 def _acierto_recall(hc, textos, tema, n_temas, rng):
-    """Fracción de consultas cuyo recall trae algún recuerdo del tema correcto."""
+    """Return the fraction of queries retrieving a memory from the correct topic."""
     ok = 0
     for t in range(n_temas):
         idxs = np.where(tema == t)[0]
@@ -54,7 +51,7 @@ def _acierto_recall(hc, textos, tema, n_temas, rng):
     return ok / n_temas
 
 
-def test_reindex_densifica_sin_empeorar_recall():
+def test_reindex_densifies_without_harming_recall():
     hc = memory("reindex_ok", namespace="proj")
     textos, tema, rng = _sembrar(hc)
     antes_enlaces = len(hc.store.links_dump())
@@ -71,7 +68,7 @@ def test_reindex_densifica_sin_empeorar_recall():
     hc.close()
 
 
-def test_reindex_no_pisa_enlaces_existentes():
+def test_reindex_preserves_existing_links():
     hc = memory("reindex_keep", namespace="proj")
     a = hc.remember("windows rechaza rutas largas con error 400", 0.7)["id"]
     b = hc.remember("los datos largos van por query string, no en el path", 0.7)["id"]
@@ -85,7 +82,7 @@ def test_reindex_no_pisa_enlaces_existentes():
     hc.close()
 
 
-def test_reindex_se_queda_en_su_contexto():
+def test_reindex_stays_in_its_namespace():
     hc = memory("reindex_ns", namespace="proj")
     _sembrar(hc, n_temas=5, por=6, seed=3)
     otro = Store(hc.store.path, namespace="otro")
@@ -101,11 +98,10 @@ def test_reindex_se_queda_en_su_contexto():
     otro.close(); hc.close()
 
 
-def test_densificar_no_rompe_el_sueno():
-    """REGRESIÓN: al densificar, un par podía quedar unido por DOS enlaces (uno en cada
-    sentido, p.ej. knn y lexical con pesos distintos). El UNION de neighbors() lo
-    devolvía duplicado, y dream reventaba (frozenset de tamaño 1). neighbors() ahora
-    deduplica por vecino."""
+def test_densification_does_not_break_dreaming():
+    """Regression: densification could connect a pair twice in opposite directions.
+    neighbors() then returned a duplicate and dream crashed on a one-item frozenset.
+    Neighbors must now be deduplicated by node."""
     hc = memory("reindex_dream", namespace="proj")
     _sembrar(hc, n_temas=8, por=8, seed=9)
     ids = [m["id"] for m in hc.store.all(only_active=False)][:2]
@@ -120,9 +116,9 @@ def test_densificar_no_rompe_el_sueno():
     hc.close()
 
 
-def test_reindex_all_namespaces_teje_cada_contexto():
-    """El visor muestra TODOS los contextos; tejer solo el 'default' (vacío) no hacía
-    nada. --all-namespaces teje cada contexto por dentro, sin cruzarlos."""
+def test_reindex_all_namespaces_weaves_each_namespace():
+    """The viewer shows ALL namespaces. --all-namespaces must weave each namespace
+    internally without crossing boundaries."""
     import json
     import os
     from hipercampo import cli
@@ -157,9 +153,9 @@ def test_reindex_all_namespaces_teje_cada_contexto():
     assert not cruces, f"tejió fuera de contexto: {cruces}"
 
 
-def test_dream_all_namespaces_agrega_ideas_de_cada_contexto():
-    """La pestaña Ideas salía vacía porque dream corría sobre 'default'. --all-namespaces
-    agrega puentes de CADA contexto, etiquetados. Regresión de la UI (Ideas vacías)."""
+def test_dream_all_namespaces_aggregates_ideas_from_each_namespace():
+    """The Ideas tab was empty because dream ran on default. --all-namespaces must
+    aggregate labeled bridges from every namespace."""
     import contextlib
     import io
     import json

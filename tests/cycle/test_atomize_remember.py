@@ -34,7 +34,7 @@ _LARGO = ("El servidor de produccion esta alojado en Frankfurt desde el ultimo "
           "por el canal de incidencias del movil corporativo.")
 
 
-def test_atomiza_y_enlaza_a_la_fuente():
+def test_atomizes_and_links_to_source():
     hc = memory("atom_rem")
     r = hc.remember(_LARGO, 0.7)
     assert r.get("atomized") is True, r
@@ -48,7 +48,7 @@ def test_atomiza_y_enlaza_a_la_fuente():
     hc.close()
 
 
-def test_repetir_documento_reutiliza_fuente_y_atomos():
+def test_repeating_document_reuses_source_and_atoms():
     """Reforzar el mismo documento no crea copias ni pierde la jerarquía."""
     hc = memory("atom_repetido")
     primero = hc.remember(_LARGO, 0.7)
@@ -64,7 +64,7 @@ def test_repetir_documento_reutiliza_fuente_y_atomos():
     assert len(enlaces) == segundo.get("atoms")
     hc.close()
 
-def test_nota_corta_no_se_atomiza():
+def test_short_note_is_not_atomized():
     """Una nota de pocas frases se guarda ENTERA: atomizarla la fragmentaría en trozos
     inútiles ('", consultable por rol.') que ensucian la memoria. Solo documentos largos."""
     hc = memory("atom_corta")
@@ -74,7 +74,7 @@ def test_nota_corta_no_se_atomiza():
     hc.close()
 
 
-def test_hecho_enterrado_se_recupera():
+def test_buried_fact_is_retrieved():
     hc = memory("atom_buried")
     hc.remember(_LARGO, 0.7)
     for pista, esperado in [("clave del wifi", "girasol2024"),
@@ -86,7 +86,7 @@ def test_hecho_enterrado_se_recupera():
     hc.close()
 
 
-def test_una_sola_idea_no_se_fragmenta():
+def test_single_idea_is_not_fragmented():
     hc = memory("atom_uno")
     r = hc.remember("el faro de alejandria guiaba a los barcos de noche", 0.7)
     assert not r.get("atomized"), r
@@ -94,7 +94,7 @@ def test_una_sola_idea_no_se_fragmenta():
     hc.close()
 
 
-def test_se_puede_desactivar():
+def test_atomization_can_be_disabled():
     previo = _mem.ATOMIZE_ON_REMEMBER
     _mem.ATOMIZE_ON_REMEMBER = False
     try:
@@ -107,7 +107,7 @@ def test_se_puede_desactivar():
         _mem.ATOMIZE_ON_REMEMBER = previo
 
 
-def test_atomiza_solo_el_texto_que_puede_persistir():
+def test_only_persistable_text_is_atomized():
     """Nada posterior al límite de la fuente puede filtrarse como átomo suelto."""
     hc = memory("atom_limite")
     prefijo = (_LARGO + " ") * ((_mem.MAX_TEXT_LEN // len(_LARGO)) + 2)
@@ -120,7 +120,7 @@ def test_atomiza_solo_el_texto_que_puede_persistir():
     hc.close()
 
 
-def test_tope_de_memoria_conserva_fuente_y_grupo_coherente():
+def test_memory_cap_preserves_source_and_coherent_group():
     """El lote se acota sin desalojar su fuente ni dejar enlaces colgantes."""
     previo = _mem.MAX_MEMORIES
     _mem.MAX_MEMORIES = 4
@@ -141,7 +141,7 @@ def test_tope_de_memoria_conserva_fuente_y_grupo_coherente():
     finally:
         _mem.MAX_MEMORIES = previo
 
-def test_fallo_de_enlace_revierte_toda_la_atomizacion():
+def test_link_failure_rolls_back_all_atomization():
     """Fuente y átomos no deben sobrevivir como una escritura parcial."""
     hc = memory("atom_rollback")
     link_real = hc.store.link

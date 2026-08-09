@@ -13,12 +13,14 @@ activate on demand via `hc_tools` when they're actually needed.
 Measure with `python scripts/tokens.py` before lengthening a description.
 """
 
+import functools
 import os
 import sys
 
 from mcp.server.fastmcp import FastMCP
 
 from .core import encoder
+from .support import config
 from .support.config import db_path
 from .cycle.memory import Hipercampo
 
@@ -75,14 +77,42 @@ ALL_TOOLS = MODE in ("all", "todas", "full", "completo")
 _CATALOG: dict[str, tuple] = {}
 
 
+PROJECT = os.getcwd()          # the server is launched inside the project directory
+
+
+def _opt_in_refusal():
+    """The answer when hipercampo is not enabled here, or None when it is.
+
+    Deliberately a MESSAGE, not a silent no-op. A tool that quietly does nothing is
+    the failure mode this project keeps rediscovering: green while doing nothing.
+    And silently writing would be worse — with a user-scope server every
+    unconfigured project shares one namespace, so it would land in the user's
+    personal memory without them ever choosing that."""
+    if config.project_enabled(PROJECT):
+        return None
+    return {"enabled": False, "project": PROJECT,
+            "reason": "hipercampo is not enabled for this project",
+            "how": "run `hipercampo enable` in the project, or switch it on in the "
+                   "VS Code viewer. Nothing was read or written."}
+
+
 def tool(fn):
     """Announces the tool if it's core (or if all were requested); otherwise
-    leaves it in the catalog, ready to activate on demand."""
-    if ALL_TOOLS or fn.__name__ in CORE:
-        return mcp.tool()(fn)
+    leaves it in the catalog, ready to activate on demand.
+
+    Also puts every tool behind the opt-in gate. The tools stay VISIBLE — the server
+    is loaded either way, and hiding them would only make the refusal harder to
+    understand — but they decline, saying so, in a project that never opted in."""
+    @functools.wraps(fn)
+    def gated(*a, **kw):
+        refusal = _opt_in_refusal()
+        return refusal if refusal is not None else fn(*a, **kw)
+
+    if ALL_TOOLS or gated.__name__ in CORE:
+        return mcp.tool()(gated)
     summary = (fn.__doc__ or "").strip().split("\n")[0]
-    _CATALOG[fn.__name__] = (fn, summary)
-    return fn
+    _CATALOG[gated.__name__] = (gated, summary)
+    return gated
 
 
 def _clip01(x: float) -> float:

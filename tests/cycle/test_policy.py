@@ -36,7 +36,7 @@ def _sembrar(hc):
     hc.remember("el pipeline de datos corre cada noche a las tres", 0.6)
 
 
-def test_una_pregunta_dispara_recordar():
+def test_question_triggers_recall():
     hc = _open(); _sembrar(hc)
     r = hc.assist("¿dónde está alojado el servidor de producción?")
     assert r["action"] == "recall", r
@@ -44,14 +44,14 @@ def test_una_pregunta_dispara_recordar():
     _clean()
 
 
-def test_algo_irrelevante_hace_que_se_calle():
+def test_irrelevant_input_causes_abstention():
     hc = _open(); _sembrar(hc)
     r = hc.assist("mañana llueve en Reikiavik y compraré pan de centeno")
     assert r["action"] == "nothing", f"debería abstenerse: {r}"
     _clean()
 
 
-def test_una_afirmacion_nueva_recomienda_guardar():
+def test_new_statement_recommends_saving():
     hc = _open(); _sembrar(hc)
     r = hc.assist("me gusta programar de madrugada con música ambiental")
     assert r["action"] in ("remember?", "update?"), r
@@ -59,7 +59,7 @@ def test_una_afirmacion_nueva_recomienda_guardar():
     _clean()
 
 
-def test_las_escrituras_solo_se_recomiendan_nunca_se_ejecutan():
+def test_writes_are_only_recommended_never_executed():
     hc = _open(); _sembrar(hc)
     antes = hc.stats()["total"]
     hc.assist("me llamo Armando y trabajo en un proyecto de memoria")
@@ -67,7 +67,7 @@ def test_las_escrituras_solo_se_recomiendan_nunca_se_ejecutan():
     _clean()
 
 
-def test_mensaje_vacio_no_hace_nada():
+def test_empty_message_does_nothing():
     hc = _open()
     assert hc.assist("")["action"] == "nothing"
     assert hc.assist("   ")["action"] == "nothing"

@@ -1,12 +1,11 @@
 """
-Tests del REGISTRO DE DECISIONES — la transparencia.
+DECISION LOG tests—the transparency contract.
 
-Una memoria que decide sola (guardar o no, olvidar, callarse) tiene que poder
-explicarse. Este registro es esa explicación: si se rompe, hipercampo pasa a ser
-una caja negra sin que nadie se entere. Y tiene una regla dura: **observar nunca
-puede romper lo observado**.
+A memory that decides whether to store, forget, or abstain must explain itself.
+If this log breaks, hipercampo silently becomes a black box. Its hard rule is that
+**observation must never break the observed operation**.
 
-Ejecuta:  python tests/test_audit.py
+Run: python tests/support/test_audit.py
 """
 
 import importlib
@@ -20,7 +19,7 @@ from helpers import run_tests, clean               # noqa: E402
 
 
 def _audit_activo(tmp: str):
-    """Recarga el módulo con el registro ENCENDIDO y apuntando a `tmp`."""
+    """Reload the module with logging ENABLED and pointed at `tmp`."""
     import os
     os.environ["HIPERCAMPO_LOG"] = "1"
     from hipercampo.support import audit
@@ -38,7 +37,7 @@ _DB = str(_DIR / "audit.db")
 _LOG = str(_DIR / "hipercampo.log")
 
 
-def test_registra_la_decision_con_sus_numeros():
+def test_records_decision_with_its_numbers():
     audit = _audit_activo(_DB)
     Path(_LOG).unlink(missing_ok=True)
     audit.log("remember", "guardado id=7", novedad=0.42, sorpresa=0.81)
@@ -48,8 +47,8 @@ def test_registra_la_decision_con_sus_numeros():
     Path(_LOG).unlink(missing_ok=True)
 
 
-def test_omite_los_campos_vacios():
-    """Un registro lleno de 'x=None' es ruido que estorba al leerlo."""
+def test_omits_empty_fields():
+    """A log full of x=None fields is distracting noise."""
     audit = _audit_activo(_DB)
     Path(_LOG).unlink(missing_ok=True)
     audit.log("forget", "nada que podar", podados=0, evictado=None, motivo="")
@@ -59,7 +58,7 @@ def test_omite_los_campos_vacios():
     Path(_LOG).unlink(missing_ok=True)
 
 
-def test_apagarlo_lo_apaga_de_verdad():
+def test_disabling_really_disables_it():
     import os
     os.environ["HIPERCAMPO_LOG"] = "0"
     from hipercampo.support import audit
@@ -73,8 +72,8 @@ def test_apagarlo_lo_apaga_de_verdad():
     os.environ["HIPERCAMPO_LOG"] = "1"
 
 
-def test_observar_nunca_rompe_lo_observado():
-    """Si el registro falla (disco, permisos, campo raro), se traga el fallo."""
+def test_observation_never_breaks_observed_operation():
+    """Logging swallows its own disk, permission, and formatting failures."""
     audit = _audit_activo(_DB)
 
     class Explosivo:
@@ -90,8 +89,8 @@ def test_observar_nunca_rompe_lo_observado():
     assert audit.tail(3) == [], "sin fichero, tail devuelve vacío sin reventar"
 
 
-def test_la_salida_a_una_tuberia_va_en_utf8():
-    """El cliente MCP lee stderr como UTF-8: 'abstención' no puede llegar rota."""
+def test_piped_output_uses_utf8():
+    """The MCP client reads stderr as UTF-8, so accented text must remain intact."""
     audit = _audit_activo(_DB)
     crudo = io.BytesIO()
 
@@ -121,8 +120,8 @@ def test_la_salida_a_una_tuberia_va_en_utf8():
     Path(_LOG).unlink(missing_ok=True)
 
 
-def test_el_ciclo_real_deja_rastro_legible():
-    """De punta a punta: guardar y recuperar tienen que verse en el registro."""
+def test_real_cycle_leaves_readable_trace():
+    """End to end, remember and recall must appear in the log."""
     _audit_activo(_DB)
     Path(_LOG).unlink(missing_ok=True)
     from hipercampo.support import audit
@@ -142,7 +141,7 @@ def test_el_ciclo_real_deja_rastro_legible():
     Path(_LOG).unlink(missing_ok=True)
 
 
-def test_los_filtros_del_registro():
+def test_log_filters():
     audit = _audit_activo(_DB)
     Path(_LOG).unlink(missing_ok=True)
     audit.log("recall", "abstención: nada destaca del ruido", n=18)
@@ -160,8 +159,8 @@ def test_los_filtros_del_registro():
     Path(_LOG).unlink(missing_ok=True)
 
 
-def test_el_registro_dice_por_que_y_no_solo_que():
-    """Un registro que dice 'abstención' sin decir contra qué no explica nada."""
+def test_log_explains_why_not_only_what():
+    """A log saying only 'abstention' without its comparison explains nothing."""
     _audit_activo(_DB)
     Path(_LOG).unlink(missing_ok=True)
     from hipercampo.support import audit

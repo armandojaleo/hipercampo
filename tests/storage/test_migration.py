@@ -43,14 +43,14 @@ def _crear_bd_v0():
     db.commit(); db.close()
 
 
-def test_abre_una_bd_antigua_sin_romper():
+def test_opens_old_database_without_breaking():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="proyecto")      # antes: OperationalError
     assert hc.stats()["total"] >= 0
     hc.close(); _clean()
 
 
-def test_migra_y_conserva_los_datos_viejos():
+def test_migrates_and_preserves_old_data():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")       # los viejos quedan en 'default'
     textos = [r["text"] for r in hc.store.all(only_active=False)]
@@ -58,7 +58,7 @@ def test_migra_y_conserva_los_datos_viejos():
     hc.close(); _clean()
 
 
-def test_migra_sin_perder_enlaces():
+def test_migrates_without_losing_links():
     """Una BD anterior conserva sus asociaciones (y pasan a ser 'confirmed')."""
     _crear_bd_v0()
     db = sqlite3.connect(_DB)
@@ -74,7 +74,7 @@ def test_migra_sin_perder_enlaces():
     hc.close(); _clean()
 
 
-def test_registra_la_version_del_esquema():
+def test_records_schema_version():
     """Una BD migrada debe DECIR en qué versión está: sin eso no hay migración
     reanudable ni forma de saber qué pasos faltan."""
     from hipercampo.storage import migrations
@@ -85,7 +85,7 @@ def test_registra_la_version_del_esquema():
     hc.close(); _clean()
 
 
-def test_migrar_dos_veces_no_hace_nada_la_segunda():
+def test_second_migration_is_noop():
     """Idempotencia: reabrir una BD ya migrada no vuelve a tocar el esquema."""
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default"); hc.close()
@@ -97,7 +97,7 @@ def test_migrar_dos_veces_no_hace_nada_la_segunda():
     hc.close(); _clean()
 
 
-def test_deja_copia_de_seguridad_antes_de_migrar():
+def test_creates_backup_before_migration():
     """Si la migración destruyera algo, los recuerdos siguen en la copia."""
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")
@@ -111,7 +111,7 @@ def test_deja_copia_de_seguridad_antes_de_migrar():
     _clean()
 
 
-def test_normaliza_estados_de_enlace_invalidos():
+def test_normalizes_invalid_link_states():
     """Una BD vieja con estados raros queda normalizada (migración 005)."""
     _crear_bd_v0()
     db = sqlite3.connect(_DB)
@@ -126,7 +126,7 @@ def test_normaliza_estados_de_enlace_invalidos():
     hc.close(); _clean()
 
 
-def test_la_bd_migrada_pasa_integrity_check():
+def test_migrated_database_passes_integrity_check():
     """`ALTER TABLE ADD COLUMN ... NOT NULL` deja las filas viejas sin reescribir y
     algunas versiones de SQLite lo denuncian ("NULL value in memories.confidence").
     Una BD migrada tiene que salir limpia del chequeo COMPLETO."""
@@ -137,7 +137,7 @@ def test_la_bd_migrada_pasa_integrity_check():
     hc.close(); _clean()
 
 
-def test_varios_procesos_abren_una_bd_nueva_a_la_vez():
+def test_multiple_processes_open_new_database_concurrently():
     """Cuatro hilos abriendo la MISMA base recién creada no deben pelearse por el
     lock migrando lo que no hay que migrar (lo destapó CI en Linux)."""
     import threading
@@ -168,7 +168,7 @@ def Store_version():
     return migrations.SCHEMA_VERSION
 
 
-def test_migracion_crea_estado_de_sorpresa_versionado():
+def test_migration_creates_versioned_surprise_state():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")
     tablas = {row[0] for row in hc.store.db.execute(
@@ -184,7 +184,7 @@ def test_migracion_crea_estado_de_sorpresa_versionado():
     reopened.close(); _clean()
 
 
-def test_puede_escribir_tras_migrar():
+def test_can_write_after_migration():
     _crear_bd_v0()
     hc = Hipercampo(_DB, namespace="default")
     r = hc.remember("algo nuevo despues de migrar el esquema viejo", 0.6)

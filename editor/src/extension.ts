@@ -150,6 +150,21 @@ async function agentSearch(query: string, mode: "recall" | "recall-auto" | "reca
 
 // Health status for the CLI, database, MCP server, and log: whether the engine is
 // alive, not merely what it stores.
+// --- per-project opt-in ---------------------------------------------------------
+// hipercampo starts switched off in a project until someone says yes. The path is
+// passed EXPLICITLY on every call: `run()` uses execFile without `cwd`, so the CLI
+// inherits the extension host's working directory, which is not the workspace. A
+// bare `hipercampo enable` from here would register the wrong directory.
+function projectPath(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+async function fetchProject(): Promise<any> {
+  const path = projectPath();
+  if (!path) return { none: true };          // no folder open: nothing to enable
+  return JSON.parse(await run(["projects", "--json", path]));
+}
+
 async function fetchStatus(): Promise<any> {
   const out = await run(["status"]);
   return JSON.parse(out);
@@ -303,6 +318,15 @@ class Controller {
       } else if (msg.type === "setPaused") {
         await run([msg.value ? "pause" : "resume"]);
         await this.load();
+      } else if (msg.type === "setProjectEnabled") {
+        const path = projectPath();
+        if (!path) {
+          vscode.window.showInformationMessage(
+            hostMessages(vscode.env.language).noFolderOpen);
+        } else {
+          await run([msg.value ? "enable" : "disable", path]);
+          this.post({ type: "project", data: await fetchProject() });
+        }
       } else if (msg.type === "backup") {
         const out = (await run(["backup"])).trim();
         vscode.window.showInformationMessage(out || hostMessages(vscode.env.language).backupCreated);
@@ -339,6 +363,9 @@ class Controller {
       // One fetch: `graph` returns nodes, edges, and the .db PATH to watch.
       const { memories, edges, scope, db, paused } = await fetchGraph();
       this.post({ type: "data", memories, edges, scope, paused });
+      // Opt-in state travels with every load: whether hipercampo is even acting
+      // here is the first thing someone opening the viewer needs to know.
+      this.post({ type: "project", data: await fetchProject() });
       if (db && db !== this.db) { this.db = db; this.watchDatabase(db); }
       void refreshValue();   // Fresh data also updates the status-bar value.
     } catch (e: any) {

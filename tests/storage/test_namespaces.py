@@ -40,7 +40,7 @@ def _clean():
 
 
 # --- aislamiento -------------------------------------------------------------
-def test_un_contexto_no_ve_lo_de_otro():
+def test_namespace_cannot_see_another_namespace():
     _clean()
     alice = Hipercampo(_DB, namespace="alice")
     bob = Hipercampo(_DB, namespace="bob")
@@ -53,7 +53,7 @@ def test_un_contexto_no_ve_lo_de_otro():
     alice.store.close(); bob.store.close(); _clean()
 
 
-def test_get_no_cruza_namespace():
+def test_get_does_not_cross_namespace():
     _clean()
     alice = Hipercampo(_DB, namespace="alice")
     bob = Hipercampo(_DB, namespace="bob")
@@ -64,7 +64,7 @@ def test_get_no_cruza_namespace():
 
 
 # --- defensa en profundidad: escrituras por id no cruzan namespace ----------
-def test_delete_y_touch_no_cruzan_namespace():
+def test_delete_and_touch_do_not_cross_namespace():
     _clean()
     alice = Hipercampo(_DB, namespace="alice")
     bob = Store(_DB, namespace="bob")
@@ -81,7 +81,7 @@ def test_delete_y_touch_no_cruzan_namespace():
 
 
 # --- concurrencia ------------------------------------------------------------
-def test_escrituras_concurrentes_no_corrompen():
+def test_concurrent_writes_do_not_corrupt():
     _clean()
 
     def escribir(ns, n):
@@ -120,7 +120,7 @@ def test_transaccion_revierte_en_error():
 
 
 # --- validación de entradas --------------------------------------------------
-def test_validacion_rechaza_texto_vacio():
+def test_validation_rejects_empty_text():
     _clean()
     hc = Hipercampo(_DB, namespace="x")
     for malo in ("", "   ", None):
@@ -132,7 +132,7 @@ def test_validacion_rechaza_texto_vacio():
     hc.store.close(); _clean()
 
 
-def test_validacion_acota_importance_y_confidence():
+def test_validation_bounds_importance_and_confidence():
     _clean()
     hc = Hipercampo(_DB, namespace="x")
     r = hc.remember("dato con valores fuera de rango", importance=20, confidence=-3)

@@ -41,7 +41,7 @@ def _envejecer(hc, dias):
 
 
 # --- el olvido ADORMECE, no borra -------------------------------------------
-def test_olvidar_no_borra_sino_adormece():
+def test_forgetting_makes_dormant_instead_of_deleting():
     hc = _open()
     mid = hc.remember("una idea trivial que quedará latente con el tiempo", 0.2)["id"]
     _envejecer(hc, 90)
@@ -55,7 +55,7 @@ def test_olvidar_no_borra_sino_adormece():
     _clean()
 
 
-def test_recall_normal_no_ve_los_latentes():
+def test_normal_recall_does_not_see_dormant_memories():
     hc = _open()
     hc.remember("nota latente sobre mariposas azules del amazonas", 0.2)
     _envejecer(hc, 90)
@@ -65,7 +65,7 @@ def test_recall_normal_no_ve_los_latentes():
 
 
 # --- muse trae conexiones indirectas y resucita lo latente ------------------
-def test_muse_resucita_un_recuerdo_latente():
+def test_muse_revives_dormant_memory():
     hc = _open()
     # dos recuerdos asociados por vocabulario compartido
     hc.remember("el río amazonas alberga mariposas azules enormes", 0.6)
@@ -80,7 +80,7 @@ def test_muse_resucita_un_recuerdo_latente():
     _clean()
 
 
-def test_muse_consulta_vacia():
+def test_muse_with_empty_query():
     hc = _open()
     hc.remember("algo cualquiera", 0.5)
     assert hc.muse("", k=3) == []

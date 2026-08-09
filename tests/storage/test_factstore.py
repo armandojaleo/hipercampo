@@ -18,7 +18,7 @@ def _clean():
         Path(_DB + suf).unlink(missing_ok=True)
 
 
-def test_guardar_y_preguntar_por_rol():
+def test_store_and_query_by_role():
     _clean()
     hc = Hipercampo(_DB, namespace="f")
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"})
@@ -31,7 +31,7 @@ def test_guardar_y_preguntar_por_rol():
     hc.store.close(); _clean()
 
 
-def test_distingue_hechos_inversos():
+def test_distinguishes_inverse_facts():
     _clean()
     hc = Hipercampo(_DB, namespace="f")
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"})
@@ -53,7 +53,7 @@ def test_persistencia_entre_reinicios():
     hc2.store.close(); _clean()
 
 
-def test_aislamiento_por_namespace():
+def test_namespace_isolation():
     _clean()
     a = Hipercampo(_DB, namespace="a")
     b = Hipercampo(_DB, namespace="b")

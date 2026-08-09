@@ -1,48 +1,48 @@
-name: "💡 Idea / Mejora"
-description: "Proponer una funcionalidad o un cambio · Propose a feature or change"
+name: "💡 Idea / Improvement"
+description: "Propose a feature or a change · Proponer una funcionalidad o un cambio"
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        En este proyecto **medimos antes de creer**. Si tu idea afirma que mejora algo,
-        piensa cómo se comprobaría.
-        *We measure before believing — think about how the claim could be tested.*
+        In this project we **measure before believing**. If your idea claims to improve
+        something, think about how that claim could be tested.
+        *Aquí medimos antes de creer: piensa cómo se comprobaría. Español o English, both fine.*
 
   - type: textarea
-    id: problema
+    id: problem
     attributes:
-      label: "¿Qué problema resuelve? · What problem does it solve?"
-      description: "El caso de uso real, no la solución todavía."
-      placeholder: "Cuando tengo miles de recuerdos, el recall tarda demasiado porque…"
+      label: "What problem does it solve? · ¿Qué problema resuelve?"
+      description: "The real use case — not the solution yet."
+      placeholder: "With thousands of memories, recall takes too long because…"
     validations:
       required: true
 
   - type: textarea
-    id: propuesta
+    id: proposal
     attributes:
-      label: "Propuesta · Proposal"
-      description: "Cómo lo abordarías."
+      label: "Proposal · Propuesta"
+      description: "How you would approach it."
     validations:
       required: true
 
   - type: textarea
-    id: medicion
+    id: measurement
     attributes:
-      label: "¿Cómo se mediría? · How would we measure it?"
-      description: "Qué test o benchmark demostraría que funciona (o que no)."
-      placeholder: "Un caso en scripts/baselines.py que mida MRR antes/después…"
+      label: "How would we measure it? · ¿Cómo se mediría?"
+      description: "Which test or benchmark would show it works — or that it doesn't."
+      placeholder: "A case in scripts/baselines.py measuring MRR before/after…"
 
   - type: textarea
-    id: alternativas
+    id: alternatives
     attributes:
-      label: "Alternativas y pegas · Alternatives and downsides"
-      description: "Qué se pierde o se complica con este cambio."
+      label: "Alternatives and downsides · Alternativas y pegas"
+      description: "What gets lost or more complicated with this change."
 
   - type: checkboxes
-    id: alcance
+    id: scope
     attributes:
-      label: "Encaje con el proyecto"
+      label: "Fit with the project · Encaje con el proyecto"
       options:
-        - label: "Encaja con el alcance local-first (sin servidor central ni multiusuario)"
-        - label: "Si trae dependencias nuevas, irían en un extra opcional y acreditadas"
+        - label: "Fits the local-first scope (no central server, no multi-tenancy) · Encaja con el alcance local-first"
+        - label: "Any new dependency would go in an optional extra, and credited · Dependencias nuevas en un extra opcional y acreditadas"

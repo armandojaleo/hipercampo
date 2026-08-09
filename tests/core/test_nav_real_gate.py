@@ -30,11 +30,11 @@ BASE = {
 }
 
 
-def test_gate_acepta_linea_base():
+def test_gate_accepts_baseline():
     assert evaluate(BASE) == []
 
 
-def test_gate_detecta_cada_regresion():
+def test_gate_detects_each_regression():
     casos = [
         ("corpus", {"corpus": 499}),
         ("fidelity", {"fidelity": 0.97}),
@@ -50,12 +50,12 @@ def test_gate_detecta_cada_regresion():
         )
 
 
-def test_umbrales_se_pueden_endurecer_sin_cambiar_el_runner():
+def test_thresholds_can_be_tightened_without_changing_runner():
     fallos = evaluate(BASE, {"max_p95_ms": 8.0, "max_rss_mb": 59.0})
     assert {fallo.split(":")[0] for fallo in fallos} == {"p95_ms", "rss_mb"}
 
 
-def test_cli_cablea_el_presupuesto_sin_ejecutar_el_corpus():
+def test_cli_wires_budget_without_running_corpus():
     llamadas = []
     real = nav_real.run_benchmark
 
@@ -75,12 +75,12 @@ def test_cli_cablea_el_presupuesto_sin_ejecutar_el_corpus():
     assert code == 0
     assert llamadas == [(7, 9, 8, 1, False)]
 
-def test_percentil_es_determinista():
+def test_percentile_is_deterministic():
     assert percentile([9.0, 1.0, 5.0, 3.0], 0.5) == 5.0
     assert percentile([9.0, 1.0, 5.0, 3.0], 0.95) == 9.0
 
 
-def test_rss_disponible_en_la_plataforma():
+def test_rss_is_available_on_platform():
     rss = current_rss_mb()
     assert math.isfinite(rss) and rss > 0, rss
 

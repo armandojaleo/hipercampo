@@ -24,7 +24,7 @@ def _enlace(hc, a, b):
 
 # --- precedencia del UPSERT -------------------------------------------------
 
-def test_una_hipotesis_no_degrada_evidencia_confirmada():
+def test_hypothesis_does_not_degrade_confirmed_evidence():
     hc = memory("est_no_degrada")
     hc.store.link(1, 2, 0.9, type="lexical", status="confirmed")
     hc.store.link(1, 2, 0.5, type="dream", status="proposed")
@@ -32,7 +32,7 @@ def test_una_hipotesis_no_degrada_evidencia_confirmada():
     assert (t, s) == ("lexical", "confirmed"), f"la hipótesis pisó la evidencia: {t}/{s}"
 
 
-def test_una_observacion_real_asciende_una_hipotesis_rechazada():
+def test_real_observation_promotes_rejected_hypothesis():
     hc = memory("est_asciende")
     hc.store.link(1, 2, 0.4, type="dream", status="rejected")
     hc.store.link(1, 2, 0.9, type="lexical", status="confirmed")
@@ -40,7 +40,7 @@ def test_una_observacion_real_asciende_una_hipotesis_rechazada():
     assert (t, s) == ("lexical", "confirmed"), f"lo observado quedó enterrado: {t}/{s}"
 
 
-def test_lo_rechazado_no_engorda_al_reproponerse():
+def test_rejected_hypothesis_does_not_grow_when_reproposed():
     hc = memory("est_no_engorda")
     hc.store.link(1, 2, 0.4, type="dream", status="rejected")
     peso0 = _enlace(hc, 1, 2)[2]
@@ -51,7 +51,7 @@ def test_lo_rechazado_no_engorda_al_reproponerse():
     assert peso == peso0, f"lo rechazado se reforzó: {peso0} → {peso}"
 
 
-def test_confirmar_persiste_frente_a_nuevas_propuestas():
+def test_confirmation_persists_against_new_proposals():
     hc = memory("est_confirmado_gana")
     hc.store.link(1, 2, 0.5, type="dream", status="proposed")
     hc.store.set_link_status(1, 2, "confirmed")
@@ -62,7 +62,7 @@ def test_confirmar_persiste_frente_a_nuevas_propuestas():
 
 # --- transiciones permitidas ------------------------------------------------
 
-def test_no_se_puede_rechazar_un_enlace_lexico():
+def test_lexical_link_cannot_be_rejected():
     hc = memory("est_lexico_intocable")
     hc.store.link(1, 2, 0.9, type="lexical", status="confirmed")
     n = hc.store.set_link_status(1, 2, "rejected")
@@ -70,7 +70,7 @@ def test_no_se_puede_rechazar_un_enlace_lexico():
     assert _enlace(hc, 1, 2)[1] == "confirmed"
 
 
-def test_no_se_re_resuelve_una_hipotesis_ya_resuelta():
+def test_resolved_hypothesis_cannot_be_resolved_again():
     hc = memory("est_una_vez")
     hc.store.link(1, 2, 0.5, type="dream", status="proposed")
     assert hc.store.set_link_status(1, 2, "confirmed") == 1
@@ -78,7 +78,7 @@ def test_no_se_re_resuelve_una_hipotesis_ya_resuelta():
     assert _enlace(hc, 1, 2)[1] == "confirmed"
 
 
-def test_transicion_a_un_estado_inventado_es_error():
+def test_transition_to_unknown_state_is_error():
     hc = memory("est_estado_raro")
     hc.store.link(1, 2, 0.5, type="dream", status="proposed")
     try:
@@ -88,7 +88,7 @@ def test_transicion_a_un_estado_inventado_es_error():
         pass
 
 
-def test_aceptar_una_propuesta_inexistente_avisa():
+def test_accepting_missing_proposal_reports_error():
     hc = memory("est_inexistente")
     hc.remember("un recuerdo cualquiera para tener algo", 0.5)
     r = hc.accept_bridge(1, 999)
@@ -97,7 +97,7 @@ def test_aceptar_una_propuesta_inexistente_avisa():
 
 # --- salud y mantenimiento --------------------------------------------------
 
-def test_health_prueba_la_escritura_de_verdad():
+def test_health_really_tests_writing():
     hc = memory("est_health")
     h = hc.health()
     assert h["writable"] is True and h["healthy"] is True, h
@@ -114,7 +114,7 @@ def test_health_completo_bajo_demanda():
     assert h.get("check") == "integrity_check" and h["integrity"] == "ok", h
 
 
-def test_un_sueno_fallido_no_reinicia_el_contador():
+def test_failed_sleep_does_not_reset_counter():
     from hipercampo.cycle.memory import AUTOSLEEP_EVERY
     hc = memory("est_sueno_fallido")
     umbral = AUTOSLEEP_EVERY - 1
@@ -130,7 +130,7 @@ def test_un_sueno_fallido_no_reinicia_el_contador():
     assert "interrumpida" in (hc.store.get_meta("last_sleep_error", "") or "")
 
 
-def test_un_sueno_correcto_si_reinicia_el_contador():
+def test_successful_sleep_resets_counter():
     hc = memory("est_sueno_ok")
     hc.store.set_meta("writes_since_sleep", 999)      # forzamos el umbral
     r = hc._autosleep()
@@ -141,7 +141,7 @@ def test_un_sueno_correcto_si_reinicia_el_contador():
 
 # --- reintento solo de lo transitorio ---------------------------------------
 
-def test_solo_se_reintenta_lo_transitorio():
+def test_only_transient_failures_are_retried():
     from hipercampo.cycle.resilience import _is_transient
     import sqlite3
     assert _is_transient(sqlite3.OperationalError("database is locked"))

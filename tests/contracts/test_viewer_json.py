@@ -69,5 +69,22 @@ def test_tokens_summary_has_every_key_the_viewer_reads():
         f"available: {sorted(summary)}")
 
 
+def test_projects_json_has_every_key_the_viewer_reads():
+    """The opt-in banner reads `PROJECT.<key>` off `hipercampo projects --json`.
+
+    This nearly went wrong the same way `metodo`/`method` did: the viewer was first
+    written against `PROJECT.enabled` while the CLI emits `enabled_here`. Nothing
+    would have raised — the banner would just have claimed the project was off,
+    always."""
+    js = VIEWER.read_text(encoding="utf-8", errors="replace")
+    wanted = set(re.findall(r"\bPROJECT\.([a-z_]+)", js))
+    emitted = set(_cli("projects", "--json"))
+    # `none` is set by the extension, not the CLI: it means "no folder open".
+    missing = wanted - emitted - {"none"}
+    assert not missing, (
+        f"the viewer reads project keys the CLI does not emit: {sorted(missing)}\n"
+        f"emitted: {sorted(emitted)}")
+
+
 if __name__ == "__main__":
     raise SystemExit(run_tests(dict(globals())))

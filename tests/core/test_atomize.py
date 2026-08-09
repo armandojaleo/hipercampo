@@ -24,7 +24,7 @@ from helpers import run_tests, clean     # noqa: E402
 from hipercampo.core.atomize import atomize     # noqa: E402
 
 
-def test_varias_oraciones_varios_atomos():
+def test_multiple_sentences_create_multiple_atoms():
     t = ("El servidor de producción está en Frankfurt. La reunión diaria es a las "
          "nueve. La clave del wifi es girasol2024.")
     a = atomize(t)
@@ -32,12 +32,12 @@ def test_varias_oraciones_varios_atomos():
     assert "Frankfurt" in a[0] and "nueve" in a[1] and "girasol2024" in a[2]
 
 
-def test_texto_corto_no_se_fragmenta():
+def test_short_text_is_not_fragmented():
     assert atomize("perro muerde hombre") == ["perro muerde hombre"]
     assert atomize("Frankfurt") == ["Frankfurt"]
 
 
-def test_oracion_muy_larga_se_parte_en_clausulas():
+def test_very_long_sentence_splits_into_clauses():
     t = ("La batería del robot R7 cae rápidamente en el pasillo norte porque el sensor "
          "de temperatura falla con la humedad alta, y luego el motor vibra a tres mil "
          "revoluciones mientras los tornillos se aflojan poco a poco cada jornada.")
@@ -46,20 +46,20 @@ def test_oracion_muy_larga_se_parte_en_clausulas():
     assert any("R7" in x for x in a) and any("sensor" in x for x in a)
 
 
-def test_no_rompe_en_abreviaturas():
+def test_does_not_split_at_abbreviations():
     a = atomize("El Dr. Ramón vive en EE.UU. y trabaja en la clínica. Todo va bien.")
     assert len(a) == 2, f"no debe cortar en Dr. ni EE.UU.: {a}"
     assert "Ramón" in a[0]
 
 
-def test_entradas_raras_no_revientan():
+def test_unusual_inputs_do_not_crash():
     assert atomize("") == []
     assert atomize("   ") == []
     assert atomize("...") == ["..."]
     assert isinstance(atomize("¿?"), list)
 
 
-def test_orden_se_conserva():
+def test_order_is_preserved():
     a = atomize("Primero A pasa aquí. Segundo B pasa allá. Tercero C pasa lejos.")
     assert a[0].startswith("Primero") and a[2].startswith("Tercero")
 

@@ -45,7 +45,7 @@ def _sembrar():
     b.close()
 
 
-def test_dump_no_incluye_el_hipervector():
+def test_dump_does_not_include_hypervector():
     _sembrar()
     s = Store(_DB, namespace="alice")
     filas = s.dump()
@@ -59,7 +59,7 @@ def test_dump_no_incluye_el_hipervector():
         assert campo in m, f"falta el campo {campo}"
 
 
-def test_dump_respeta_el_contexto():
+def test_dump_respects_namespace():
     _sembrar()
     s = Store(_DB, namespace="alice")
     propios = s.dump()
@@ -70,7 +70,7 @@ def test_dump_respeta_el_contexto():
     assert {"alice", "bob"} <= ns, "con --all-namespaces debe verse todo el fichero"
 
 
-def test_orden_por_importancia():
+def test_order_by_importance():
     _sembrar()
     s = Store(_DB, namespace="alice")
     filas = s.dump(order="importance")
@@ -79,7 +79,7 @@ def test_orden_por_importancia():
     assert imps == sorted(imps, reverse=True), "no respetó el orden por importancia"
 
 
-def test_cli_json_tiene_la_forma_que_espera_el_visor():
+def test_cli_json_has_shape_expected_by_viewer():
     _sembrar()
     r = subprocess.run(
         [sys.executable, "-m", "hipercampo.cli", "list", "--json", "--all-namespaces"],
@@ -92,7 +92,7 @@ def test_cli_json_tiene_la_forma_que_espera_el_visor():
     assert {"alice", "bob"} <= {m["namespace"] for m in data["memories"]}
 
 
-def test_graph_solo_aristas_entre_nodos_mostrados():
+def test_graph_only_has_edges_between_displayed_nodes():
     _sembrar()
     # crear una asociación entre dos recuerdos de alice
     a = Hipercampo(_DB, namespace="alice")
@@ -108,7 +108,7 @@ def test_graph_solo_aristas_entre_nodos_mostrados():
         assert e["src"] in node_ids and e["dst"] in node_ids
 
 
-def test_dormant_y_wake_por_id():
+def test_dormant_and_wake_by_id():
     _sembrar()
     a = Hipercampo(_DB, namespace="alice")
     mid = a.store.all(only_active=False)[0]["id"]
@@ -129,7 +129,7 @@ def _cli(args):
     return code, buf.getvalue()
 
 
-def test_cli_list_graph_dormant_en_proceso():
+def test_cli_list_graph_and_dormant_in_process():
     _sembrar()
     os.environ["HIPERCAMPO_DB"] = _DB
     os.environ["HIPERCAMPO_LOG"] = "0"
@@ -177,7 +177,7 @@ def test_cli_list_graph_dormant_en_proceso():
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
 
-def test_registro_y_tokens_con_log_activo():
+def test_log_and_tokens_with_logging_enabled():
     """Ejercita las ramas REALES de log/tokens/status con el registro encendido
     (el CI de cobertura corre con HIPERCAMPO_LOG=0, que no las tocaría). Forzamos el
     flag del módulo a mano para no depender del entorno."""
@@ -205,7 +205,7 @@ def test_registro_y_tokens_con_log_activo():
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
 
-def test_pausa_no_recordar():
+def test_pause_prevents_remembering():
     """En pausa no se graba ni se refuerza; al reanudar, vuelve a grabar. Y no borra
     nada: leer sigue funcionando. Es el modo 'no recordar'."""
     from hipercampo.support import config
@@ -235,7 +235,7 @@ def test_pausa_no_recordar():
         os.environ.pop("HIPERCAMPO_DB", None)
 
 
-def test_pausa_por_variable_de_entorno_manda():
+def test_pause_environment_variable_takes_precedence():
     """HIPERCAMPO_PAUSED=1 fuerza la pausa por encima del fichero-bandera."""
     from hipercampo.support import config
     _clean()

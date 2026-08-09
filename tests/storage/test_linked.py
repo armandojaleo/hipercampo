@@ -46,7 +46,7 @@ def _sembrar():
     c.store.close()
 
 
-def test_sin_enlazar_no_se_ve_nada_ajeno():
+def test_without_linking_foreign_memory_is_invisible():
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo")
     hits = hc.recall("segmentos de ruta IIS 400 caracteres")
@@ -54,7 +54,7 @@ def test_sin_enlazar_no_se_ve_nada_ajeno():
     hc.store.close()
 
 
-def test_enlazado_se_lee_y_se_dice_de_donde_viene():
+def test_linked_memory_is_read_with_source_namespace():
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo", linked=["player"])
     hits = hc.recall("segmentos de ruta IIS 400 caracteres")
@@ -64,7 +64,7 @@ def test_enlazado_se_lee_y_se_dice_de_donde_viene():
     hc.store.close()
 
 
-def test_el_no_enlazado_sigue_invisible():
+def test_unlinked_namespace_remains_invisible():
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo", linked=["player"])
     hits = hc.recall("dato privado del proyecto secreto")
@@ -72,7 +72,7 @@ def test_el_no_enlazado_sigue_invisible():
     hc.store.close()
 
 
-def test_leer_no_refuerza_lo_ajeno():
+def test_reading_does_not_reinforce_foreign_memory():
     """touch() sobre un recuerdo enlazado no debe cambiarlo: leer no ensucia."""
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo", linked=["player"])
@@ -87,7 +87,7 @@ def test_leer_no_refuerza_lo_ajeno():
     hc.store.close()
 
 
-def test_remember_siempre_escribe_en_el_propio():
+def test_remember_always_writes_to_own_namespace():
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo", linked=["player"])
     r = hc.remember("una idea nueva nacida de cruzar los dos proyectos", 0.7)
@@ -98,7 +98,7 @@ def test_remember_siempre_escribe_en_el_propio():
     hc.store.close()
 
 
-def test_update_no_puede_corregir_lo_enlazado():
+def test_update_cannot_modify_linked_memory():
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo", linked=["player"])
     ajeno = next(r for r in hc.store.all(only_active=True)
@@ -109,7 +109,7 @@ def test_update_no_puede_corregir_lo_enlazado():
     hc.store.close()
 
 
-def test_consolidar_no_absorbe_texto_ajeno():
+def test_consolidation_does_not_absorb_foreign_text():
     """El mantenimiento cuida lo propio: un semántico nunca copia texto enlazado."""
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo", linked=["player"])
@@ -122,7 +122,7 @@ def test_consolidar_no_absorbe_texto_ajeno():
     hc.store.close()
 
 
-def test_asterisco_enlaza_todos_los_demas():
+def test_wildcard_links_all_other_namespaces():
     _sembrar()
     hc = Hipercampo(_DB, namespace="hipercampo", linked=["*"])
     assert set(hc.store.linked) == {"player", "secreto"}, hc.store.linked

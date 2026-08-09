@@ -47,7 +47,7 @@ def test_redact_secrets_enmascara():
     assert "superclave123" not in r2 and "password" in r2
 
 
-def test_remember_redacta_si_esta_activo():
+def test_remember_redacts_when_enabled():
     old = M.REDACT_SECRETS
     M.REDACT_SECRETS = True
     try:
@@ -62,7 +62,7 @@ def test_remember_redacta_si_esta_activo():
 
 
 # --- tope de cantidad --------------------------------------------------------
-def test_tope_acota_la_memoria():
+def test_cap_bounds_memory():
     old = M.MAX_MEMORIES
     M.MAX_MEMORIES = 5
     try:
@@ -76,7 +76,7 @@ def test_tope_acota_la_memoria():
         _clean()
 
 
-def test_tope_protege_lo_importante():
+def test_cap_protects_important_memory():
     old = M.MAX_MEMORIES
     M.MAX_MEMORIES = 3
     try:

@@ -1,5 +1,6 @@
 export interface HostMessages {
   commandNotFound: string;
+  noFolderOpen: string;
   allContexts: string;
   chooseDatabase: string;
   activeMemory: (file: string) => string;
@@ -22,6 +23,7 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     commandNotFound: "Couldn't find 'hipercampo' or 'python -m hipercampo.cli'. "
       + "Install it with 'pip install --pre hipercampo', or set its path in "
       + "hipercampo.command.",
+    noFolderOpen: "Open a folder first: hipercampo is enabled per project.",
     allContexts: "all contexts",
     chooseDatabase: "Choose hipercampo database",
     activeMemory: (file) => `Active memory: ${file}`,
@@ -46,6 +48,7 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     commandNotFound: "No se encontró 'hipercampo' ni 'python -m hipercampo.cli'. "
       + "Instálalo con 'pip install --pre hipercampo' o configura su ruta en "
       + "hipercampo.command.",
+    noFolderOpen: "Abre antes una carpeta: hipercampo se activa por proyecto.",
     allContexts: "todos los contextos",
     chooseDatabase: "Elegir base de datos de hipercampo",
     activeMemory: (file) => `Memoria activa: ${file}`,

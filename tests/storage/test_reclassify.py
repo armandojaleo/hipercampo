@@ -26,7 +26,7 @@ def _abrir(hc, ns):
     return Store(hc.store.path, namespace=ns)
 
 
-def test_mueve_los_propios_a_otro_contexto():
+def test_moves_owned_memories_to_another_namespace():
     hc = memory("rc_mueve", namespace="personal")
     hc.remember("una nota de proyecto que cayó en personal", 0.7)
     ids = [m["id"] for m in hc.store.all(only_active=False)]
@@ -55,7 +55,7 @@ def test_solo_toca_lo_propio():
     comprobar.close(); hc.close()
 
 
-def test_enlace_con_ambos_extremos_movidos_se_muda():
+def test_link_moves_when_both_ends_move():
     hc = memory("rc_enlace", namespace="personal")
     a = hc.remember("windows rechaza rutas largas con 400", 0.7)["id"]
     b = hc.remember("los datos largos van por query string", 0.7)["id"]
@@ -67,7 +67,7 @@ def test_enlace_con_ambos_extremos_movidos_se_muda():
     destino.close(); hc.close()
 
 
-def test_enlace_que_cruzaria_contextos_se_corta():
+def test_link_is_cut_if_it_would_cross_namespaces():
     hc = memory("rc_corta", namespace="personal")
     a = hc.remember("recuerdo A", 0.7)["id"]
     b = hc.remember("recuerdo B asociado a A", 0.7)["id"]
@@ -80,7 +80,7 @@ def test_enlace_que_cruzaria_contextos_se_corta():
     destino.close(); hc.close()
 
 
-def test_destino_vacio_es_error():
+def test_empty_destination_is_error():
     hc = memory("rc_err", namespace="personal")
     hc.remember("algo", 0.6)
     ids = [m["id"] for m in hc.store.all(only_active=False)]

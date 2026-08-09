@@ -36,7 +36,7 @@ def _clean():
             pass
 
 
-def test_un_hecho_nuevo_cierra_al_anterior_sin_borrarlo():
+def test_new_fact_closes_previous_without_deleting_it():
     hc = _open()
     hc.remember_fact({"subject": "servidor", "predicate": "ubicado_en",
                       "object": "Frankfurt"})
@@ -51,7 +51,7 @@ def test_un_hecho_nuevo_cierra_al_anterior_sin_borrarlo():
     _clean()
 
 
-def test_pregunta_devuelve_lo_vigente():
+def test_query_returns_current_fact():
     hc = _open()
     hc.remember_fact({"subject": "servidor", "predicate": "ubicado_en",
                       "object": "Frankfurt"})
@@ -62,7 +62,7 @@ def test_pregunta_devuelve_lo_vigente():
     _clean()
 
 
-def test_se_puede_preguntar_por_el_pasado():
+def test_past_can_be_queried():
     hc = _open()
     hc.remember_fact({"subject": "servidor", "predicate": "ubicado_en",
                       "object": "Frankfurt"})
@@ -79,7 +79,7 @@ def test_se_puede_preguntar_por_el_pasado():
     _clean()
 
 
-def test_hechos_distintos_no_se_cierran_entre_si():
+def test_distinct_facts_do_not_close_each_other():
     hc = _open()
     hc.remember_fact({"subject": "servidor", "predicate": "ubicado_en",
                       "object": "Frankfurt"})

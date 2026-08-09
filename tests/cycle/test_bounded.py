@@ -31,7 +31,7 @@ def _sembrar_relleno(hc, n):
             hc.store.add(t, encode_text(t), 1.0, 0.5, 0.5)
 
 
-def test_max_scan_limita_las_filas_que_se_traen():
+def test_max_scan_limits_fetched_rows():
     hc = memory("bound_lim")
     _sembrar_relleno(hc, 200)
     todas = hc.store.all(only_active=False)
@@ -41,7 +41,7 @@ def test_max_scan_limita_las_filas_que_se_traen():
     hc.close()
 
 
-def test_la_cota_conserva_lo_mas_vivo():
+def test_bound_preserves_most_active_memory():
     """Un recuerdo FUERTE (reforzado) se encuentra aunque la cota sea estrecha y haya
     mucho relleno: la cota se queda con lo más vivo, no con lo primero que pilla."""
     from hipercampo.core.encoder import encode_text
@@ -58,7 +58,7 @@ def test_la_cota_conserva_lo_mas_vivo():
     hc.close()
 
 
-def test_recall_con_cota_sigue_respondiendo_y_no_revienta():
+def test_bounded_recall_still_responds_without_crashing():
     hc = memory("bound_ok")
     _sembrar_relleno(hc, 120)
     hit = hc.recall("nota de relleno numero 50", k=3, max_scan=30)
@@ -66,7 +66,7 @@ def test_recall_con_cota_sigue_respondiendo_y_no_revienta():
     hc.close()
 
 
-def test_cota_ridicula_no_rompe():
+def test_tiny_bound_does_not_break():
     """max_scan=1 (o 0, que se sube a 1) es un caso extremo, no un error."""
     hc = memory("bound_min")
     _sembrar_relleno(hc, 50)
@@ -75,7 +75,7 @@ def test_cota_ridicula_no_rompe():
     hc.close()
 
 
-def test_existe_el_indice_que_hace_rapida_la_cota():
+def test_index_exists_to_make_bound_fast():
     """Sin índice sobre (namespace, strength, last_access) el ORDER BY del LIMIT era
     MÁS lento que escanear todo (medido). El índice es parte del contrato de la cota."""
     hc = memory("bound_idx")

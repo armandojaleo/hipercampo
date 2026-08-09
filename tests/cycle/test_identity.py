@@ -19,7 +19,7 @@ from hipercampo.cycle.identity import SELF_NAMESPACE      # noqa: E402
 from hipercampo.cycle.memory import Hipercampo            # noqa: E402
 
 
-def test_lo_aprendido_sobrevive_a_cerrar_la_sesion():
+def test_learned_identity_survives_session_close():
     """El punto entero: continuidad entre sesiones."""
     hc = memory("id_sobrevive")
     ruta = hc.store.path
@@ -33,7 +33,7 @@ def test_lo_aprendido_sobrevive_a_cerrar_la_sesion():
     otra_sesion.close()
 
 
-def test_se_comparte_entre_proyectos():
+def test_identity_is_shared_across_projects():
     """La identidad es del agente, no de un proyecto: se ve desde cualquiera."""
     hc = memory("id_compartida", namespace="proyecto_a")
     ruta = hc.store.path
@@ -45,7 +45,7 @@ def test_se_comparte_entre_proyectos():
     otro.close()
 
 
-def test_no_se_mezcla_con_la_memoria_del_mundo():
+def test_identity_does_not_mix_with_world_memory():
     hc = memory("id_separada")
     hc.learn("Armando prefiere respuestas directas, sin peloteo", "preferencia")
     hc.remember("el servidor de produccion esta alojado en Frankfurt", 0.7)
@@ -58,7 +58,7 @@ def test_no_se_mezcla_con_la_memoria_del_mundo():
     hc.close()
 
 
-def test_no_entra_por_la_puerta_de_los_enlaces():
+def test_identity_does_not_enter_through_linked_namespaces():
     """El agujero real: con HIPERCAMPO_LINKED='*' la identidad se colaba en recall
     como si fuera un proyecto más. '*' significa 'todos MIS PROYECTOS', no 'todo
     lo que hay en el fichero'."""
@@ -82,7 +82,7 @@ def test_no_entra_por_la_puerta_de_los_enlaces():
     explicito.close()
 
 
-def test_una_leccion_no_se_olvida_por_desuso():
+def test_lesson_is_not_forgotten_through_disuse():
     """El olvido activo poda lo débil; una lección aprendida no es débil."""
     hc = memory("id_no_olvida")
     hc.learn("no reintentar escrituras que quizá ya se confirmaron", "leccion")
@@ -92,7 +92,7 @@ def test_una_leccion_no_se_olvida_por_desuso():
     hc.close()
 
 
-def test_repetir_una_regla_la_refuerza_en_vez_de_duplicarla():
+def test_repeating_rule_reinforces_instead_of_duplicating():
     """Una regla que se repite es una regla que se confirma, no ruido."""
     hc = memory("id_refuerza")
     r1 = hc.learn("medir antes de creer y decir la verdad de los limites", "regla")
@@ -103,7 +103,7 @@ def test_repetir_una_regla_la_refuerza_en_vez_de_duplicarla():
     hc.close()
 
 
-def test_los_tipos_se_validan():
+def test_identity_types_are_validated():
     hc = memory("id_tipos")
     r = hc.learn("algo con un tipo inventado", "chorrada")
     assert "error" in r and "valid" in r, r
@@ -111,7 +111,7 @@ def test_los_tipos_se_validan():
     hc.close()
 
 
-def test_se_puede_desaprender():
+def test_identity_can_be_unlearned():
     """Una regla puede dejar de valer: entonces se borra de verdad."""
     hc = memory("id_desaprende")
     r = hc.learn("una norma provisional que luego dejara de valer", "regla")
@@ -121,7 +121,7 @@ def test_se_puede_desaprender():
     hc.close()
 
 
-def test_se_agrupa_por_tipo_para_leerlo_de_un_vistazo():
+def test_identity_is_grouped_by_type_for_readability():
     hc = memory("id_formato")
     hc.learn("medir antes de creer", "regla")
     hc.learn("el nucleo se queda local-first", "decision")
@@ -131,7 +131,7 @@ def test_se_agrupa_por_tipo_para_leerlo_de_un_vistazo():
     hc.close()
 
 
-def test_el_contexto_reservado_no_se_pisa_con_uno_normal():
+def test_reserved_namespace_cannot_be_overwritten_by_normal_namespace():
     hc = memory("id_reservado")
     hc.learn("una regla cualquiera para ocupar el contexto reservado", "regla")
     assert hc._self_store().namespace == SELF_NAMESPACE

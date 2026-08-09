@@ -20,6 +20,12 @@
       pausar: "Pausar la memoria (modo 'no recordar')", reanudar: "Reanudar la memoria",
       refrescar: "Refrescar", cambiarBD: "Cambiar base de datos", todosContextos: "todos los contextos",
       banner: "⏸ Memoria <b>en pausa</b>: no se graban recuerdos nuevos ni se refuerzan (leer sí funciona).",
+      optinOff: "⭘ hipercampo está <b>desactivado</b> en este proyecto. Aquí ni lee ni escribe.",
+      optinOn: "Activar aquí",
+      optinDisable: "Desactivar aquí",
+      optinNotAdopted: "hipercampo está activo allí donde ya tiene memoria. Activar o "
+        + "desactivar cualquier proyecto pasa al modo opt-in: desde entonces, el proyecto "
+        + "que no esté en la lista queda apagado.",
       tabs: { list: "Lista", graph: "Mapa", timeline: "Tiempo", axes: "Ejes",
         ideas: "Ideas", facts: "Hechos", tokens: "Tokens", log: "Registro", status: "Estado" },
       factsCargando: "Leyendo los hechos…",
@@ -111,6 +117,12 @@
       pausar: "Pause the memory ('don't remember' mode)", reanudar: "Resume the memory",
       refrescar: "Refresh", cambiarBD: "Change database", todosContextos: "all contexts",
       banner: "⏸ Memory <b>paused</b>: no new memories are written or reinforced (reading still works).",
+      optinOff: "⭘ hipercampo is <b>off</b> in this project. It neither reads nor writes here.",
+      optinOn: "Enable here",
+      optinDisable: "Disable here",
+      optinNotAdopted: "hipercampo is on everywhere it already has memory. Enabling or "
+        + "disabling any project switches to opt-in: from then on, a project that is not "
+        + "on the list is off.",
       tabs: { list: "List", graph: "Map", timeline: "Timeline", axes: "Axes",
         ideas: "Ideas", facts: "Facts", tokens: "Tokens", log: "Log", status: "Status" },
       factsCargando: "Reading facts…",
@@ -1219,6 +1231,9 @@
 
   window.addEventListener("message", (ev) => {
     const msg = ev.data;
+    if (msg.type === "project") {
+      PROJECT = msg.data || null; renderOptIn(); return;
+    }
     if (msg.type === "data") {
       MEM = msg.memories || []; EDGES = msg.edges || []; SCOPE = msg.scope || "";
       HITS = null; ACTIVE = null;
@@ -1290,6 +1305,9 @@
   });
   $("pause").addEventListener("click", () =>
     vscode.postMessage({ type: "setPaused", value: !PAUSED }));
+  $("optin-enable").addEventListener("click", () =>
+    vscode.postMessage({ type: "setProjectEnabled",
+                         value: !(PROJECT && PROJECT.enabled_here) }));
   $("issue").addEventListener("click", () =>
     vscode.postMessage({ type: "open-external",
       url: "https://github.com/armandojaleo/hipercampo/issues/new" }));
@@ -1297,6 +1315,24 @@
     $("weave").disabled = true;
     vscode.postMessage({ type: "reindex" });
   });
+
+  // Per-project opt-in. Two states have to be told apart and the difference matters:
+  // "off here" (nothing happens in this project) and "not configured yet" (an install
+  // from before opt-in existed, still on wherever it has memory). Showing them the
+  // same would leave an upgraded user unable to tell why it works, or why it stopped.
+  let PROJECT = null;
+
+  function renderOptIn() {
+    const banner = $("optin-banner"), btn = $("optin-enable"), text = $("optin-text");
+    if (!PROJECT || PROJECT.none) { banner.classList.add("hidden"); return; }
+    const on = !!PROJECT.enabled_here, adopted = !!PROJECT.opt_in_adopted;
+    // The banner is for when something needs saying: off, or on-but-unconfigured.
+    // A project deliberately enabled needs no permanent sign.
+    banner.classList.toggle("hidden", on && adopted);
+    text.innerHTML = on ? L.optinNotAdopted : L.optinOff;
+    btn.textContent = on ? L.optinDisable : L.optinOn;
+    btn.classList.toggle("on", !on);
+  }
 
   function renderPause() {
     $("paused-banner").classList.toggle("hidden", !PAUSED);

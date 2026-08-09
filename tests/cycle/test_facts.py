@@ -32,7 +32,7 @@ def _facts_json(argv):
     return code, json.loads(buf.getvalue())
 
 
-def test_facts_json_del_contexto():
+def test_namespace_facts_json():
     hc = memory("facts_ns", namespace="proj-a")
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"})
     db = hc.store.path
@@ -51,7 +51,7 @@ def test_facts_json_del_contexto():
         os.environ.pop("HIPERCAMPO_NAMESPACE", None)
 
 
-def test_facts_all_namespaces_y_validez_temporal():
+def test_facts_all_namespaces_and_temporal_validity():
     hc = memory("facts_all", namespace="proj-a")
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "hombre"})
     hc.remember_fact({"subject": "perro", "predicate": "muerde", "object": "cartero"})
