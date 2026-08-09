@@ -155,9 +155,10 @@ class Hipercampo:
                     "reason": "memory paused ('do not record' mode)"}
         text = _validate_text(text)
         requested = tipo if tipo is not None else kind
-        kind = normalise_type(requested)
-        if kind is None:
+        resolved = normalise_type(requested)      # str | None: narrowed just below
+        if resolved is None:
             return {"error": f"invalid kind: {requested}", "valid": dict(TYPES)}
+        kind = resolved
         ss = self._self_store()
         tagged = f"{kind}: {text}"
         hv = encode_text(tagged)
@@ -758,8 +759,10 @@ class Hipercampo:
             group = [r]
             group_idx = [i]
             used.add(r["id"])
-            for j in np.flatnonzero(sims >= CONSOLIDATE_SIMILARITY):
-                j = int(j)                      # ascending: same order as before
+            # `np.flatnonzero` yields numpy integers; a separate name keeps the
+            # plain `int` that indexes and `group_idx` expect.
+            for pos in np.flatnonzero(sims >= CONSOLIDATE_SIMILARITY):
+                j = int(pos)                    # ascending: same order as before
                 if j == i or eps[j]["id"] in used:
                     continue
                 # cohesion: must resemble ALL of the group, not just the

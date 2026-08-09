@@ -408,10 +408,12 @@ def cmd_dream(args) -> int:
     if getattr(args, "json", False):
         print(json.dumps(d, ensure_ascii=False, default=str))
     else:
-        bridges = d.get("bridges", [])
-        for b in bridges if isinstance(bridges, list) else []:
+        # A separate name: `bridges` above is a list[dict] built for the
+        # all-contexts branch, while this one comes out of a dict of `object`.
+        found = d.get("bridges", [])
+        for b in found if isinstance(found, list) else []:
             print(f"- {b['hypothesis']}")
-        if not bridges:
+        if not found:
             print("No new ideas for now (nothing to connect).")
     return 0
 
