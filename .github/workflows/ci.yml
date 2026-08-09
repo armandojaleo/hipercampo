@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege for GITHUB_TOKEN. Without this block the token inherits the
+# repository default, which in many repos is read/write on contents: a compromised
+# action or a malicious dependency pulled during a build would then be able to push.
+# CI only ever needs to read the checkout.
+permissions:
+  contents: read
+
 jobs:
   viewer:
     runs-on: ubuntu-latest
@@ -19,16 +26,17 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: editor/package-lock.json
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: npm ci
-      - name: Comprobar JavaScript del webview
+      - name: Check webview JavaScript
         run: node --check media/viewer.js
-      - name: Compilar y probar extensión
+      - name: Build and test the extension
         run: npm test
 
   test:
-    # hipercampo es una app LOCAL: Windows y macOS no son opcionales.
-    # La matriz completa solo en la versión estable; los extremos, en Linux.
+    # hipercampo is a LOCAL app: Windows and macOS are not optional. Testing only on
+    # Linux once hid three real bugs. Full matrix on the stable version; the edge
+    # Python versions on Linux only.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -48,49 +56,77 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # Bounded like `mcp` in pyproject: floor + major ceiling. Unpinned, a new ruff
+      # release adding a lint rule turns CI red on code nobody touched — and a build
+      # that goes red on its own teaches you to ignore red builds. Bump deliberately.
+      # ruff is pre-1.0, so its breaking changes arrive in MINOR bumps: ceiling there.
       - name: Install
-        run: pip install -e . ruff coverage mypy pytest
+        run: pip install -e . "ruff>=0.15,<0.16" "coverage>=7.15,<8" "mypy>=2.3,<3" "pytest>=9,<10"
 
       - name: Lint (ruff)
         run: python -m ruff check hipercampo/ tests/ scripts/ examples/
 
-      # Puerta de tipos: un None sin comprobar o una asignación incompatible no entra.
-      # Independiente de plataforma, así que basta una celda de la matriz.
+      # Type gate: an unchecked None or an incompatible assignment does not get in.
+      # Platform-independent, so one cell of the matrix is enough.
       - name: Type-check (mypy)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python -m mypy hipercampo/
 
-      # Cadena de suministro: escaneo de CVEs conocidas del árbol de dependencias.
-      # Informativo por ahora (no bloquea): sirve para VER una vulnerabilidad en cuanto
-      # aparece, sin romper el verde por un aviso en una transitiva que no controlamos.
-      # Volver bloqueante (quitar continue-on-error) cuando el árbol esté limpio.
-      # Ver la política en SECURITY.md.
+      # Supply chain: scan for known CVEs in the dependency tree. This step used to be
+      # informational, with a note saying "make it blocking once the tree is clean".
+      # Measured in a clean venv with only the project installed: "No known
+      # vulnerabilities found". The condition is met, so it now BLOCKS.
+      #
+      # It will go red the day an advisory lands on a transitive of `mcp` that we do
+      # not control, and that is the point: a supply-chain problem should stop a
+      # release, not scroll past in a log. If it ever blocks on something genuinely
+      # un-actionable, `--ignore-vuln <ID>` documents the exception by name instead of
+      # blinding the whole check. Policy in SECURITY.md.
       - name: Supply-chain audit (pip-audit)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        continue-on-error: true
         run: |
           pip install pip-audit
           pip-audit --strict --desc
 
-      - name: Test suite (todas las suites, incluidas las generativas)
+      - name: Test suite (every suite, generative ones included)
         shell: bash
         env:
           PYTHONIOENCODING: utf-8
         run: |
           set -e
-          # Glob, NO lista a mano: un fichero de test nuevo entra solo en la matriz.
-          # Antes se enumeraban a mano y se colaban ficheros sin correr en Windows/macOS
-          # (list, budget, purge, core_embebible), justo donde viven los bugs de plataforma.
-          shopt -s nullglob
-          for t in tests/test_*.py; do
+          # DISCOVERY, never a hand-written list: a new test file joins the matrix on its
+          # own. They used to be enumerated by hand and files slipped through without ever
+          # running on Windows/macOS (list, budget, purge, core_embebible) — exactly where
+          # platform bugs live.
+          #
+          # Discovery is done by PYTHON, not the shell: `tests/test_*.py` does not descend
+          # into subdirectories, so when the suite was grouped into tests/core,
+          # tests/storage, tests/cycle… it matched NOTHING. With `nullglob` the loop never
+          # iterated, `set -e` had nothing to fail on, and this step passed GREEN having
+          # run zero tests across all five matrix cells. The very lesson this comment
+          # already recorded, relearned.
+          #
+          # Neither `mapfile` (bash 4+, and macOS ships 3.2) nor `find` (on Windows it can
+          # resolve to System32's find.exe): Python is the only thing that behaves the same
+          # on all three platforms, and it is trustworthy here because it is what we test.
+          TESTS=$(python -c "import pathlib; [print(p.as_posix()) for p in sorted(pathlib.Path('tests').rglob('test_*.py'))]")
+          COUNT=$(printf '%s\n' "$TESTS" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+          echo "Test files found: $COUNT"
+          # Making "I found no tests" a FAILURE rather than a silence is the important
+          # half of the fix: the pattern can break again, this guard cannot.
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::no tests were found: discovery is broken"
+            exit 1
+          fi
+          while IFS= read -r t; do
             echo "::group::$t"
             python "$t"
             echo "::endgroup::"
-          done
+          done <<< "$TESTS"
 
-      # Cobertura con SUELO: si baja del 78%, el CI falla. No se persigue el 100%
-      # (hay ramas que solo se dan en fallos de hardware); se persigue no retroceder.
-      - name: Cobertura
+      # Coverage with a FLOOR: below 78% the build fails. We do not chase 100% (some
+      # branches only happen on hardware failures); we chase not regressing.
+      - name: Coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         shell: bash
         env:
@@ -99,7 +135,17 @@ jobs:
         run: |
           set -e
           coverage erase
-          for t in tests/test_*.py; do coverage run -a --source=hipercampo "$t" >/dev/null; done
+          # Same recursive discovery as the step above (the why is documented there).
+          TESTS=$(python -c "import pathlib; [print(p.as_posix()) for p in sorted(pathlib.Path('tests').rglob('test_*.py'))]")
+          COUNT=$(printf '%s\n' "$TESTS" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+          echo "Test files found: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::no tests were found: discovery is broken"
+            exit 1
+          fi
+          while IFS= read -r t; do
+            coverage run -a --source=hipercampo "$t" >/dev/null
+          done <<< "$TESTS"
           coverage report --sort=cover
           coverage report --fail-under=78
 
@@ -112,32 +158,32 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install
-        run: pip install -e . ruff coverage
+        run: pip install -e . "ruff>=0.15,<0.16" "coverage>=7.15,<8"
 
       - name: Lint (ruff)
         run: python -m ruff check hipercampo/ tests/ scripts/ examples/
-      - name: Benchmark de calidad (modo léxico)
+      - name: Quality benchmark (lexical mode)
         run: python scripts/benchmark.py
-      - name: Gate navegable sobre corpus real (calidad, latencia y memoria)
+      - name: Navigable-recall gate on a real corpus (quality, latency, memory)
         env:
           HIPERCAMPO_LOG: "0"
         run: python scripts/nav_real.py --check
-      - name: Banco de estrés (10 hechos + 10 distractores confusos)
+      - name: Stress bench (10 facts + 10 confusable distractors)
         run: python scripts/stress.py
-      - name: Latencia y RAM de recall a escala (p50/p95/p99, con y sin cota)
+      - name: Recall latency and RAM at scale (p50/p95/p99, bounded and unbounded)
         env:
           HIPERCAMPO_LOG: "0"
         run: python scripts/latency.py 1000 5000 10000
-      - name: Comparativa con baselines (BM25 vs hipercampo, léxico)
+      - name: Baseline comparison (BM25 vs hipercampo, lexical)
         run: python scripts/baselines.py
-      - name: Ablaciones cognitivas (sorpresa, confianza, propagación, consolidación)
+      - name: Cognitive ablations (surprise, confidence, propagation, consolidation)
         env:
           HIPERCAMPO_LOG: "0"
         run: python scripts/ablations.py --check
-      - name: Eficiencia de contexto (calidad, tokens y latencia)
+      - name: Context efficiency (quality, tokens and latency)
         env:
           HIPERCAMPO_LOG: "0"
         run: python scripts/context_efficiency.py --check
-      - name: Ejemplos de uso (smoke)
+      - name: Usage examples (smoke)
         run: |
           for e in examples/*.py; do echo "== $e =="; python "$e"; done

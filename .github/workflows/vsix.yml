@@ -1,10 +1,15 @@
-name: Publicar visor (VS Code Marketplace)
+name: Publish viewer (VS Code Marketplace)
 
-# Publica la extensión editor/ en el Marketplace al empujar un tag viewer-vX.Y.Z.
-# Requiere el secreto VSCE_PAT (ver editor/PUBLISHING.md). Sin ese secreto no hace nada.
+# Publishes the editor/ extension to the Marketplace when a viewer-vX.Y.Z tag is
+# pushed. Requires the VSCE_PAT secret (see editor/PUBLISHING.md); without it, nothing.
 on:
   push:
     tags: ["viewer-v*"]
+
+# Least privilege: publishing to the Marketplace uses VSCE_PAT, never GITHUB_TOKEN,
+# so the token needs nothing beyond reading the checkout.
+permissions:
+  contents: read
 
 jobs:
   publish:
@@ -18,24 +23,29 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: npm ci
 
-      - name: Compilar y probar
+      - name: Build and test
         run: npm test
 
-      - name: La versión del tag debe coincidir con package.json
+      - name: Tag version must match package.json
         run: |
           TAG="${GITHUB_REF_NAME#viewer-v}"
           PKG=$(node -p "require('./package.json').version")
           echo "tag=$TAG  package.json=$PKG"
-          test "$TAG" = "$PKG" || { echo "::error::el tag ($TAG) no coincide con package.json ($PKG)"; exit 1; }
+          test "$TAG" = "$PKG" || { echo "::error::tag ($TAG) does not match package.json ($PKG)"; exit 1; }
 
-      - name: Publicar en el Marketplace
+      - name: Publish to the Marketplace
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
           if [ -z "$VSCE_PAT" ]; then
-            echo "::error::falta el secreto VSCE_PAT (ver editor/PUBLISHING.md)"; exit 1
+            echo "::error::VSCE_PAT secret is missing (see editor/PUBLISHING.md)"; exit 1
           fi
-          npx --yes @vscode/vsce@3.9.2 publish -p "$VSCE_PAT"
+          # No `-p "$VSCE_PAT"`: vsce reads the token from the VSCE_PAT environment
+          # variable on its own. Passing it as an argument put the secret in the
+          # process argv, where any other process on the runner can read it — and it
+          # would land in a trace if anyone ever adds `set -x`. The env var is
+          # already there; the flag only added exposure.
+          npx --yes @vscode/vsce@3.9.2 publish

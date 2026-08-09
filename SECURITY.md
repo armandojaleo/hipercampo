@@ -94,7 +94,16 @@ design**:
 - **Local and offline.** The MCP server communicates with its client over stdio. It
   opens no ports and does not listen on the network, so it is not remotely exposed.
 - **It does not execute memory contents.** hipercampo only stores and retrieves
-  text. The core contains no `eval`, `exec`, `os.system`, `subprocess`, or `pickle`.
+  text. Nothing that comes out of memory is ever evaluated: there is no `eval`,
+  `exec`, `os.system` or `pickle` anywhere in the package, and no code path takes a
+  stored string anywhere near a shell.
+  The one module that spawns processes is `hipercampo/support/procs.py`, which backs
+  `hipercampo servers` and `hipercampo restart` — it lists and terminates *hipercampo's
+  own* MCP servers. It never touches memory contents: it invokes exactly four fixed
+  commands (`ps` and `powershell` to list, `taskkill` and `os.kill` to stop), every
+  call passes an argument **list** rather than a shell string (`shell=True` appears
+  nowhere in the package), the PowerShell query is a constant with nothing
+  interpolated, and the only variable is a PID validated with `.isdigit()` before use.
 - **Parameterized SQL.** Every query uses `?` placeholders; SQL strings are not
   assembled from input, preventing SQL injection.
 - **Minimal, auditable dependencies:** `numpy` (BSD) and `mcp` (MIT). The semantic
@@ -175,16 +184,23 @@ pip install --require-hashes -r requirements.lock
 
 - 🟢 **Minimal tree** and bounded `mcp` (`<2`).
 - 🟢 **Trusted Publishing plus attestations** for releases.
-- 🟡 **`pip-audit` in CI** to scan the tree for known CVEs. It currently provides
-  visibility and should become blocking once the tree is clean.
-- ⚪ **Pin `vsce`** in `vsix.yml`. Today
-  `npx --yes @vscode/vsce publish` downloads the **latest** npm release and hands it
-  `VSCE_PAT`. Pinning a verified version (`@vscode/vsce@X.Y.Z`) prevents a
-  compromised new release from receiving that token. **This is the highest-priority
-  pending item** because it touches a secret.
-- ⚪ **Pin GitHub Actions by SHA**, not tag: `actions/checkout@<sha>`,
-  `setup-python@<sha>`, and `pypa/gh-action-pypi-publish@<sha>`. Tags are mutable;
-  SHAs are not. `release.yml` can publish to PyPI, making its action chain critical.
+- 🟢 **`pip-audit` blocks CI.** It was informational, with a note to make it blocking
+  once the tree was clean. Measured in a clean virtualenv with only the project
+  installed: *no known vulnerabilities*. So it blocks now. It will go red the day an
+  advisory lands on a transitive of `mcp`, which is the intent.
+- 🟢 **`vsce` pinned** in `vsix.yml` (`@vscode/vsce@3.9.2`), so a compromised newer
+  release cannot receive `VSCE_PAT`. The token is also no longer passed as a
+  command-line argument: `vsce` reads it from the environment, and argv is readable
+  by other processes on the runner.
+- 🟢 **GitHub Actions pinned by SHA**, not tag — `checkout`, `setup-python`,
+  `setup-node` and `pypa/gh-action-pypi-publish`. Tags are mutable; SHAs are not.
+  `release.yml` can publish to PyPI, so its action chain is critical.
+- 🟢 **`GITHUB_TOKEN` least privilege.** Every workflow declares `permissions:`
+  explicitly (`contents: read`, plus `id-token: write` only where OIDC needs it).
+  Without that block the token inherits the repository default, which is often
+  read/write.
+- 🟢 **CI tooling bounded** (`ruff`, `coverage`, `mypy`, `pytest`) with a floor and a
+  major ceiling, so a tool release cannot change what CI checks without a commit.
 - ⚪ **Available trade-off: make `mcp` optional.** Moving it to an `[mcp]` extra
   would leave the core with **one dependency** (`numpy`) and remove the unused HTTP
   stack. The cost is changing server installation to `pip install hipercampo[mcp]`.
