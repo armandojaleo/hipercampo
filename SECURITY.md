@@ -187,7 +187,11 @@ pip install --require-hashes -r requirements.lock
 - 🟢 **`pip-audit` blocks CI.** It was informational, with a note to make it blocking
   once the tree was clean. Measured in a clean virtualenv with only the project
   installed: *no known vulnerabilities*. So it blocks now. It will go red the day an
-  advisory lands on a transitive of `mcp`, which is the intent.
+  advisory lands on a transitive of `mcp`, which is the intent. It runs without
+  `--strict` on purpose: that flag also fails on dependencies it cannot audit, and
+  the project itself is installed in editable mode at a version not yet on PyPI, so
+  every version bump would have broken CI until that version was published. A real
+  vulnerability still fails the build without it.
 - 🟢 **`vsce` pinned** in `vsix.yml` (`@vscode/vsce@3.9.2`), so a compromised newer
   release cannot receive `VSCE_PAT`. The token is also no longer passed as a
   command-line argument: `vsce` reads it from the environment, and argv is readable
