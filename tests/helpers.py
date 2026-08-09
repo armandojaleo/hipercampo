@@ -27,6 +27,13 @@ sys.path.insert(0, str(ROOT))
 for _v in ("HIPERCAMPO_LINKED", "HIPERCAMPO_PAUSED", "HIPERCAMPO_NAMESPACE", "HIPERCAMPO_DB"):
     os.environ.pop(_v, None)
 
+# Per-project opt-in is OFF for the suite's own sake. The gate asks "was hipercampo
+# invited into this directory?", and a test is not a project: without this, whether a
+# server-level test passes would depend on whether its scratch database happened to
+# hold a memory yet — green or red by accident of ordering. tests/support/test_opt_in.py
+# clears this variable itself, because the gate is exactly what it is testing.
+os.environ["HIPERCAMPO_FORCE_ENABLED"] = "1"
+
 from hipercampo.cycle.memory import Hipercampo             # noqa: E402
 
 _open_memory: Hipercampo | None = None

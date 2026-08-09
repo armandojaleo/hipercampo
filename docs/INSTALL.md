@@ -161,6 +161,33 @@ Restart Claude Code. You should see 18 tools: `hc_remember`, `hc_recall`,
 `hc_muse`, `hc_dream`, `hc_accept_bridge`, `hc_reject_bridge`, `hc_update`,
 `hc_remember_fact`, `hc_ask_role`, `hc_consolidate`, `hc_forget`, `hc_stats`.
 
+### Turning it on per project (opt-in)
+
+**hipercampo starts switched off.** Registering the server does not make it act:
+in a project you have not opted into, the hook stays silent and the tools decline
+with an explanation rather than reading or writing anything.
+
+```bash
+cd my-project
+hipercampo enable          # turn it on here
+hipercampo projects        # where is it on?
+hipercampo disable         # turn it off again
+```
+
+The unit is the **directory**, not the namespace, and that is forced rather than
+chosen: a server registered at user scope carries a single
+`HIPERCAMPO_NAMESPACE`, so every project without its own `.mcp.json` shares it —
+the namespace cannot tell two projects apart, the path can.
+
+> **Upgrading from a version without opt-in?** Nothing switches off. While no
+> project has been enabled or disabled, an installation that already holds
+> memories keeps working exactly as before, and `hipercampo projects` says so.
+> The first `enable`/`disable` adopts opt-in; from then on, a project that is not
+> on the list is off.
+
+For CI or embedded use, where there is no project to opt in,
+`HIPERCAMPO_FORCE_ENABLED=1` bypasses the gate.
+
 ### Memory shared across ALL projects (global)
 
 The `.mcp.json` above enables hipercampo **in that project only**. Since the

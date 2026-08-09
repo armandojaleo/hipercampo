@@ -14,11 +14,14 @@ hipercampo CLI — for use from the terminal and, above all, from HOOKS
     hipercampo restart               # terminate them after an upgrade (client relaunches)
     hipercampo log [-f] [-g text]    # what it decided and why (live with -f)
     hipercampo identity              # what's been learned while working
+    hipercampo enable|disable        # turn hipercampo on/off for THIS project
+    hipercampo projects              # where it is on
     hipercampo doctor                # diagnosis: path, permissions, version, deps
     hipercampo version
 
 Variables: HIPERCAMPO_DB, HIPERCAMPO_NAMESPACE, HIPERCAMPO_SEMANTIC,
-HIPERCAMPO_AUTOSLEEP_EVERY, HIPERCAMPO_MAX_MEMORIES, HIPERCAMPO_REDACT_SECRETS.
+HIPERCAMPO_AUTOSLEEP_EVERY, HIPERCAMPO_MAX_MEMORIES, HIPERCAMPO_REDACT_SECRETS,
+HIPERCAMPO_FORCE_ENABLED (bypass the per-project opt-in gate; CI/embedded).
 """
 
 import argparse
@@ -116,6 +119,21 @@ def cmd_hook(_args) -> int:
         payload = json.loads(raw)
     except Exception:
         payload = {}
+
+    # OPT-IN gate. The hook is the part that fires on its own, every turn, so it is
+    # the part that must never run in a project that did not ask for it. Staying
+    # quiet here costs nothing; speaking up in somebody else's project costs them
+    # context window and mixes their work into a memory they never chose.
+    #
+    # The project is the DIRECTORY. Claude Code sends `cwd` in the payload; the
+    # fallback exists because the hook is launched inside the project anyway, and
+    # guessing wrong should mean "stay quiet", never "write somewhere unexpected".
+    from .support import config as _config
+    project = payload.get("cwd") or os.getcwd()
+    if not _config.project_enabled(project):
+        print("{}")
+        return 0
+
     # At session START there's no question to answer: what's needed is to
     # recall who's working, so the session doesn't start from scratch.
     if payload.get("hook_event_name") == "SessionStart":
@@ -415,6 +433,50 @@ def cmd_dormant(args) -> int:
     return 0
 
 
+def cmd_projects(args) -> int:
+    """Turn hipercampo on or off for a project, and list where it is on.
+
+    The project is the DIRECTORY. That is forced, not chosen: a server registered
+    at user scope carries one namespace, so every project without its own
+    `.mcp.json` shares it and the namespace cannot tell two projects apart.
+    """
+    from .support import config
+    target = os.path.abspath(getattr(args, "path", None) or os.getcwd())
+
+    if args.cmd in ("enable", "disable"):
+        config.set_project_enabled(target, args.cmd == "enable")
+        print(json.dumps({"project": target, "enabled": args.cmd == "enable"},
+                         ensure_ascii=False))
+        return 0
+
+    registry = config.enabled_projects()
+    out: dict[str, Any] = {
+        "here": target,
+        "enabled_here": config.project_enabled(target),
+        "opt_in_adopted": registry is not None,
+        "projects": registry or [],
+    }
+    if registry is None:
+        # Say it out loud rather than pretending the list is empty. An upgrade must
+        # not switch off a working setup in silence.
+        out["note"] = ("opt-in is not configured yet, so hipercampo stays on "
+                       "wherever it already has memory. The first `hipercampo "
+                       "enable`/`disable` adopts opt-in, and from then on any "
+                       "project not on the list is off.")
+    if getattr(args, "json", False):
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
+    print(f"here:    {out['here']}")
+    print(f"enabled: {out['enabled_here']}")
+    if out.get("note"):
+        print(f"\nnote: {out['note']}")
+    elif registry:
+        print("\nactive in:")
+        for p in registry:
+            print(f"  {p}")
+    return 0
+
+
 def cmd_budget(args) -> int:
     """Views or sets the hook's token budget (what the memory injects per
     turn). Persisted next to the .db and honored by the hook on the next
@@ -675,11 +737,20 @@ def cmd_status(_args) -> int:
     log. It's the memory's 'control panel', unadorned: says what's alive."""
     from . import __version__
     from .support import audit
+    from .support import config
     from .support.config import db_path, paused
     from .support.procs import list_servers
     path = os.path.abspath(db_path())
+    here = os.getcwd()
     out: dict[str, Any] = {"version": __version__, "python": sys.version.split()[0],
-                           "paused": paused(), "db": {"path": path}}
+                           "paused": paused(), "db": {"path": path},
+                           # Per-project opt-in, for the viewer to show and toggle.
+                           # `adopted` is not derivable from `enabled`: not-yet-adopted
+                           # also reads as enabled, and the viewer needs to say which,
+                           # or an upgraded user cannot tell "on" from "not configured".
+                           "project": {"path": here,
+                                       "enabled": config.project_enabled(here),
+                                       "adopted": config.opt_in_adopted()}}
 
     try:
         out["db"]["exists"] = os.path.isfile(path)
@@ -802,6 +873,7 @@ _COMMANDS = {
     "dream": cmd_dream, "list": cmd_list, "graph": cmd_graph, "status": cmd_status,
     "tokens": cmd_tokens, "pause": cmd_pause, "resume": cmd_pause,
     "dormant": cmd_dormant, "purge": cmd_purge, "log": cmd_log,
+    "enable": cmd_projects, "disable": cmd_projects, "projects": cmd_projects,
 }
 
 
@@ -825,6 +897,15 @@ def main(argv=None) -> int:
     bg = sub.add_parser("budget", help="view or set the hook's token budget")
     bg.add_argument("--set", type=int, help="set the budget (tokens per turn)")
     bg.add_argument("--reset", action="store_true", help="go back to the factory default (350)")
+    # Per-project opt-in. hipercampo does not switch itself on in a project nobody
+    # asked it to; these are how you say yes (and the viewer calls them).
+    for name, help_ in (("enable", "activate hipercampo for this project"),
+                        ("disable", "deactivate hipercampo for this project")):
+        sp = sub.add_parser(name, help=help_)
+        sp.add_argument("path", nargs="?", help="project directory (default: current)")
+    pr = sub.add_parser("projects", help="where hipercampo is active")
+    pr.add_argument("path", nargs="?", help="project directory (default: current)")
+    pr.add_argument("--json", action="store_true", help="JSON output (for the viewer)")
     sub.add_parser("version", help="installed version")
     for name, hlp in (("assist", "what's needed right now (hooks)"),
                           ("recall", "retrieve"), ("muse", "inspiration"),
