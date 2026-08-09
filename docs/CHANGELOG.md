@@ -5,6 +5,70 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+## [0.1.0b14] — 2026-08-09
+
+### Changed
+- **The package is organised in layers.** `hipercampo/core/` (algebra and encoding),
+  `support/` (paths, logging, budget, warnings), `storage/` (SQLite), `cycle/` (the
+  memory itself). Each layer only looks downwards, which is what keeps the core
+  measurable — and embeddable — on its own. `cli.py` and `server.py` stay at the
+  package root because they are public paths, and `hipercampo.encoder` and
+  `hipercampo.roles` still import exactly as documented; `tests/contracts/
+  test_public_paths.py` holds all of that in place.
+- **Everything a contributor reads is now in English** (package, docs, scripts,
+  viewer, tests). Spanish is deliberately kept where it is the thing under test:
+  the recall corpus, the injection strings that exercise the Spanish patterns in
+  `support/safety.py`, and the viewer's Spanish localisation.
+- **`hc_learn(tipo=…)` is now `hc_learn(kind=…)`** in the MCP tool, with English
+  values (`rule|lesson|decision|preference`). The Python API still accepts `tipo=`
+  and the Spanish values, because those keys are written into stored rows: a plain
+  rename would have quietly filed every existing rule and decision under "lesson".
+
+### Added
+- **Per-project opt-in — hipercampo starts switched off.** Registering the server no
+  longer means it acts: in a project that has not opted in, the hook stays silent and
+  the tools decline with an explanation instead of reading or writing. Enable it with
+  `hipercampo enable`, or from the viewer, which shows the state and toggles it.
+  The unit is the directory, not the namespace — a server registered at user scope
+  carries one namespace, so every project without its own `.mcp.json` shares it.
+  An installation that already holds memories keeps working untouched until the
+  first `enable`/`disable`; `hipercampo projects` reports which state you are in.
+- Faster core: the hypervector bundle and pairwise similarity are vectorised, and
+  the O(N²) maintenance loops no longer decode the same blob per pair. Measured at
+  N=1500: consolidate 21.1s → 6.4s, dream 33.5s → 11.1s, reindex 10.4s → 5.5s.
+
+### Fixed
+- **The token bill was reporting clock seconds.** Log entries begin
+  `YYYY-MM-DD HH:MM:SS tokens `, so the pattern `(\d+) tok` matched `07 tok` — the
+  seconds — and never reached the real figure. Measured on a real log: 5304 reported
+  where the true total was 65451, a 12x under-count of the number this project uses
+  to argue for itself. The viewer's chart had been reading it correctly all along,
+  so the summary and the graph in the same panel disagreed on the same data.
+- **The decision log lost entries to line breaks.** A memory containing a newline
+  split its entry in two; the orphaned half had no timestamp or action and surfaced
+  in the viewer as a "?" row. Newlines are collapsed on write and orphans filtered
+  on read, since the log is append-only.
+- **CI was running zero tests and passing green.** `tests/test_*.py` does not descend
+  into subdirectories, so grouping the suite into folders left it matching nothing.
+  Discovery is now recursive and finding zero tests is an explicit failure. With the
+  suite actually running again, the Windows cell immediately caught a real bug.
+- `forget()` committed the whole connection, so nested inside an atomised write it
+  half-committed the caller's work.
+- `_self_store` carried the `@resilient` decorator, which returns an error dict where
+  a `Store` was expected: a transient database failure became an `AttributeError`
+  instead of the readable message it promised.
+- Four type errors that had `mypy` — and therefore main — red since the restructure.
+
+### Security
+- Every workflow declares `permissions:` explicitly; `pip-audit` now blocks CI
+  (measured clean in a fresh virtualenv); CI tooling is version-bounded; `VSCE_PAT`
+  is no longer passed as a command-line argument, where argv is readable by other
+  processes on the runner.
+- `SECURITY.md` claimed the core contains no `subprocess`. It does, in
+  `support/procs.py`. The usage is safe — argument lists, no `shell=True` anywhere,
+  a constant PowerShell query, PID validated before use — but the sentence was false.
+  Three items listed as pending were already done and are now marked as such.
+
 ### Changed
 - **Viewer redesign (extension v0.9.15) — constellation map, clearer information
   architecture, and a stable simulation.** Map nodes are now colored by cognitive
