@@ -92,6 +92,9 @@ jobs:
         shell: bash
         env:
           PYTHONIOENCODING: utf-8
+          # A test run is not a project: open the per-project opt-in gate for the
+          # suite. Each file runs standalone here, so no conftest is loaded.
+          HIPERCAMPO_FORCE_ENABLED: "1"
         run: |
           set -e
           # DISCOVERY, never a hand-written list: a new test file joins the matrix on its
@@ -132,6 +135,7 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
           HIPERCAMPO_LOG: "0"
+          HIPERCAMPO_FORCE_ENABLED: "1"
         run: |
           set -e
           coverage erase
