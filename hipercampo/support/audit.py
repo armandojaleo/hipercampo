@@ -14,6 +14,7 @@ Readable format, one line per decision:
 """
 
 import os
+import re
 import sys
 import time
 import unicodedata
@@ -65,13 +66,29 @@ def _to_stderr(line: str) -> None:
     print(line, file=sys.stderr, flush=True)
 
 
+def _one_line(value) -> str:
+    """Collapse anything that would break the one-entry-per-line format.
+
+    The log records fragments of what the user wrote, and a memory containing a
+    line break used to split its entry in two: the second half carried no
+    timestamp and no action, so `tail` returned it as an entry of its own and the
+    viewer rendered it as "?". Newlines, carriage returns and tabs become single
+    spaces — the entry stays readable and stays on one line."""
+    text = str(value)
+    for ch in ("\r\n", "\n", "\r", "\t"):
+        text = text.replace(ch, " ")
+    return text.strip()
+
+
 def log(action: str, detail: str = "", **fields) -> None:
     """Logs a decision. Never raises: observability must never break
     anything."""
     if not _ENABLED:
         return
     try:
-        extra = " · ".join(f"{k}={v}" for k, v in fields.items() if v not in (None, ""))
+        extra = " · ".join(f"{k}={_one_line(v)}" for k, v in fields.items()
+                           if v not in (None, ""))
+        detail = _one_line(detail)
         line = f"{time.strftime('%H:%M:%S')} {action:<9} {detail}"
         if extra:
             line += f" · {extra}"
@@ -82,6 +99,14 @@ def log(action: str, detail: str = "", **fields) -> None:
                         f"{' · ' + extra if extra else ''}\n")
     except Exception:
         pass
+
+
+_ENTRY = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \S")
+
+
+def _is_entry(line: str) -> bool:
+    """A real entry starts with 'YYYY-MM-DD HH:MM:SS ' and an action."""
+    return bool(_ENTRY.match(line))
 
 
 def tail(n: int = 20, contains: str | None = None, today_only: bool = False,
@@ -97,6 +122,11 @@ def tail(n: int = 20, contains: str | None = None, today_only: bool = False,
         lines = _PATH.read_text(encoding="utf-8", errors="replace").splitlines()
     except Exception:
         return []
+    # Drop anything that is not a real entry. Writing now collapses newlines, but a
+    # log written before that fix still holds orphaned continuation lines, and they
+    # would keep showing up as entries with no action — the "?" rows in the viewer.
+    # Reading is where old files get cleaned up, since the log is append-only.
+    lines = [ln for ln in lines if _is_entry(ln)]
     if today_only:
         today = time.strftime("%Y-%m-%d")
         lines = [ln for ln in lines if ln.startswith(today)]
@@ -139,7 +169,13 @@ def token_cost() -> dict:
     today = time.strftime("%Y-%m-%d")
     total = today_total = turns = saved = 0
     for ln in tail(0, action="tokens"):
-        m = re.search(r"(\d+) tok", ln)
+        # Search the MESSAGE, never the whole line. Every entry here starts
+        # "YYYY-MM-DD HH:MM:SS tokens ", so `(\d+) tok` found "07 tok" — the
+        # SECONDS of the clock followed by the action column — before ever
+        # reaching the real figure. The bill, which is this project's whole
+        # transparency argument, was reporting wall-clock seconds as tokens.
+        message = ln[20:].split(" ", 1)[1] if " " in ln[20:] else ""
+        m = re.search(r"(\d+) tok", message)
         if not m:
             continue
         n = int(m.group(1))
@@ -147,7 +183,11 @@ def token_cost() -> dict:
         turns += 1
         if ln.startswith(today):
             today_total += n
-        original = re.search(r"\(de (\d+)", ln)      # what was trimmed off
+        # "(of N)" is what the hook writes today; "(de N)" is what it wrote before
+        # the translation. Both are accepted because a real log spans the change,
+        # and matching only the new one silently reported zero savings — the whole
+        # point of this counter is to show the budget doing its job.
+        original = re.search(r"\((?:of|de) (\d+)", ln)      # what was trimmed off
         if original:
             saved += max(0, int(original.group(1)) - n)
     return {"total": total, "today": today_total, "injections": turns,

@@ -181,6 +181,60 @@ def test_log_explains_why_not_only_what():
     Path(_LOG).unlink(missing_ok=True)
 
 
+# --- one entry per line, whatever the user wrote ----------------------------
+def test_a_newline_in_the_text_does_not_split_the_entry():
+    """The log records fragments of what the user wrote. A memory containing a
+    line break used to split its entry in two, and the orphaned half — no
+    timestamp, no action — came back from `tail` as an entry of its own, which the
+    viewer rendered as a "?" row. Found in a real log: two of them."""
+    audit = _audit_activo(_LOG)
+    audit.log("remember", "first line\nsecond line", text="a\nb\tc")
+    lines = audit.tail(0)
+    assert len(lines) == 1, f"the entry was split across {len(lines)} lines: {lines}"
+    assert "first line second line" in lines[0], lines[0]
+    assert "a b c" in lines[0], lines[0]
+
+
+def test_orphan_lines_in_an_older_log_are_ignored():
+    """The log is append-only, so a file written before the fix still holds
+    orphaned lines. Reading is where they are filtered out; otherwise the viewer
+    keeps showing "?" rows for entries that do not exist."""
+    audit = _audit_activo(_LOG)
+    audit.log("recall", "a well-formed entry")
+    with open(_LOG, "a", encoding="utf-8") as f:
+        f.write("an orphaned continuation line with no timestamp\n\n")
+    lines = audit.tail(0)
+    assert len(lines) == 1, lines
+    assert "well-formed" in lines[0], lines[0]
+
+
+def test_the_bill_counts_tokens_and_not_clock_seconds():
+    """Every entry here begins "YYYY-MM-DD HH:MM:SS tokens ", so searching the
+    whole line for `(\\d+) tok` matched "07 tok" — the SECONDS of the clock
+    followed by the action column — and never reached the real figure. Measured on
+    a real log: it reported 5304 tokens where the true total was 65451, a 12x
+    under-count of the one number this project uses to argue for itself.
+
+    The tell was there all along: the viewer's chart reads the message and was
+    right, while the summary above it read the whole line and was wrong, on the
+    same data in the same panel."""
+    audit = _audit_activo(_LOG)
+    audit.log("tokens", "injected 350 tok")
+    cost = audit.token_cost()
+    assert cost["total"] == 350, f"counted {cost['total']}, probably the seconds"
+
+
+def test_the_savings_counter_reads_both_spellings():
+    """`token_cost` matched "(de N)" while the hook had started writing "(of N)"
+    after the translation, so the savings counter silently reported zero. A real
+    log spans the change, so both are accepted: 10049 tokens had gone uncounted."""
+    audit = _audit_activo(_LOG)
+    audit.log("tokens", "injected 100 tok (of 250, budget 350)")
+    audit.log("tokens", "injected 100 tok (de 250)")
+    saved = audit.token_cost()["saved_by_budget"]
+    assert saved == 300, f"expected 150 per line, got {saved}"
+
+
 if __name__ == "__main__":
     clean()
     codigo = run_tests(dict(globals()))
