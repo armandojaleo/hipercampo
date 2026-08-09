@@ -112,7 +112,13 @@ jobs:
           # Neither `mapfile` (bash 4+, and macOS ships 3.2) nor `find` (on Windows it can
           # resolve to System32's find.exe): Python is the only thing that behaves the same
           # on all three platforms, and it is trustworthy here because it is what we test.
-          TESTS=$(python -c "import pathlib; [print(p.as_posix()) for p in sorted(pathlib.Path('tests').rglob('test_*.py'))]")
+          #
+          # `tr -d` strips carriage returns: on Windows, Python's print turns LF into
+          # CRLF, and `read -r` removes only the LF — leaving the CR stuck to the path,
+          # so python reports "can't open file '...test_x.py<CR>'". Caught by the Windows
+          # cell the first time this step actually ran anything, which is the whole
+          # argument for keeping Windows and macOS in the matrix.
+          TESTS=$(python -c "import pathlib; [print(p.as_posix()) for p in sorted(pathlib.Path('tests').rglob('test_*.py'))]" | tr -d '\r')
           COUNT=$(printf '%s\n' "$TESTS" | sed '/^$/d' | wc -l | tr -d '[:space:]')
           echo "Test files found: $COUNT"
           # Making "I found no tests" a FAILURE rather than a silence is the important
@@ -140,7 +146,7 @@ jobs:
           set -e
           coverage erase
           # Same recursive discovery as the step above (the why is documented there).
-          TESTS=$(python -c "import pathlib; [print(p.as_posix()) for p in sorted(pathlib.Path('tests').rglob('test_*.py'))]")
+          TESTS=$(python -c "import pathlib; [print(p.as_posix()) for p in sorted(pathlib.Path('tests').rglob('test_*.py'))]" | tr -d '\r')
           COUNT=$(printf '%s\n' "$TESTS" | sed '/^$/d' | wc -l | tr -d '[:space:]')
           echo "Test files found: $COUNT"
           if [ "$COUNT" -eq 0 ]; then
