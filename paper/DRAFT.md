@@ -30,10 +30,39 @@ epistemic separation of confirmed knowledge from hypotheses; (5) auditability as
 first-class property.
 
 ## 2. Related work
-Agent-memory systems (Mem0, MemGPT/Letta, Zep/Graphiti), retrieval-augmented generation,
-and vector databases; vector-symbolic / hyperdimensional computing (Kanerva's sparse
-distributed memory, Plate's holographic reduced representations); hippocampal models of
-consolidation and forgetting. *(To expand with a head-to-head comparison — Section 4.4.)*
+**Agent-memory systems.** Mem0, MemGPT/Letta, and Zep/Graphiti all wrap an LLM around a
+retrieval store: Mem0 extracts and updates facts with an LLM-driven summarizer; Letta
+(formerly MemGPT) pages memory in and out of the context window like a virtual-memory
+manager; Zep/Graphiti build a temporal knowledge graph and rely on an LLM to resolve
+entities and edges. All three improve on plain RAG, and all three still rank primarily by
+embedding similarity and lean on an LLM call to decide what persists. Hipercampo instead
+gates writing with a measurable, model-free signal (compression/MDL) and encodes structure
+algebraically (role-filler binding) rather than through LLM-mediated graph construction —
+cheaper per write, and auditable without re-asking a model why it wrote something.
+
+**Retrieval-augmented generation and vector databases** (FAISS, pgvector, and the RAG
+literature generally) answer "what is similar to this query," full stop: no notion of
+importance, no decay, no distinction between a fact and its later contradiction. Hipercampo
+is not a RAG replacement — a `hc_recall` call can be RAG's retrieval step — but it adds the
+axes RAG omits (novelty, importance, reliability, utility) and a temporal-validity model RAG
+does not have.
+
+**Vector-symbolic / hyperdimensional computing.** Kanerva's Sparse Distributed Memory and
+Plate's Holographic Reduced Representations established that binary or bipolar hypervectors
+support algebraic composition (`bind`/`bundle`/`permute`) that dense embeddings do not:
+order and role survive the encoding instead of blurring into an average. Hipercampo applies
+that algebra to agent memory specifically — role-records with temporal validity, and a
+navigable index built from the same hypervectors rather than a separate ANN structure.
+MnemoCore is, to our knowledge, the closest prior use of HDC for agent memory; it does not
+integrate surprise-gating, sleep consolidation, or active forgetting into a single cycle.
+
+**Hippocampal models of consolidation and forgetting.** The systems-consolidation account
+(hippocampus writes fast, cortex integrates slowly during replay) and adaptive-forgetting
+models (retention as a function of use and value, not just elapsed time) motivate
+hipercampo's `sleep`/`forget` mechanisms directly; Section 3 states which parts are a
+structural analogy (grouping, decay) versus which are literal borrowings (none — no
+biological simulation is claimed). *(Head-to-head numbers against Mem0/Letta/Zep on a shared
+benchmark are Section 4.4, still pending — see the evidence table in OUTLINE.md.)*
 
 ## 3. System
 Text is encoded into 10,000-bit hypervectors (bind/bundle/permute). A **surprise gate**
@@ -108,11 +137,54 @@ Open source (MIT core), CI on Windows/macOS/Linux × Python 3.11–3.13 with ruf
 coverage, and blocking benchmarks; installable from PyPI; every number above regenerates
 from a named script.
 
-## 6. Conclusion
+## 6. Limitations
+Stated plainly, and not deferred to an appendix:
+
+- **Encoding ceiling, not a navigation ceiling.** The base encoder is lexical
+  (character trigrams); it nails keyword and typo queries but caps around 0.20–0.29 on
+  conceptual synonyms. An optional semantic hook (SimHash over a dense embedding) recovers
+  most of that gap (0.75–0.90 MRR) at the cost of a model download — the core stays
+  embedding-free by design, and this is a deliberate trade-off, not an oversight.
+- **False recall is not zero at scale.** It reads 0.00 on a small synthetic corpus (N=20)
+  but settles at 0.17 (lexical) / ~0.10 (semantic) on an N=500 sweep — still on par with
+  embeddings' cosine cutoff, not better, once the corpus is large enough to have a real
+  noise floor.
+- **Temporal correctness is 0.733, not 1.0.** The gap is VSA cross-entity confusion among
+  historically-valid facts at query time — a real limit of the algebra at the tested scale,
+  not a bug to be patched away quietly.
+- **Not yet validated past 100k memories.** The navigable-graph index is measured sublinear
+  at 100k (≈1.09% of nodes visited); whether that holds at 1M is an open question, not an
+  extrapolated claim.
+- **The longitudinal result is v1, at modest scale.** 1,844 events over 120 entities and 6
+  simulated months is a first result, not a stress test; a larger run (more entities, more
+  months) is the natural next step before the numbers should be treated as representative.
+- **No standard-benchmark head-to-head yet.** The LongMemEval adapter exists and separates
+  evidence-session recall from LLM-judged answer quality, but the full 500-instance run
+  against Mem0/Letta/Zep/RAG has not been published. Until it is, "competitive with
+  embeddings" rests on the baseline comparison in Section 4.2, not on a shared benchmark.
+- **No real-use A/B.** Every number here comes from scripted benchmarks and simulations;
+  a multi-month dogfooding comparison (agent with vs. without hipercampo) has not been run.
+
+## 7. Conclusion
 Hipercampo is a step toward memory that an agent can rely on over time and a human can
 audit: it knows what is current, forgets noise without losing signal, and never confuses a
 hypothesis with a fact. The remaining work is evidence at scale — standard-benchmark
 comparisons and a longitudinal study — not more mechanism.
+
+## References
+- P. Kanerva. "Sparse Distributed Memory." MIT Press, 1988.
+- P. Kanerva. "Hyperdimensional Computing: An Introduction to Computing in Distributed
+  Representation with High-Dimensional Random Vectors." Cognitive Computation, 2009.
+- T. A. Plate. "Holographic Reduced Representations." IEEE Transactions on Neural
+  Networks, 1995.
+- M. Hutter. "Universal Artificial Intelligence: Sequential Decisions Based on
+  Algorithmic Probability." Springer, 2005. (compression-as-intelligence / MDL framing)
+- J. L. McClelland, B. L. McNaughton, R. C. O'Reilly. "Why There Are Complementary
+  Learning Systems in the Hippocampus and Neocortex." Psychological Review, 1995.
+  (systems consolidation)
+- Mem0 (mem0.ai) — LLM-driven fact extraction and updating for agent memory.
+- MemGPT / Letta (letta.com) — paged virtual-context memory management for LLM agents.
+- Zep / Graphiti (getzep.com) — temporal knowledge-graph memory for agents.
 
 ---
 *Attribution: framing sharpened by an external review (ChatGPT, Aug 2026); see ROADMAP.*

@@ -69,9 +69,11 @@ python scripts/demo.py
 You'll see the algebra distinguishing word order and the full cycle
 (surprise → recall → sleep → forget) working.
 
-**Real use cases** in [`examples/`](examples/): a personal assistant that remembers
-across sessions, a project knowledge base with role queries, and creative
-brainstorming where forgotten memories resurface.
+**Real use cases** in [`examples/`](examples/) — 7 runnable scripts: a personal
+assistant that remembers across sessions, a project knowledge base with role
+queries, creative brainstorming where forgotten memories resurface, temporal facts
+with history, linked projects that read without writing, and the full dream →
+confirm loop.
 
 **See your memory** without leaving the editor: the VS Code viewer in
 [`editor/`](editor/) has four tabs — a **list** of cards, the associative **map**

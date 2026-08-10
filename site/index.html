@@ -237,13 +237,159 @@
   </section>
 
   <section>
+    <p class="label">Tools every agent gains</p>
+    <table class="ledger">
+      <tr><th>tool</th><th>for</th></tr>
+      <tr>
+        <td class="idea">hc_remember</td>
+        <td class="what">Store something, if it's novel or surprising enough to pass
+        the gate. <code>importance</code> protects from forgetting; <code>confidence</code>
+        weights ranking.</td>
+      </tr>
+      <tr>
+        <td class="idea">hc_recall</td>
+        <td class="what">Retrieve by similarity and spreading activation — and it can
+        <strong>abstain</strong>, returning nothing rather than guessing.</td>
+      </tr>
+      <tr>
+        <td class="idea">hc_muse</td>
+        <td class="what">Creative recall: surfaces indirect connections and dormant
+        memories that resurface to tie ideas together.</td>
+      </tr>
+      <tr>
+        <td class="idea">hc_dream</td>
+        <td class="what">Creative sleep: proposes bridges between memories that share
+        a common associate — staged as hypotheses, never live until confirmed.</td>
+      </tr>
+      <tr>
+        <td class="idea">hc_remember_fact</td>
+        <td class="what">Store a structured <code>subject/predicate/object</code> fact.
+        A superseding fact doesn't delete the old one — it closes its validity and the
+        old value becomes history.</td>
+      </tr>
+      <tr>
+        <td class="idea">hc_ask_role</td>
+        <td class="what">Ask for a field knowing the others — "who bites the man?" —
+        by unbinding. Answers what's true now, or, with <code>days_ago</code>, what was
+        true then.</td>
+      </tr>
+      <tr>
+        <td class="idea">hc_consolidate / hc_forget</td>
+        <td class="what">Sleep and active forgetting on demand. <code>hc_forget(dry_run=True)</code>
+        rehearses what would go dormant without touching anything.</td>
+      </tr>
+    </table>
+    <p style="margin-top:1rem">18 tools total; only the 6 daily ones are announced by
+    default so tool descriptions don't tax every request — the rest activate hot,
+    on first use.</p>
+  </section>
+
+  <section>
+    <p class="label">Scale &amp; latency — measured</p>
+    <table class="ledger">
+      <tr><th>corpus</th><th>quality</th><th>p95</th><th>visited</th></tr>
+      <tr>
+        <td class="idea">655 real Python stdlib docs</td>
+        <td class="what">navigate-vs-scan fidelity 1.000</td>
+        <td class="what">CI-gated</td>
+        <td class="what">42.6%</td>
+      </tr>
+      <tr>
+        <td class="idea">10,000 structured memories</td>
+        <td class="what">precision@5 1.000</td>
+        <td class="what">~2.2 ms</td>
+        <td class="what">1.751%</td>
+      </tr>
+      <tr>
+        <td class="idea">100,000 structured memories</td>
+        <td class="what">group precision@5 1.000</td>
+        <td class="what">6.94 ms</td>
+        <td class="what">1.094%</td>
+      </tr>
+    </table>
+    <p style="margin-top:1rem">At 100k the resident index is 141.5 MB; cold
+    construction takes 7.46 s, warm reuse 0.073 ms. Reproduce with
+    <code>scripts/nav_scale.py</code> and <code>scripts/nav_real.py --check</code>.</p>
+  </section>
+
+  <section>
+    <p class="label">What it costs you — measured in tokens</p>
+    <table class="ledger">
+      <tr><th>source</th><th>cost</th><th>when</th></tr>
+      <tr>
+        <td class="idea">announced tools (6, default)</td>
+        <td class="what">~810 tok</td>
+        <td class="what">every request</td>
+      </tr>
+      <tr>
+        <td class="idea">with HIPERCAMPO_TOOLS=all (18)</td>
+        <td class="what">~2,070 tok</td>
+        <td class="what">every request</td>
+      </tr>
+      <tr>
+        <td class="idea">hook injection</td>
+        <td class="what">≤350 tok</td>
+        <td class="what">only on turns that fire</td>
+      </tr>
+    </table>
+    <p style="margin-top:1rem">The expensive part was never the memory — it's tool
+    descriptions traveling in every request whether or not they're called. Measured
+    end to end over a 30-turn session: <strong style="color:var(--paper)">87k → 26k
+    tokens</strong>.</p>
+  </section>
+
+  <section class="stat">
+    <p class="stat-num">0.0<span>00</span></p>
+    <p class="stat-cap">contradiction rate answering superseded facts, vs 0.708 for a
+    store-everything baseline — a six-month simulated agent memory, 1,844 events.
+    Temporal validity means a new fact closes the old one instead of leaving two
+    truths in the graph.</p>
+  </section>
+
+  <section>
+    <p class="label">Contexts stay separate, on purpose</p>
+    <p>All memory lives in a single file; namespaces are drawers inside it. You write
+    to your own and read from the ones you link — what's linked is read, never
+    touched.</p>
+    <pre>~/.hipercampo/hipercampo.db
+├── __self__        the agent's working identity
+├── personal        who you are
+├── proj-webshop  ══&gt; you write here while working on the shop
+└── proj-blog     ──&gt; you read it, but never touch it</pre>
+    <p>Local isolation, not multi-user security — hipercampo is local-first by
+    design, and stays that way. Full map in
+    <a href="https://github.com/armandojaleo/hipercampo/blob/main/docs/INSTALL.md">INSTALL.md</a>.</p>
+  </section>
+
+  <section>
+    <p class="label">Honest positioning</p>
+    <p>hipercampo did not invent hyperdimensional computing — VSA dates to the '90s
+    (Kanerva, Plate) — nor is it the first attempt at agent memory (Mem0, Letta,
+    Graphiti, MemGPT). What's original is the specific combination: VSA algebra +
+    surprise (MDL) + consolidation + forgetting + four independent axes, exposed as
+    an MCP server, treating memory as a cycle rather than a store. We don't claim to
+    beat embedding-based hybrid memories — we explore a different paradigm, with its
+    limits measured and stated, not buried.</p>
+  </section>
+
+  <section>
+    <p class="label">This is a beta</p>
+    <p>Local-first with no telemetry means nothing phones home — which also means
+    your feedback is the only signal we get. Open a
+    <a href="https://github.com/armandojaleo/hipercampo/issues/new?template=beta_feedback.yml">beta feedback issue</a>
+    for what worked and what rubbed, or a
+    <a href="https://github.com/armandojaleo/hipercampo/issues/new?template=bug_report.yml">bug report</a>
+    for what broke. No account-tracking, no analytics — just issues, PRs, and stars.</p>
+  </section>
+
+  <section>
     <p class="label">Read further</p>
     <ul class="index-list">
       <li><a href="https://github.com/armandojaleo/hipercampo#readme">README</a><span class="n">en</span></li>
       <li><a href="https://github.com/armandojaleo/hipercampo/blob/main/docs/README.es.md">README</a><span class="n">es</span></li>
       <li><a href="https://github.com/armandojaleo/hipercampo/blob/main/paper/DRAFT.md">Paper — working draft</a><span class="n">pdf soon</span></li>
       <li><a href="https://github.com/armandojaleo/hipercampo/tree/main/docs">Docs</a><span class="n">install · roadmap</span></li>
-      <li><a href="https://github.com/armandojaleo/hipercampo/tree/main/examples">Examples</a><span class="n">3 walkthroughs</span></li>
+      <li><a href="https://github.com/armandojaleo/hipercampo/tree/main/examples">Examples</a><span class="n">7 walkthroughs</span></li>
     </ul>
   </section>
 
