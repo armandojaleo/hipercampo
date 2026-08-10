@@ -3,9 +3,11 @@
   "ext.description": "Explore Hipercampo memory from VS Code: map, timeline, facts, ideas, token cost and health (local-first, no network).",
   "cmd.showMemories": "Hipercampo: view memories",
   "cmd.refresh": "Hipercampo: refresh memories",
+  "cmd.editLinked": "Hipercampo: edit linked contexts",
   "view.home": "Memory",
   "config.command": "hipercampo executable. If it isn't on PATH, put the full path, or \"python -m hipercampo.cli\".",
   "config.dbPath": "Path to the .db file (HIPERCAMPO_DB). Empty = whatever hipercampo uses by default.",
   "config.namespace": "Context to show (HIPERCAMPO_NAMESPACE). Empty = \"default\". Ignored when \"all contexts\" is on.",
-  "config.allNamespaces": "Show the whole file, not just one context."
+  "config.allNamespaces": "Show the whole file, not just one context.",
+  "config.linked": "Other contexts this one can read from (HIPERCAMPO_LINKED). Empty = none, \"*\" = all, or a comma-separated list like \"proj-blog,proj-docs\". Edit it from the viewer with the 🔗 button instead of a JSON file."
 }

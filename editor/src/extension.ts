@@ -62,8 +62,12 @@ function childEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   const db = (cfg().get<string>("dbPath") || "").trim();
   const ns = (cfg().get<string>("namespace") || "").trim();
+  const linked = cfg().get<string>("linked");
   if (db) env.HIPERCAMPO_DB = db;
   if (ns) env.HIPERCAMPO_NAMESPACE = ns;
+  // An explicit empty string means "no linked contexts", overriding whatever the
+  // MCP server's own env has; only an untouched (undefined) setting leaves it alone.
+  if (linked !== undefined) env.HIPERCAMPO_LINKED = linked;
   return env;
 }
 
@@ -208,6 +212,24 @@ async function chooseDatabase(): Promise<boolean> {
   if (!file) return false;
   await cfg().update("dbPath", file, vscode.ConfigurationTarget.Global);
   vscode.window.showInformationMessage(text.activeMemory(file));
+  return true;
+}
+
+/** Edit HIPERCAMPO_LINKED without hand-editing .mcp.json or ~/.claude.json: this is
+ * the only per-server setting the viewer's own config surface can safely change
+ * (it just writes VS Code settings, same as dbPath/namespace above). */
+async function editLinked(): Promise<boolean> {
+  const text = hostMessages(vscode.env.language);
+  const current = cfg().get<string>("linked") || "";
+  const value = await vscode.window.showInputBox({
+    prompt: text.editLinkedPrompt,
+    placeHolder: text.editLinkedPlaceholder,
+    value: current,
+  });
+  if (value === undefined) return false;   // Cancelled: leave the setting untouched.
+  const trimmed = value.trim();
+  await cfg().update("linked", trimmed, vscode.ConfigurationTarget.Global);
+  vscode.window.showInformationMessage(text.linkedUpdated(trimmed));
   return true;
 }
 /** Move a memory to another context (curation). Ask for an existing or new destination.
@@ -467,6 +489,9 @@ export function activate(context: vscode.ExtensionContext) {
       { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand("hipercampo.showMemories", () => Panel.show(context)),
     vscode.commands.registerCommand("hipercampo.refresh", () => Panel.refresh()),
+    vscode.commands.registerCommand("hipercampo.editLinked", async () => {
+      if (await editLinked()) { resolved = undefined; Panel.refresh(); }
+    }),
   );
 }
 

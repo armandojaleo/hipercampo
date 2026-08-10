@@ -16,6 +16,9 @@ export interface HostMessages {
   statusTooltip: string;
   statusValue: (saved: string) => string;
   valueTooltip: (served: number, injected: number, saved: number, today: number) => string;
+  editLinkedPrompt: string;
+  editLinkedPlaceholder: string;
+  linkedUpdated: (value: string) => string;
 }
 
 const MESSAGES: Record<"en" | "es", HostMessages> = {
@@ -43,6 +46,11 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
       `Memory served ${served} times · ~${injected} tokens injected`
       + ` · ~${saved} kept lean by the budget · ${today} today.`
       + `\nEstimates (Claude's tokenizer isn't public). Click to open the viewer.`,
+    editLinkedPrompt: "Linked contexts (HIPERCAMPO_LINKED)",
+    editLinkedPlaceholder: "Empty = none, \"*\" = all, or \"proj-blog,proj-docs\"",
+    linkedUpdated: (value) => value
+      ? `Linked contexts updated: ${value}`
+      : "Linked contexts cleared: this context no longer reads from others.",
   },
   es: {
     commandNotFound: "No se encontró 'hipercampo' ni 'python -m hipercampo.cli'. "
@@ -68,6 +76,11 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
       `Memoria servida ${served} veces · ~${injected} tokens inyectados`
       + ` · ~${saved} recortados por el presupuesto · ${today} hoy.`
       + `\nEstimaciones (el tokenizador de Claude no es público). Clic para abrir el visor.`,
+    editLinkedPrompt: "Contextos enlazados (HIPERCAMPO_LINKED)",
+    editLinkedPlaceholder: "Vacío = ninguno, «*» = todos, o «proj-blog,proj-docs»",
+    linkedUpdated: (value) => value
+      ? `Contextos enlazados actualizados: ${value}`
+      : "Contextos enlazados vaciados: este contexto ya no lee de otros.",
   },
 };
 

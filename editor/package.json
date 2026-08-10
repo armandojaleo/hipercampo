@@ -55,6 +55,11 @@
         "command": "hipercampo.refresh",
         "title": "%cmd.refresh%",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "hipercampo.editLinked",
+        "title": "%cmd.editLinked%",
+        "icon": "$(link)"
       }
     ],
     "viewsContainers": {
@@ -79,6 +84,11 @@
       "view/title": [
         {
           "command": "hipercampo.showMemories",
+          "when": "view == hipercampo.home",
+          "group": "navigation"
+        },
+        {
+          "command": "hipercampo.editLinked",
           "when": "view == hipercampo.home",
           "group": "navigation"
         }
@@ -106,6 +116,11 @@
           "type": "boolean",
           "default": true,
           "description": "%config.allNamespaces%"
+        },
+        "hipercampo.linked": {
+          "type": "string",
+          "default": "",
+          "description": "%config.linked%"
         }
       }
     }
