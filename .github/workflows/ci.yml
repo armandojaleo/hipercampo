@@ -154,6 +154,31 @@ jobs:
             echo "::endgroup::"
           done <<< "$TESTS"
 
+      # On EVERY platform, not just Linux. This ran on ubuntu-latest alone and hid a
+      # Windows file-lock bug in two examples for as long as they existed: POSIX
+      # unlinks an open file happily, Windows raises WinError 32. Seven examples,
+      # about five seconds — the cheapest coverage in this file.
+      - name: Usage examples (smoke)
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+          HIPERCAMPO_LOG: "0"
+        run: |
+          set -e
+          shopt -s nullglob
+          EXAMPLES=(examples/*.py)
+          echo "Examples found: ${#EXAMPLES[@]}"
+          # Same rule as test discovery: finding none is a failure, not a silence.
+          if [ "${#EXAMPLES[@]}" -eq 0 ]; then
+            echo "::error::no examples were found"
+            exit 1
+          fi
+          for e in "${EXAMPLES[@]}"; do
+            echo "::group::$e"
+            python "$e"
+            echo "::endgroup::"
+          done
+
       # Coverage with a FLOOR: below 78% the build fails. We do not chase 100% (some
       # branches only happen on hardware failures); we chase not regressing.
       - name: Coverage
@@ -219,6 +244,9 @@ jobs:
         env:
           HIPERCAMPO_LOG: "0"
         run: python scripts/context_efficiency.py --check
-      - name: Usage examples (smoke)
-        run: |
-          for e in examples/*.py; do echo "== $e =="; python "$e"; done
+      # The examples smoke test moved to the multi-platform `test` job: it used to
+      # run here, on ubuntu-latest only, and that hid a real bug. Two examples
+      # closed `hc.store.close()` instead of `hc.close()`, leaving the identity
+      # store's connection open; POSIX unlinks an open file without complaint, so
+      # Linux never noticed, while Windows failed with WinError 32. Seven examples
+      # take about five seconds, which is a cheap price for covering all three.
