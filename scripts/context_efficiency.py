@@ -166,6 +166,62 @@ def evaluate_local(report: dict, thresholds: dict | None = None) -> list[str]:
     ]
 
 
+def _subsample(data: list[dict], limit: int) -> list[dict]:
+    """A subset that keeps the mix of question types, NEVER the first N.
+
+    `data[:limit]` looks like an innocent way to run a cheap subset, and it is a
+    trap here: LongMemEval ships grouped by question_type, so the first 10
+    instances are ten `single-session-user` questions and not one abstention
+    case. Measured that way the adapter reported a flawless recall@5 = 1.0 with
+    `abstention=None` — a perfect score for the easiest sixth of the benchmark,
+    presented as if it were the benchmark.
+
+    So the subset is stratified: each type contributes in proportion, and every
+    type present in the corpus survives if the budget allows it. Deterministic,
+    no seed, so two runs of the same size are comparable.
+    """
+    if limit >= len(data):
+        return list(data)
+    # Stratify by type AND by abstention. Grouping on question_type alone is not
+    # enough: the `_abs` instances sit at the END of each type's block, so taking
+    # the head of every bucket still selected zero of them at n=60 — the same
+    # bias one level down, and it silences the abstention metric entirely.
+    groups: dict[str, list[dict]] = {}
+    for instance in data:
+        kind = str(instance.get("question_type", "unknown"))
+        abstains = str(instance.get("question_id", "")).endswith("_abs")
+        groups.setdefault(f"{kind}{'/abs' if abstains else ''}", []).append(instance)
+    # Proportional (largest remainder), with a floor of one per bucket. Plain
+    # round-robin was the first attempt and it overshot in the other direction:
+    # equal weight per bucket turned 6% abstention questions into 42% of the
+    # sample. Proportional keeps the corpus mix; the floor keeps a small category
+    # from being rounded out of existence.
+    order = sorted(groups)
+    total = len(data)
+    floor_each = 1 if limit >= len(order) else 0
+    quotas: dict[str, int] = {}
+    remainders: list[tuple[float, str]] = []
+    for name in order:
+        exact = limit * len(groups[name]) / total
+        quotas[name] = max(floor_each, min(int(exact), len(groups[name])))
+        remainders.append((exact - int(exact), name))
+    # Hand out (or claw back) the slots left over by the flooring above.
+    spare = limit - sum(quotas.values())
+    for _, name in sorted(remainders, reverse=True):
+        if spare == 0:
+            break
+        if spare > 0 and quotas[name] < len(groups[name]):
+            quotas[name] += 1
+            spare -= 1
+        elif spare < 0 and quotas[name] > floor_each:
+            quotas[name] -= 1
+            spare += 1
+    selected: list[dict] = []
+    for name in order:
+        selected.extend(groups[name][:quotas[name]])
+    return selected[:limit]
+
+
 def load_longmemeval(path: str | Path, limit: int | None = None) -> list[dict]:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, list):
@@ -174,7 +230,7 @@ def load_longmemeval(path: str | Path, limit: int | None = None) -> list[dict]:
         "question_id", "question", "haystack_session_ids",
         "haystack_sessions", "answer_session_ids",
     }
-    selected = data[:limit] if limit is not None else data
+    selected = _subsample(data, limit) if limit is not None else data
     for index, instance in enumerate(selected):
         if not isinstance(instance, dict) or not required <= set(instance):
             missing = required - set(instance) if isinstance(instance, dict) else required
@@ -207,6 +263,25 @@ def _map_session(hc: Hipercampo, result: dict, session_id, mapping: dict[int, ob
 def run_longmemeval(path: str | Path, limit: int | None = None,
                     k: int = 5) -> dict:
     instances = load_longmemeval(path, limit)
+    # Progress on stderr, so stdout stays a clean report. This run takes HOURS —
+    # about 50 sessions and half a megabyte of text are ingested per instance —
+    # and it used to print nothing until the end. A three-hour job with no signal
+    # cannot be told apart from a hung one: the first attempt was left running
+    # blind, and "how far along is it" had no answer other than guessing from CPU
+    # time. Anything this slow has to say where it is.
+    started = time.perf_counter()
+
+    def _progress(done: int) -> None:
+        elapsed = time.perf_counter() - started
+        rate = elapsed / done
+        # ASCII only. The first version separated the fields with "·" and the
+        # Windows console printed "Â·": stderr there is not UTF-8 unless someone
+        # sets PYTHONIOENCODING, and progress output is exactly the thing nobody
+        # sets it for. A status line has no business needing an encoding.
+        print(f"  [{done:>4}/{len(instances)}] {elapsed / 60:6.1f} min elapsed | "
+              f"{rate:5.1f} s/instance | ~{rate * (len(instances) - done) / 60:6.1f} min left",
+              file=sys.stderr, flush=True)
+
     recalls = []
     abstentions = []
     latencies = []
@@ -244,6 +319,7 @@ def run_longmemeval(path: str | Path, limit: int | None = None,
                 answered_tokens.append(float(cost))
             hc.close()
             config.paused = previous_paused
+            _progress(index + 1)
         return {
             "dataset": "LongMemEval",
             "instances": len(instances),
@@ -252,6 +328,10 @@ def run_longmemeval(path: str | Path, limit: int | None = None,
             "k": k,
             "payload_tokens": {
                 "mean": statistics.mean(tokens) if tokens else 0.0,
+                # p50 was missing while the report asked for it with
+                # `.get("p50", 0)`, so every LongMemEval run printed a confident
+                # "p50=0 tokens" that was the default, not a measurement.
+                "p50": statistics.median(tokens) if tokens else 0.0,
                 "p95": percentile(tokens, 0.95),
                 "estimated": is_estimate(),
                 "method": method(),
@@ -281,7 +361,9 @@ def print_report(report: dict) -> None:
     else:
         print(f"recall@{report['k']}={report['retrieval_recall_at_k']} · "
               f"abstention={report['abstention_accuracy']}")
-    print(f"context: p50={report['payload_tokens'].get('p50', 0):.0f} "
+    # No `.get` default here: a missing key must explode, not print a plausible
+    # zero. That is how "p50=0 tokens" survived unnoticed in every run.
+    print(f"context: p50={report['payload_tokens']['p50']:.0f} "
           f"p95={report['payload_tokens']['p95']:.0f} tokens · "
           f"latency p50={report['latency_ms']['p50']:.2f}ms "
           f"p95={report['latency_ms']['p95']:.2f}ms")
