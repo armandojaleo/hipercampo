@@ -116,7 +116,12 @@ def test_consolidation_does_not_absorb_foreign_text():
     hc.remember("los hipervectores de diez mil bits toleran mucho ruido", 0.6)
     hc.remember("los hipervectores se comparan con distancia de Hamming", 0.6)
     hc.consolidate()
-    for r in hc.store.all(kind="semantic", only_active=False):
+    semanticos = hc.store.all(kind="semantic", only_active=False)
+    # Sin esta guardia el test es MUDO: si la consolidación no produjera nada, el
+    # bucle no itera, no falla nada y el aislamiento entre proyectos queda sin
+    # comprobar. Ya ocurrió una vez con la comprobación de capas.
+    assert semanticos, "no hubo consolidación: no hay nada que comprobar"
+    for r in semanticos:
         assert "IIS" not in r["text"], "un semántico propio absorbió texto ajeno"
         assert r["namespace"] == "hipercampo"
     hc.store.close()

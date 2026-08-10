@@ -75,6 +75,10 @@ def test_consolidation_does_not_chain_dissimilar_items():
     hc.consolidate()
     # The grouped semantic memory must not mix the annual report with failures.
     sem = [r["text"] for r in hc.store.all(only_active=False) if r["kind"] == "semantic"]
+    # Without this guard the test is MUTE: no consolidation means no iterations,
+    # nothing fails, and greedy chaining goes unchecked. The `if` inside makes it
+    # worse — even with results, none containing "fallo" asserts nothing.
+    assert any("fallo" in s for s in sem), "nothing was grouped: nothing to check"
     for s in sem:
         if "fallo" in s:
             assert "informe anual" not in s, "grouped dissimilar items through greedy chaining"
