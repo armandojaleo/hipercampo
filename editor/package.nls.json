@@ -9,5 +9,5 @@
   "config.dbPath": "Path to the .db file (HIPERCAMPO_DB). Empty = whatever hipercampo uses by default.",
   "config.namespace": "Context to show (HIPERCAMPO_NAMESPACE). Empty = \"default\". Ignored when \"all contexts\" is on.",
   "config.allNamespaces": "Show the whole file, not just one context.",
-  "config.linked": "Other contexts this one can read from (HIPERCAMPO_LINKED). Empty = none, \"*\" = all, or a comma-separated list like \"proj-blog,proj-docs\". Edit it from the viewer with the 🔗 button instead of a JSON file."
+  "config.linked": "Fallback used only when no hipercampo MCP server is found on this machine (HIPERCAMPO_LINKED for the viewer's own CLI calls). Normally edit HIPERCAMPO_LINKED with the 🔗 button instead: it writes the real .mcp.json / ~/.claude.json server entries."
 }

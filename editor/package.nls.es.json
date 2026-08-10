@@ -9,5 +9,5 @@
   "config.dbPath": "Ruta del fichero .db (HIPERCAMPO_DB). Vacío = el que hipercampo use por defecto.",
   "config.namespace": "Contexto a mostrar (HIPERCAMPO_NAMESPACE). Vacío = «default». Se ignora con «todos los contextos» activado.",
   "config.allNamespaces": "Mostrar todo el fichero, no solo un contexto.",
-  "config.linked": "Otros contextos que este puede leer (HIPERCAMPO_LINKED). Vacío = ninguno, «*» = todos, o una lista separada por comas como «proj-blog,proj-docs». Edítalo desde el visor con el botón 🔗 en vez de un fichero JSON."
+  "config.linked": "Alternativa usada solo cuando no se encuentra ningún servidor MCP de hipercampo en esta máquina (HIPERCAMPO_LINKED para las llamadas CLI propias del visor). Normalmente edita HIPERCAMPO_LINKED con el botón 🔗: escribe directamente las entradas reales de .mcp.json / ~/.claude.json."
 }

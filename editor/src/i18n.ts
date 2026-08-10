@@ -19,6 +19,9 @@ export interface HostMessages {
   editLinkedPrompt: string;
   editLinkedPlaceholder: string;
   linkedUpdated: (value: string) => string;
+  chooseServers: string;
+  linkedUpdatedFiles: (value: string, count: number) => string;
+  linkedWriteError: (detail: string) => string;
 }
 
 const MESSAGES: Record<"en" | "es", HostMessages> = {
@@ -51,6 +54,12 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     linkedUpdated: (value) => value
       ? `Linked contexts updated: ${value}`
       : "Linked contexts cleared: this context no longer reads from others.",
+    chooseServers: "Which MCP server(s) should this change apply to?",
+    linkedUpdatedFiles: (value, count) => (value
+      ? `HIPERCAMPO_LINKED set to "${value}" in ${count} server config(s). `
+      : `HIPERCAMPO_LINKED cleared in ${count} server config(s). `)
+      + "A .bak-hipercampo backup was written next to each file. Restart the MCP server(s) to apply.",
+    linkedWriteError: (detail) => `Couldn't update some server configs: ${detail}`,
   },
   es: {
     commandNotFound: "No se encontró 'hipercampo' ni 'python -m hipercampo.cli'. "
@@ -81,6 +90,12 @@ const MESSAGES: Record<"en" | "es", HostMessages> = {
     linkedUpdated: (value) => value
       ? `Contextos enlazados actualizados: ${value}`
       : "Contextos enlazados vaciados: este contexto ya no lee de otros.",
+    chooseServers: "¿A qué servidor(es) MCP se aplica este cambio?",
+    linkedUpdatedFiles: (value, count) => (value
+      ? `HIPERCAMPO_LINKED puesto a «${value}» en ${count} configuración(es) de servidor. `
+      : `HIPERCAMPO_LINKED vaciado en ${count} configuración(es) de servidor. `)
+      + "Se escribió una copia .bak-hipercampo junto a cada fichero. Reinicia el/los servidor(es) MCP para aplicarlo.",
+    linkedWriteError: (detail) => `No se pudieron actualizar algunas configuraciones: ${detail}`,
   },
 };
 

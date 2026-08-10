@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { execFile } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 import * as crypto from "crypto";
 import { hostMessages } from "./i18n";
 
@@ -215,22 +216,132 @@ async function chooseDatabase(): Promise<boolean> {
   return true;
 }
 
-/** Edit HIPERCAMPO_LINKED without hand-editing .mcp.json or ~/.claude.json: this is
- * the only per-server setting the viewer's own config surface can safely change
- * (it just writes VS Code settings, same as dbPath/namespace above). */
+// --- editing the REAL MCP server config (not just this extension's own setting) ----
+// hipercampo.linked only steers the viewer's own CLI calls. The thing Armando actually
+// asked for is editing HIPERCAMPO_LINKED where it really lives: the mcpServers entries
+// in the workspace .mcp.json and the global ~/.claude.json that Claude itself reads.
+
+interface LinkedTarget { file: string; server: string; }
+
+/** A server counts as "hipercampo" when its env carries one of our variables — this
+ * avoids guessing from `command`, which users are free to alias or wrap. */
+function isHipercampoEnv(env: any): boolean {
+  return !!env && ("HIPERCAMPO_NAMESPACE" in env || "HIPERCAMPO_LINKED" in env || "HIPERCAMPO_DB" in env);
+}
+
+function collectServers(servers: any, file: string, out: LinkedTarget[]): void {
+  if (!servers || typeof servers !== "object") return;
+  for (const name of Object.keys(servers)) {
+    if (isHipercampoEnv(servers[name]?.env)) out.push({ file, server: name });
+  }
+}
+
+/** Every hipercampo MCP server this machine knows about: the project's .mcp.json and
+ * the global ~/.claude.json (both its top-level mcpServers and, for older layouts,
+ * the per-project mcpServers under projects[cwd]). Files that don't exist or don't
+ * parse are skipped silently — a missing .mcp.json is normal, not an error. */
+function findLinkedTargets(): LinkedTarget[] {
+  const out: LinkedTarget[] = [];
+  const wsFolder = projectPath();
+  const candidateFiles = [
+    wsFolder ? path.join(wsFolder, ".mcp.json") : undefined,
+    path.join(os.homedir(), ".claude.json"),
+  ].filter((f): f is string => !!f);
+  for (const file of candidateFiles) {
+    try {
+      const data = JSON.parse(fs.readFileSync(file, "utf8"));
+      collectServers(data.mcpServers, file, out);
+      if (wsFolder) collectServers(data.projects?.[wsFolder]?.mcpServers, file, out);
+    } catch { /* No file, or not JSON we understand: nothing to offer for it. */ }
+  }
+  return out;
+}
+
+function readLinkedValue(target: LinkedTarget): string {
+  try {
+    const data = JSON.parse(fs.readFileSync(target.file, "utf8"));
+    const env = data.mcpServers?.[target.server]?.env
+      ?? data.projects?.[projectPath() || ""]?.mcpServers?.[target.server]?.env;
+    return env?.HIPERCAMPO_LINKED || "";
+  } catch { return ""; }
+}
+
+/** Detect the file's own indent so a rewrite doesn't turn a two-space file into a
+ * four-space diff noise-fest; JSON.stringify needs a width, not the original text. */
+function detectIndent(raw: string): number {
+  const m = raw.match(/\n( +)"/);
+  return m ? m[1].length : 2;
+}
+
+/** Write HIPERCAMPO_LINKED into one server's env, in place. A timestamped backup is
+ * written first because ~/.claude.json is Claude's own config, not ours: if something
+ * about this rewrite is wrong, the fix is "restore the backup", not "lose settings". */
+function writeLinkedValue(target: LinkedTarget, value: string): void {
+  const raw = fs.readFileSync(target.file, "utf8");
+  const data = JSON.parse(raw);
+  const apply = (servers: any): boolean => {
+    if (!servers?.[target.server]) return false;
+    const server = servers[target.server];
+    server.env = server.env || {};
+    if (value) server.env.HIPERCAMPO_LINKED = value;
+    else delete server.env.HIPERCAMPO_LINKED;
+    return true;
+  };
+  const wsFolder = projectPath();
+  const done = apply(data.mcpServers)
+    || (wsFolder ? apply(data.projects?.[wsFolder]?.mcpServers) : false);
+  if (!done) throw new Error(`Server "${target.server}" not found in ${target.file}`);
+  fs.writeFileSync(`${target.file}.bak-hipercampo`, raw, "utf8");
+  const indent = detectIndent(raw);
+  fs.writeFileSync(target.file, JSON.stringify(data, null, indent) + "\n", "utf8");
+}
+
+/** Edit HIPERCAMPO_LINKED where it actually lives: the real MCP server configs
+ * (.mcp.json / ~/.claude.json), not a copy inside this extension's own settings. */
 async function editLinked(): Promise<boolean> {
   const text = hostMessages(vscode.env.language);
-  const current = cfg().get<string>("linked") || "";
+  const targets = findLinkedTargets();
+
+  if (!targets.length) {
+    // No known hipercampo MCP server on this machine/workspace: fall back to the
+    // viewer's own setting so the CLI calls it makes are still consistent.
+    const current = cfg().get<string>("linked") || "";
+    const value = await vscode.window.showInputBox({
+      prompt: text.editLinkedPrompt, placeHolder: text.editLinkedPlaceholder, value: current,
+    });
+    if (value === undefined) return false;
+    const trimmed = value.trim();
+    await cfg().update("linked", trimmed, vscode.ConfigurationTarget.Global);
+    vscode.window.showInformationMessage(text.linkedUpdated(trimmed));
+    return true;
+  }
+
+  let picks = targets;
+  if (targets.length > 1) {
+    const items = targets.map((t) => ({
+      label: t.server, description: t.file, picked: true, target: t,
+    }));
+    const selected = await vscode.window.showQuickPick(items,
+      { canPickMany: true, placeHolder: text.chooseServers });
+    if (!selected?.length) return false;
+    picks = selected.map((s) => s.target);
+  }
+
+  const current = readLinkedValue(picks[0]);
   const value = await vscode.window.showInputBox({
-    prompt: text.editLinkedPrompt,
-    placeHolder: text.editLinkedPlaceholder,
-    value: current,
+    prompt: text.editLinkedPrompt, placeHolder: text.editLinkedPlaceholder, value: current,
   });
-  if (value === undefined) return false;   // Cancelled: leave the setting untouched.
+  if (value === undefined) return false;
   const trimmed = value.trim();
-  await cfg().update("linked", trimmed, vscode.ConfigurationTarget.Global);
-  vscode.window.showInformationMessage(text.linkedUpdated(trimmed));
-  return true;
+
+  const failed: string[] = [];
+  for (const t of picks) {
+    try { writeLinkedValue(t, trimmed); } catch (e: any) { failed.push(`${t.server}: ${e.message || e}`); }
+  }
+  if (failed.length) vscode.window.showErrorMessage(text.linkedWriteError(failed.join("; ")));
+  const ok = picks.length - failed.length;
+  if (ok > 0) vscode.window.showInformationMessage(text.linkedUpdatedFiles(trimmed, ok));
+  return ok > 0;
 }
 /** Move a memory to another context (curation). Ask for an existing or new destination.
  * The operation is reversible, so it does not require a modal confirmation. */
