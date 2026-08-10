@@ -97,7 +97,8 @@ def main():
     else:
         print("  (Nothing resurfaced this time; incubation doesn't always pay off —")
         print("   just like in a real mind. Try again another night.)")
-    hc.store.close()
+    hc.close()          # not hc.store.close(): stats() opens the identity
+                        # store too, and leaving it open locks the file on Windows
     cleanup()
 
 

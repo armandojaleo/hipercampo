@@ -44,7 +44,7 @@ def main():
         ("Marta", now - 3 * DAY),   # back on rotation
     ]
     fact_ids = []
-    for person, when in rotation:
+    for person, _timestamp in rotation:      # the timestamps are applied below
         r = hc.remember_fact({"subject": "on-call", "predicate": "is", "object": person})
         fact_ids.append(r["id"])
         if r.get("supersedes"):
@@ -56,8 +56,11 @@ def main():
     # call time, same as a real agent would. To DEMONSTRATE months of
     # history without actually waiting months, we backdate the validity
     # window directly, the same way examples/04 fast-forwards `last_access`.
+    # strict=True is not just to satisfy the linter: the three lists line up by
+    # construction, so a mismatch would mean `rotation` was edited without the
+    # windows following, and silently pairing the wrong dates is worse than raising.
     windows = list(zip(fact_ids, [w for _, w in rotation],
-                       [w for _, w in rotation[1:]] + [None]))
+                       [w for _, w in rotation[1:]] + [None], strict=True))
     for fid, valid_from, valid_to in windows:
         hc.store.db.execute("UPDATE facts SET valid_from = ?, valid_to = ? WHERE id = ?",
                             (valid_from, valid_to, fid))

@@ -61,7 +61,8 @@ def main():
 
     print("\n  A forgotten read about telegraphs or fungi in a forest can inspire")
     print("  today's design. That's creative incubation.")
-    hc.store.close()
+    hc.close()          # not hc.store.close(): stats() opens the identity
+                        # store too, and leaving it open locks the file on Windows
     cleanup()
 
 
