@@ -135,14 +135,24 @@ def _config_on(base):
 
 
 def test_the_same_directory_spelled_differently_is_one_entry():
-    """A path is compared as text, so `C:\\Proj`, `c:/proj/` and a relative walk to
-    the same place must collapse to one entry — otherwise enabling a project from
-    the viewer would not match enabling it from the shell."""
+    """The path is compared as text, so spellings of the same directory must
+    collapse — otherwise enabling a project from the viewer (which passes an
+    absolute path) would not match enabling it from the shell.
+
+    Case is deliberately NOT part of that on POSIX. `os.path.normcase` folds case on
+    Windows and does nothing on Linux/macOS, which is correct: `/Proj` and `/proj`
+    really are two different directories there. An earlier version of this test
+    asserted case-insensitivity everywhere and passed on Windows while failing on
+    both POSIX runners — the test encoded a Windows assumption, the code did not."""
     base = _fresh("paths")
     config = _config_on(base)
     project = (base / "proj_a").resolve()
     config.set_project_enabled(str(project), True)
-    for spelling in (str(project), str(project).upper(), str(project) + os.sep):
+
+    spellings = [str(project), str(project) + os.sep, os.path.join(str(project), ".")]
+    if os.name == "nt":                       # only where the filesystem folds case
+        spellings.append(str(project).upper())
+    for spelling in spellings:
         assert config.project_enabled(spelling), f"not recognised: {spelling}"
 
 
