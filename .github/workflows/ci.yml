@@ -35,6 +35,16 @@ jobs:
       - name: Build and test the extension
         run: npm run test:all
 
+      # The viewer badge is held to the same rule as the Python one: it may
+      # understate, never overstate. The floor is read FROM the badge, so the number
+      # in the README and the number CI enforces cannot drift apart.
+      - name: Viewer coverage (floor taken from the README badge)
+        shell: bash
+        run: |
+          FLOOR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('../.github/badges/coverage-viewer.json','utf8')).message.replace('%',''))")
+          echo "Badge claims ${FLOOR}%"
+          VIEWER_COVERAGE_FLOOR="$FLOOR" npm run coverage
+
   test:
     # hipercampo is a LOCAL app: Windows and macOS are not optional. Testing only on
     # Linux once hid three real bugs. Full matrix on the stable version; the edge
@@ -169,6 +179,10 @@ jobs:
           done <<< "$TESTS"
           coverage report --sort=cover
           coverage report --fail-under=78
+          # The README badge is verified against this run: it may understate, never
+          # overstate. A number nobody re-checks is the failure mode this repo keeps
+          # finding, so the badge is measured rather than trusted.
+          python scripts/badges.py --check
 
   benchmarks:
     runs-on: ubuntu-latest

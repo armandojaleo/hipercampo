@@ -1,14 +1,6 @@
 "use strict";
 
-const { test, expect } = require("@playwright/test");
-const { SAMPLE, buildStandalone } = require("../../tools/preview");
-
-async function openViewer(page, language = "en", view = "list", data = SAMPLE) {
-  const errors = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.setContent(buildStandalone(language, view, data, "dark"), { waitUntil: "load" });
-  return errors;
-}
+const { test, expect, openViewer, SAMPLE } = require("./fixture");
 
 test("renders, filters, sorts, and localizes the real webview", async ({ page }) => {
   const errors = await openViewer(page);
@@ -29,14 +21,14 @@ test("renders, filters, sorts, and localizes the real webview", async ({ page })
   await expect(page.locator("#view-list .card")).toHaveCount(2);
   await expect(page.locator("#count")).toHaveText("2 of 18");
 
-  await openViewer(page, "es");
+  await openViewer(page, { language: "es" });
   await expect(page.locator('[data-view="graph"]')).toHaveText("Mapa");
   await expect(page.locator("#q")).toHaveAttribute("placeholder", "Filtrar por texto…");
   expect(errors).toEqual([]);
 });
 
 test("renders the map and preserves the VS Code message contract", async ({ page }) => {
-  const errors = await openViewer(page, "en", "graph");
+  const errors = await openViewer(page, { view: "graph" });
 
   await expect(page.locator("#view-graph")).toHaveClass(/active/);
   await expect(page.locator("#graph-legend .k")).not.toHaveCount(0);
@@ -55,7 +47,7 @@ test("renders the map and preserves the VS Code message contract", async ({ page
 test("escapes memory content instead of executing stored markup", async ({ page }) => {
   const malicious = '<img id="owned" src=x onerror="window.__xss = true">';
   const data = { nodes: [{ ...SAMPLE.nodes[0], text: malicious }], edges: [] };
-  const errors = await openViewer(page, "en", "list", data);
+  const errors = await openViewer(page, { data });
 
   await expect(page.locator("#view-list .text")).toHaveText(malicious);
   await expect(page.locator("#owned")).toHaveCount(0);

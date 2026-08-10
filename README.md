@@ -3,6 +3,8 @@
 [![CI](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml/badge.svg)](https://github.com/armandojaleo/hipercampo/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/hipercampo)](https://pypi.org/project/hipercampo/)
 [![Downloads](https://static.pepy.tech/badge/hipercampo)](https://pepy.tech/project/hipercampo)
+[![coverage (core)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/armandojaleo/hipercampo/main/.github/badges/coverage-python.json)](#coverage-both-halves)
+[![coverage (viewer)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/armandojaleo/hipercampo/main/.github/badges/coverage-viewer.json)](#coverage-both-halves)
 
 🌍 **Español: [README.es.md](docs/README.es.md)** · You are reading the English version.
 
@@ -94,6 +96,36 @@ python scripts/nav_real.py --check       # navigation fidelity, latency and RAM
 python scripts/ablations.py --check      # isolate the four cognitive mechanisms
 python scripts/context_efficiency.py --check  # quality, context tokens and latency
 ```
+
+### Coverage, both halves
+
+Measured 2026-08-10. Reproduce it yourself with the two commands below — the
+numbers are printed by the tools, not typed here by hand.
+
+| | tests | coverage | how |
+|---|---|---|---|
+| Python core (`hipercampo/`) | 342 | **83%** | `coverage run -m pytest && coverage report` |
+| Viewer (`editor/media/viewer.js`) | 8 end-to-end | **74%** | `cd editor && npm run coverage` |
+
+CI enforces a floor of 78% on the Python side. Viewer coverage comes from
+Chromium's own V8 instrumentation during the Playwright run — no extra dependency,
+and measured while the tests actually assert, rather than by a script driving the
+UI to inflate a number.
+
+**The badges above cannot rot.** Their numbers live in `.github/badges/*.json` (read
+straight from this repository; no third-party service holds the data) and CI runs
+`python scripts/badges.py --check`, which **fails if a badge claims more than the
+measured coverage**. The check is one-sided on purpose: a badge is never allowed to
+overstate, and if coverage improves it simply understates until someone regenerates
+it with `--write`.
+
+**Where the coverage is thin, stated plainly:** the extension host
+(`editor/src/*.ts`, which shells out to the CLI) has no tests at all, and the
+Python CLI sits at 62%. Both are on the roadmap. Three bugs shipped through the
+viewer in one week, all of them the same shape — a JSON key renamed on the Python
+side that the JavaScript side kept reading, breaking a panel with no error
+anywhere. `tests/contracts/test_viewer_json.py` now pins those key names for all
+six payloads, and the end-to-end tests check the panels actually render the value.
 
 The complete suite runs in CI on Windows, macOS and Ubuntu with Python 3.11–3.13.
 Example invariants checked:

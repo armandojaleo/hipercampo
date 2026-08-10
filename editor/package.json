@@ -132,7 +132,8 @@
     "test:all": "npm test && npm run test:e2e",
     "preview": "node tools/preview.js --all",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm test"
+    "vscode:prepublish": "npm test",
+    "coverage": "node tools/run-coverage.js"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",
