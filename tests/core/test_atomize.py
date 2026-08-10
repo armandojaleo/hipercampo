@@ -64,6 +64,33 @@ def test_order_is_preserved():
     assert a[0].startswith("Primero") and a[2].startswith("Tercero")
 
 
+def test_a_decimal_is_not_a_sentence_boundary():
+    """The module comment claimed decimals were protected while no code did it.
+
+    Found by storing this project's own notes: "recall@5 0.830" was atomized into
+    "recall@5 0." and "830 (el azar da ~0.". A severed number is worse than a lost
+    one — it stays in memory looking like a fact and means nothing."""
+    atoms = atomize("El recall@5 fue 0.830 sobre la muestra estratificada de 60.")
+    assert not any(a.rstrip(".").endswith("0") and "830" not in a for a in atoms), atoms
+    assert any("0.830" in a for a in atoms), atoms
+
+
+def test_a_filename_is_not_a_sentence_boundary():
+    """Same root cause: "context_efficiency.py" became "context_efficiency." plus
+    "py". File paths are most of what an engineering memory is worth keeping."""
+    atoms = atomize("El instrumento es scripts/context_efficiency.py y tarda mucho.")
+    assert any("context_efficiency.py" in a for a in atoms), atoms
+
+
+def test_real_sentences_still_split():
+    """The guard must not swallow ordinary boundaries: a dot followed by a capital
+    letter or a space still ends a sentence, digits nearby or not."""
+    atoms = atomize("Medimos 60 instancias. El resultado fue malo. Hay que mirarlo.")
+    assert len(atoms) == 3, atoms
+    atoms = atomize("Costo 195 s. Luego bajo bastante mas de lo esperado.")
+    assert len(atoms) == 2, atoms
+
+
 if __name__ == "__main__":
     clean()
     sys.exit(run_tests(dict(globals())))

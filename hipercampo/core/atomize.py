@@ -37,13 +37,42 @@ def _ends_in_abbrev(frag: str) -> bool:
     return bool(m and m.group(1) in _ABBREV)
 
 
+# A dot with a digit on each side is a decimal, and a dot followed by a source
+# extension is a filename. Neither ends a sentence, and neither was handled: the
+# comment above claimed decimals were protected while nothing in the code did it.
+# Storing this module's own notes is what exposed it — "recall@5 0.830" became the
+# atoms "recall@5 0." and "830 (chance gives ~0.", which carry no meaning at all,
+# and "context_efficiency.py" was severed into "context_efficiency." and "py".
+# Numbers and file paths are most of what an engineering memory is worth keeping.
+_DECIMAL_LEFT = re.compile(r"\d$")
+_DECIMAL_RIGHT = re.compile(r"^\d")
+_FILENAME = re.compile(
+    r"^(?:py|pyi|js|mjs|ts|tsx|jsx|json|md|txt|ya?ml|toml|ini|cfg|log|csv|"
+    r"html?|css|sh|bat|ps1|sql|db|lock)\b", re.IGNORECASE)
+
+
+def _continues_a_token(buff: str, following: str) -> bool:
+    """True when the dot just consumed belongs INSIDE a token, not after it."""
+    if not buff.endswith("."):
+        return False
+    stem = buff[:-1]
+    if _DECIMAL_LEFT.search(stem) and _DECIMAL_RIGHT.match(following):
+        return True
+    return bool(re.search(r"\w$", stem) and _FILENAME.match(following))
+
+
 def _by_sentences(text: str) -> list[str]:
     parts, buff = [], ""
-    for chunk in _END.split(text):
+    chunks = _END.split(text)
+    for index, chunk in enumerate(chunks):
         if _END.fullmatch(chunk or ""):
             buff += "" if "\n" in chunk else chunk
             if _ends_in_abbrev(buff):          # abbreviation: don't close yet
                 buff += " "
+                continue
+            # Peek at what follows before deciding this dot closed a sentence.
+            following = chunks[index + 1] if index + 1 < len(chunks) else ""
+            if _continues_a_token(buff, following):
                 continue
             if buff.strip():
                 parts.append(buff.strip())
