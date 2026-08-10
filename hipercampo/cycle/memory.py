@@ -508,11 +508,30 @@ class Hipercampo:
 
     # 2 -----------------------------------------------------------------
     @resilient
-    def recall(self, query: str, k: int = 5, hops: int = 1,
+    def recall(self, query: str, k: int = 5, hops: int = 0,
                include_history: bool = False, max_scan: int | None = None,
                nav: bool | str = False) -> list[dict]:
         """
-        Retrieves by similarity (seeds) + spreading activation (associates).
+        Retrieves by similarity. Spreading activation is still available with
+        hops>=1, but it is OFF by default, and that default was measured
+        rather than assumed.
+
+        On a real 240-memory project context, propagation changed the top-5
+        in 1 of 12 queries and surfaced something outside the direct top-20
+        in 0 of 12 — it reordered occasionally and never found anything
+        plain similarity had missed. Two other instruments agree:
+        `scripts/ablations.py` reports MRR 0.820 -> 0.820 with and without
+        it, and `scripts/baselines.py` scores the no-propagation variant
+        HIGHER (0.824 vs 0.807). On a corpus that shares its vocabulary —
+        which one person's memory always does — the association graph
+        saturates, so the spread reaches everything and only adds noise.
+
+        The graph itself is NOT wasted: it is what `muse` runs on, where the
+        indirect connection IS the product. On that same real corpus muse
+        returned 11 ideas, every one of them through an indirect
+        association, in 4 of 5 queries. So association earns its place in
+        muse, not in recall, and this default now says so instead of the
+        README claiming it twice.
         Can return an EMPTY LIST if nothing clears the minimum relevance
         threshold (knowing how to say "I don't know" avoids reinforcing
         false positives from noise). By default it does NOT return history

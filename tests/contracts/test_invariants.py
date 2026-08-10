@@ -191,5 +191,41 @@ def test_learn_accepts_the_old_parameter_name_and_values():
     assert hc.learn("something", tipo="not-a-type").get("error")
 
 
+# --- 6. propagation is off in recall, and that is a measured decision ---------
+def test_recall_does_not_propagate_by_default():
+    """`hops` defaults to 0, and the number was measured rather than assumed.
+
+    On a real 240-memory context, propagation changed the top-5 in 1 of 12
+    queries and surfaced something outside the direct top-20 in 0 of 12.
+    `scripts/ablations.py` reports MRR 0.820 -> 0.820 with and without it, and
+    `scripts/baselines.py` scores the no-propagation variant higher (0.824 vs
+    0.807). Turning it back on by default should therefore require re-measuring,
+    not just editing a signature."""
+    import inspect
+
+    from hipercampo.cycle.memory import Hipercampo
+    assert inspect.signature(Hipercampo.recall).parameters["hops"].default == 0
+
+
+def test_muse_still_propagates_because_that_is_its_product():
+    """The association graph is not dead weight — it is what muse runs on, where
+    the indirect connection IS the result. Measured on the same real corpus: 11
+    ideas, every one through an indirect association, in 4 of 5 queries. Pinned
+    so that switching recall's default off never quietly takes muse with it."""
+    import inspect
+
+    from hipercampo.cycle.memory import Hipercampo
+    assert inspect.signature(Hipercampo.muse).parameters["hops"].default >= 1
+
+    hc = memory("muse_propagates")
+    for i in range(6):
+        hc.remember(f"note {i} about associative memory, sparse vectors and recall")
+    hc.remember("an unrelated note about the corner bakery and its bread")
+    ideas = hc.muse("associative memory", k=3)
+    # The point is not how many ideas: it is that reaching them used the graph.
+    assert all(i["via"] in ("indirect association", "dormant but relevant")
+               for i in ideas), ideas
+
+
 if __name__ == "__main__":
     raise SystemExit(run_tests(dict(globals())))
