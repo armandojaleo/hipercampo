@@ -42,8 +42,13 @@ def _colour(pct: float) -> str:
 
 
 def _badge(label: str, pct: float) -> dict:
+    """TRUNCATES, never rounds. Rounding 72.6 up to 73 makes the badge claim more
+    than was measured — the one thing this file exists to prevent — and it made
+    the badge fail its own check. Truncating guarantees badge <= measured."""
+    import math
+    shown = math.floor(pct)
     return {"schemaVersion": 1, "label": label,
-            "message": f"{pct:.0f}%", "color": _colour(pct)}
+            "message": f"{shown}%", "color": _colour(shown)}
 
 
 def measured_python() -> float | None:
@@ -94,6 +99,17 @@ def main() -> int:
                   f"{stated if stated is not None else '—'}")
             continue
         if args.write:
+            # A laptop may LOWER a badge but never raise one. Coverage is not
+            # identical everywhere: CI measured the viewer at 72.1% where a Windows
+            # machine measured 74.3%, and writing the local figure put the badge
+            # above what the gate could reproduce — CI went red on the very commit
+            # that added the badge. CI is the reference because CI is the gate.
+            import os
+            en_ci = os.environ.get("CI", "").lower() == "true"
+            if stated is not None and measured > stated and not en_ci:
+                print(f"  {name:<7} measured {measured:.1f}% here, badge stays at "
+                      f"{stated:.0f}% (only CI may raise it)")
+                continue
             (BADGES / f"coverage-{name}.json").write_text(
                 json.dumps(_badge(label, measured), indent=2) + "\n", encoding="utf-8")
             print(f"  {name:<7} badge written: {measured:.1f}%")
@@ -101,7 +117,9 @@ def main() -> int:
         if stated is None:
             problems.append(f"{name}: no badge file; run --write")
             continue
-        ok = measured + 0.5 >= stated          # rounding slack, the badge shows whole %
+        # No slack: the badge is truncated when written, so it can never sit above
+        # the measurement. A tolerance here would quietly re-allow overstating.
+        ok = measured >= stated
         print(f"  {name:<7} measured {measured:.1f}%  badge {stated:.0f}%  "
               f"{'ok' if ok else 'OVERSTATED'}")
         if not ok:

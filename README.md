@@ -105,7 +105,7 @@ numbers are printed by the tools, not typed here by hand.
 | | tests | coverage | how |
 |---|---|---|---|
 | Python core (`hipercampo/`) | 342 | **83%** | `coverage run -m pytest && coverage report` |
-| Viewer (`editor/media/viewer.js`) | 8 end-to-end | **74%** | `cd editor && npm run coverage` |
+| Viewer (`editor/media/viewer.js`) | 8 end-to-end | **72%** | `cd editor && npm run coverage` |
 
 CI enforces a floor of 78% on the Python side. Viewer coverage comes from
 Chromium's own V8 instrumentation during the Playwright run — no extra dependency,
@@ -118,6 +118,13 @@ straight from this repository; no third-party service holds the data) and CI run
 measured coverage**. The check is one-sided on purpose: a badge is never allowed to
 overstate, and if coverage improves it simply understates until someone regenerates
 it with `--write`.
+
+Two details learned the hard way, on the very commit that introduced the badges.
+Coverage is **not identical everywhere** — CI measures the viewer at 72.1% where a
+Windows machine measures 74.3% — so the badge tracks **CI**, which is the gate, and
+`--write` will lower a badge from any machine but only raise one when `CI=true`.
+And the percentage is **truncated, never rounded**: rounding 72.6 up to 73 would make
+the badge claim more than was measured, which is the one thing it exists to prevent.
 
 **Where the coverage is thin, stated plainly:** the extension host
 (`editor/src/*.ts`, which shells out to the CLI) has no tests at all, and the
