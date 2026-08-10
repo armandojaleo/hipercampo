@@ -11,10 +11,27 @@ on top would be another project; this core stays local and simple.
 
 Status: 🟢 done · 🟡 in progress · ⚪ pending
 
-## Current state — v0.1.0b13 (6 August 2026)
+## Current state — v0.1.0b14 (9 August 2026)
 
-Beta b13 is complete and published on PyPI after green multi-platform CI and
-benchmarks.
+Beta b14 is published on PyPI after green multi-platform CI and benchmarks. It
+carries the layered package, the finished English migration, per-project opt-in,
+and a round of fixes described in the changelog.
+
+Two of those fixes are worth repeating here, because they say something about the
+gates rather than the features:
+
+- **CI passed three commits while running zero tests.** `tests/test_*.py` does not
+  descend into subdirectories, and the suite had been grouped into folders. The
+  multi-platform matrix — the thing this project relies on most — was reporting
+  green having executed nothing. Discovery is now recursive, and finding zero tests
+  is an explicit failure.
+- **The token bill was reporting clock seconds instead of tokens** (5304 against a
+  real 65451). The figure this project uses to argue for itself was wrong by 12x,
+  with a green suite throughout, and it surfaced because a human said a number
+  looked odd.
+
+The lesson is written into `AGENTS.md`: a regression test only counts once it has
+been seen RED against the old code, and the checker needs checking too.
 
 - ✅ **Multi-platform CI:** full suites on Windows, macOS, and Ubuntu with Python
   3.11–3.13.
@@ -218,7 +235,17 @@ each user runs locally. The useful work separates contexts on one machine:
 
 - 🟢 **Complete namespaces:** isolate projects/profiles in one database across all
   operations and links. Implemented and tested.
-- ⚪ Convenient per-project namespace selection from the client.
+- 🟢 **Per-project opt-in (b14).** hipercampo starts switched OFF and is turned on per
+  project, from `hipercampo enable|disable|projects` or the viewer's banner. In a
+  project that never opted in, the hook stays silent and the tools decline with an
+  explanation instead of reading or writing.
+
+  The unit is the **directory**, not the namespace, and that was forced rather than
+  chosen: a server registered at user scope carries one `HIPERCAMPO_NAMESPACE`, so
+  every project without its own `.mcp.json` shares it — the namespace cannot tell two
+  projects apart, the path can. An installation that already holds memories keeps
+  working untouched until the first `enable`/`disable`, so an upgrade never switches
+  someone off in silence.
 - ⚪ Client-level hardening against memory-borne injection; see [SECURITY.md](../SECURITY.md).
 
 ## Phase 5 — The real VSA differentiator
@@ -248,7 +275,50 @@ each user runs locally. The useful work separates contexts on one machine:
 - ✅ **Explainable retrieval:** `score_components` exposes direct similarity,
   association boost, confidence factor, and superseded penalty.
 - 🟢 v0.1.0-alpha published on **PyPI** through Trusted Publishing and attestations.
-- ⚪ Observability: structured logging and metrics.
+- 🟡 **Observability.** The decision log is structured and machine-readable
+  (`hipercampo log --json`: timestamp, action, message), the token bill is exposed
+  with a time series (`hipercampo tokens`), and `hipercampo status` reports database
+  health, running servers, and per-context counts. What is missing is *metrics* in
+  the operational sense — nothing aggregates over time or alerts. Marked ⚪ until
+  b14 even though most of it already existed, which is its own small lesson about
+  taking a roadmap's word for the state of things.
+
+## The viewer is where the net does not reach
+
+Not a phase — a measured risk that had no entry here, written down because three
+bugs shipped through it in one week.
+
+| | production | test | ratio |
+|---|---|---|---|
+| Python core | 5728 lines | 5765 | **1.01** |
+| Viewer (`viewer.js` + `src/*.ts`) | 1957 lines | 113 | **0.06** |
+
+*(non-blank lines, measured 2026-08-10; re-measure before quoting)*
+
+Sixteen times less test per line than the core, on the surface a user actually
+looks at. The bugs were not exotic. All three were the same shape — the CLI emits
+JSON in Python, the viewer reads it in JavaScript, and **a renamed key breaks the
+panel silently**: no test on either side sees it, the value just renders empty.
+
+- `s.metodo` against an emitted `method` — the "how tokens were counted" note went
+  blank after the English migration.
+- `PROJECT.enabled` against an emitted `enabled_here` — the opt-in banner would have
+  claimed every project was off, forever. Caught before shipping.
+- Log rows rendering as `?` — an unescaped newline split entries in two.
+
+What exists now: `tests/contracts/test_viewer_json.py` binds the field names the
+viewer reads against what the CLI emits, for all six payloads (`status`, `tokens`,
+`projects`, `log`, `graph`, `facts`), and three Playwright end-to-end tests gate
+viewer releases.
+
+What is still missing:
+
+- ⚪ **Behaviour, not just field names.** The contract tests prove the keys line up;
+  they say nothing about whether the panel *renders* correctly. That is the
+  Playwright side, and three tests is thin for 1806 lines.
+- ⚪ **The extension host (`src/*.ts`) is untested.** It is what shells out to the
+  CLI, and it already hid a real trap: `execFile` runs without `cwd`, so a bare
+  `hipercampo enable` from the viewer would have registered the wrong directory.
 
 ## Phase 7 — Engineering maturity and the path to embedded use
 
