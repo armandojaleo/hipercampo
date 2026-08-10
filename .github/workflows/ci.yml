@@ -244,6 +244,14 @@ jobs:
         env:
           HIPERCAMPO_LOG: "0"
         run: python scripts/context_efficiency.py --check
+      # Shared-jargon corpus, in BOTH regimes. The other benches describe their
+      # corpus but never its regime, and that blind spot hid the fact that spreading
+      # activation earned nothing: none of them sat anywhere near a saturated graph.
+      # This one asserts the two regimes still exist before trusting its own scores.
+      - name: Shared-jargon retrieval (broad and saturated regimes)
+        env:
+          HIPERCAMPO_LOG: "0"
+        run: python scripts/jargon_bench.py --check
       # The examples smoke test moved to the multi-platform `test` job: it used to
       # run here, on ubuntu-latest only, and that hid a real bug. Two examples
       # closed `hc.store.close()` instead of `hc.close()`, leaving the identity

@@ -95,7 +95,22 @@ python -m mypy hipercampo/
 python scripts/nav_real.py --check       # navigation fidelity, latency and RAM
 python scripts/ablations.py --check      # isolate the four cognitive mechanisms
 python scripts/context_efficiency.py --check  # quality, context tokens and latency
+python scripts/jargon_bench.py --check        # retrieval on a shared-jargon corpus
 ```
+
+`jargon_bench.py` exists because the other benchmarks describe their corpus but
+never its **regime**, and that blind spot hid a real defect: spreading activation
+earned nothing in recall, and no bench sat anywhere near a saturated association
+graph to show it. What saturates a graph is **narrowness**, not scale — measured on
+real memories, 240 notes spanning one project link 2.2% of pairs, while 8 notes
+about a single sub-topic link 75%. This bench reproduces both and reports the
+regime next to the score, so a number is never read without knowing which world it
+came from.
+
+Its numbers are deliberately harsher than the others: on shared jargon, keyword
+retrieval holds (MRR 0.90) while **paraphrase (0.16) and synonym (0.03) collapse**.
+That gap is the honest state of lexical encoding, and it is the ceiling the roadmap
+points at.
 
 ### Coverage, both halves
 
@@ -104,7 +119,7 @@ numbers are printed by the tools, not typed here by hand.
 
 | | tests | coverage | how |
 |---|---|---|---|
-| Python core (`hipercampo/`) | 342 | **83%** | `coverage run -m pytest && coverage report` |
+| Python core (`hipercampo/`) | 344 | **83%** | `coverage run -m pytest && coverage report` |
 | Viewer (`editor/media/viewer.js`) | 8 end-to-end | **72%** | `cd editor && npm run coverage` |
 
 CI enforces a floor of 78% on the Python side. Viewer coverage comes from
