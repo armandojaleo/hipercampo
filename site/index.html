@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hipercampo — a living memory for AI agents</title>
+<meta name="description" content="A local-first, VSA-based memory for AI agents. Auditable, sublinear, and it forgets on purpose.">
+<style>
+  :root{
+    --ink:#0c0e10;
+    --paper:#eae6da;
+    --fg:#d9d6ca;
+    --fg-dim:#8c8a80;
+    --write:#d99a3c;
+    --sleep:#4f9187;
+    --rule:#2a2d31;
+    --mono:ui-monospace,"Cascadia Code","Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+    --serif:"Iowan Old Style","Source Serif Pro","Palatino Linotype",Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--ink); color:var(--fg);
+    font-family:var(--serif); font-size:17px; line-height:1.6;
+  }
+  ::selection{background:var(--write); color:var(--ink)}
+  a{color:var(--paper); text-decoration-color:var(--fg-dim)}
+  a:hover{text-decoration-color:var(--write)}
+  a:focus-visible, button:focus-visible{outline:2px solid var(--write); outline-offset:2px}
+
+  .wrap{max-width:900px; margin:0 auto; padding:0 1.75rem}
+
+  /* ---- masthead: full-bleed bit-grid with the wordmark riding on top ---- */
+  header.mast{
+    position:relative; min-height:100vh; min-height:100svh;
+    display:flex; flex-direction:column; justify-content:flex-end;
+    border-bottom:1px solid var(--rule); overflow:hidden;
+  }
+  #readout{position:absolute; inset:0; width:100%; height:100%; background:#08090a}
+  header.mast::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(8,9,10,.15) 0%, rgba(8,9,10,.55) 55%, rgba(8,9,10,.92) 100%);
+    pointer-events:none;
+  }
+  .mast-body{position:relative; z-index:1; padding:2rem 0 3.25rem}
+  .kicker{
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--sleep); margin:0 0 1.1rem;
+  }
+  .kicker::before{content:"◆ "; color:var(--write)}
+  h1{
+    font-family:var(--mono); font-weight:700; font-size:clamp(3.2rem,13vw,8.5rem);
+    letter-spacing:-.03em; margin:0 0 1.25rem; line-height:.92; color:var(--paper);
+  }
+  h1 .cursor{color:var(--write); animation:blink 1.1s steps(1) infinite}
+  @media (prefers-reduced-motion: reduce){ h1 .cursor{animation:none} }
+  @keyframes blink{50%{opacity:0}}
+  .thesis{
+    font-family:var(--serif); font-style:italic; font-size:1.5rem; color:var(--fg);
+    max-width:34rem; margin:0 0 2rem;
+  }
+  .cta{display:flex; gap:0 1.75rem; flex-wrap:wrap; font-family:var(--mono); font-size:.9rem}
+  .cta a{padding:.15rem 0; border-bottom:1px solid var(--rule)}
+  .cta a::before{content:"→ "; color:var(--write)}
+
+  main{padding:3.5rem 0 1rem}
+  section{margin-bottom:3.75rem}
+  .label{
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--fg-dim); margin:0 0 1.1rem; padding-bottom:.6rem; border-bottom:1px solid var(--rule);
+  }
+  section > p{max-width:38rem}
+  section > p + p{margin-top:1rem}
+
+  /* ---- ledger ---- */
+  .ledger{width:100%; border-collapse:collapse; font-size:.96rem}
+  .ledger tr{border-bottom:1px solid var(--rule)}
+  .ledger tr:first-child{border-top:1px solid var(--rule)}
+  .ledger th{
+    text-align:left; font-family:var(--mono); font-size:.68rem; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--fg-dim); font-weight:400; padding:.6rem .8rem .6rem 0;
+  }
+  .ledger td{padding:.85rem .8rem .85rem 0; vertical-align:top}
+  .ledger td.idea{
+    font-family:var(--mono); color:var(--paper); font-size:.88rem; white-space:nowrap;
+    border-left:2px solid var(--write);
+    padding-left:.7rem;
+  }
+  .ledger tr:nth-child(even) td.idea{border-left-color:var(--sleep)}
+  .ledger td.what{color:var(--fg)}
+  .ledger td.from{color:var(--fg-dim); font-size:.85rem; font-style:italic; font-family:var(--serif)}
+
+  /* ---- giant-numeral pull-out ---- */
+  .stat{
+    display:grid; grid-template-columns:auto 1fr; align-items:end; gap:0 1.75rem;
+    margin:5.5rem 0 5.5rem; padding-top:1rem;
+  }
+  .stat-num{
+    font-family:var(--mono); font-weight:700; font-size:clamp(4.5rem,16vw,9rem);
+    line-height:.85; margin:0; color:var(--write); letter-spacing:-.03em;
+  }
+  .stat-num span{color:var(--sleep); font-size:.4em; vertical-align:top}
+  .stat-cap{
+    font-family:var(--serif); font-style:italic; font-size:1.1rem; color:var(--fg);
+    max-width:22rem; margin:0 0 .6rem;
+  }
+  @media (max-width:560px){
+    .stat{grid-template-columns:1fr}
+  }
+
+  /* ---- try it ---- */
+  pre{
+    background:#08090a; border:1px solid var(--rule); border-radius:2px;
+    padding:1rem 1.2rem; overflow-x:auto; font-family:var(--mono); font-size:.85rem;
+    color:var(--paper); margin:0 0 1rem;
+  }
+  pre .prompt{color:var(--sleep)}
+
+  /* ---- margin note ---- */
+  .note{
+    display:grid; grid-template-columns:auto 1fr; gap:0 1rem;
+    font-family:var(--mono); font-size:.84rem; color:var(--fg-dim); line-height:1.7;
+  }
+  .note .tag{color:var(--sleep); white-space:nowrap}
+  .note strong{color:var(--paper); font-weight:600}
+
+  /* ---- reading list ---- */
+  .index-list{list-style:none; margin:0; padding:0; font-family:var(--mono); font-size:.92rem}
+  .index-list li{
+    display:flex; justify-content:space-between; gap:1rem;
+    padding:.55rem 0; border-bottom:1px solid var(--rule);
+  }
+  .index-list li:first-child{border-top:1px solid var(--rule)}
+  .index-list span.n{color:var(--fg-dim)}
+
+  footer{
+    border-top:1px solid var(--rule); color:var(--fg-dim); font-family:var(--mono);
+    font-size:.75rem; padding:1.75rem 0 2.5rem; letter-spacing:.02em;
+  }
+
+  @media (max-width:640px){
+    .ledger{font-size:.85rem}
+    .ledger td.idea{white-space:normal}
+  }
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <canvas id="readout"></canvas>
+  <div class="wrap mast-body">
+    <p class="kicker">MCP server · local-first memory</p>
+    <h1>hipercampo<span class="cursor">_</span></h1>
+    <p class="thesis">A living memory for AI agents, built on hypervectors — not embeddings.</p>
+    <nav class="cta">
+      <a href="https://github.com/armandojaleo/hipercampo">source</a>
+      <a href="https://github.com/armandojaleo/hipercampo/blob/main/docs/INSTALL.md">install</a>
+      <a href="https://github.com/armandojaleo/hipercampo/blob/main/paper/DRAFT.md">paper</a>
+      <a href="https://pypi.org/project/hipercampo/">pypi</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <p class="label">The problem</p>
+    <p>Most LLM memories are "chunk → embed → top-k": they rank by similarity and
+    never ask whether something is relevant, current, or trustworthy. Nothing is ever
+    forgotten. It's a landfill with a search box.</p>
+    <p>hipercampo separates <em>what it remembers</em> from <em>what it suspects</em>,
+    and runs a cycle modeled on the hippocampus: surprise-gated writing, sleep
+    consolidation, and active forgetting, over a navigable graph of 10,000-bit
+    hypervectors.</p>
+  </section>
+
+  <section>
+    <p class="label">Four ideas, one cycle</p>
+    <table class="ledger">
+      <tr><th>mechanism</th><th>what it does</th><th>inspiration</th></tr>
+      <tr>
+        <td class="idea">vsa / hypervectors</td>
+        <td class="what">Memories as binary hypervectors with real algebra
+        (bind/bundle). Tells "the dog bites the man" from its reverse — something
+        dense embeddings blur. CPU-only, no GPU.</td>
+        <td class="from">Kanerva · Plate</td>
+      </tr>
+      <tr>
+        <td class="idea">surprise gate</td>
+        <td class="what">A double veto: won't store the redundant (something similar
+        exists) nor the predictable (an internal compression model already saw it
+        coming, measured in bits).</td>
+        <td class="from">hippocampal prediction error</td>
+      </tr>
+      <tr>
+        <td class="idea">sleep</td>
+        <td class="what">An offline pass groups similar episodes into semantic
+        memory and archives the originals, on your own schedule.</td>
+        <td class="from">hippocampus → cortex replay</td>
+      </tr>
+      <tr>
+        <td class="idea">forgetting</td>
+        <td class="what">Strength decays with disuse. The weak goes dormant, not
+        deleted, and can resurface through <code>hc_muse</code>. Importance
+        protects.</td>
+        <td class="from">adaptive forgetting</td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="stat">
+    <p class="stat-num">≈1<span>%</span></p>
+    <p class="stat-cap">of nodes visited per recall at 100,000 memories — it navigates a
+    small-world graph instead of scanning it, and that number is measured, not claimed.</p>
+  </section>
+
+  <section>
+    <p class="label">Try it — 30 seconds, no agent client</p>
+    <pre><span class="prompt">$</span> pip install numpy
+<span class="prompt">$</span> python scripts/demo.py</pre>
+    <p>You'll watch the algebra distinguish word order, then the full cycle —
+    surprise → recall → sleep → forget — run end to end.</p>
+  </section>
+
+  <section>
+    <p class="label">Engineering honesty</p>
+    <div class="note">
+      <span class="tag">note —</span>
+      <span>Surprise combines lexical novelty with real prediction error from an
+      in-house compression model — no neural net, no GPU. The base encoder is
+      <strong>lexical</strong>. Recall is sublinear (≈1% of nodes visited at 100k
+      memories) because it navigates a small-world graph rather than scanning it.
+      Every number here is reproducible from the scripts in the repo, and the
+      <a href="https://github.com/armandojaleo/hipercampo/blob/main/paper/DRAFT.md">paper</a>
+      states the limits next to the results, not after them.</span>
+    </div>
+  </section>
+
+  <section>
+    <p class="label">Read further</p>
+    <ul class="index-list">
+      <li><a href="https://github.com/armandojaleo/hipercampo#readme">README</a><span class="n">en</span></li>
+      <li><a href="https://github.com/armandojaleo/hipercampo/blob/main/docs/README.es.md">README</a><span class="n">es</span></li>
+      <li><a href="https://github.com/armandojaleo/hipercampo/blob/main/paper/DRAFT.md">Paper — working draft</a><span class="n">pdf soon</span></li>
+      <li><a href="https://github.com/armandojaleo/hipercampo/tree/main/docs">Docs</a><span class="n">install · roadmap</span></li>
+      <li><a href="https://github.com/armandojaleo/hipercampo/tree/main/examples">Examples</a><span class="n">3 walkthroughs</span></li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">hipercampo — local-first, MIT-licensed, CPU-only. no accounts, no telemetry.</div>
+</footer>
+
+<script>
+// Literal bit-grid: hash real bytes of the project's own name into a
+// hypervector-shaped pattern, render it once as a single seamless tile, then
+// drift that one static image slowly leftward — no color cycling, no
+// recomputation, just one texture scrolling like a strip of tape.
+(function(){
+  const canvas = document.getElementById('readout');
+  const ctx = canvas.getContext('2d');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const COLS = 140, ROWS = 60;
+  let bits, tile, tileW, tileH, offsetX = 0;
+
+  function hashBits(seedStr, n){
+    // xorshift32 seeded from the string — deterministic, no deps.
+    let s = 0;
+    for(let i=0;i<seedStr.length;i++) s = (s*31 + seedStr.charCodeAt(i)) >>> 0;
+    if(s===0) s = 1;
+    const out = new Uint8Array(n);
+    for(let i=0;i<n;i++){
+      s ^= s<<13; s>>>=0; s ^= s>>>17; s ^= s<<5; s>>>=0;
+      out[i] = (s & 1);
+    }
+    return out;
+  }
+
+  bits = hashBits('hipercampo · 10000-bit hypervector', COLS*ROWS);
+
+  function buildTile(height){
+    tileH = height;
+    const ch = tileH / ROWS;
+    const cw = ch; // square cells
+    tileW = Math.round(cw * COLS);
+    tile = document.createElement('canvas');
+    tile.width = tileW;
+    tile.height = tileH;
+    const tctx = tile.getContext('2d');
+    tctx.fillStyle = '#08090a';
+    tctx.fillRect(0, 0, tileW, tileH);
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const i = r*COLS+c;
+        if(!bits[i]) continue;
+        const isWrite = (i % 7 === 0);
+        const isSleep = (i % 11 === 0);
+        tctx.fillStyle = isWrite ? '#d99a3c' : isSleep ? '#4f9187' : '#726f66';
+        tctx.globalAlpha = 0.5 + 0.5 * (((i*2654435761) >>> 0) % 100) / 100;
+        tctx.fillRect(c*cw, r*ch, cw*0.72, ch*0.72);
+      }
+    }
+    tctx.globalAlpha = 1;
+  }
+
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * devicePixelRatio;
+    canvas.height = rect.height * devicePixelRatio;
+    buildTile(canvas.height);
+    offsetX = 0;
+  }
+
+  function draw(){
+    ctx.fillStyle = '#08090a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let x = -offsetX % tileW;
+    if(x > 0) x -= tileW;
+    for(; x < canvas.width; x += tileW){
+      ctx.drawImage(tile, x, 0);
+    }
+  }
+
+  function loop(){
+    offsetX += 0.12 * devicePixelRatio;
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize', () => { resize(); draw(); });
+  resize();
+  draw();
+  if(!reduceMotion) requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
