@@ -1274,6 +1274,14 @@
 
   // UI events.
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => activateView(t.dataset.view));
+  const tabstrip = document.querySelector(".tabstrip");
+  if (tabstrip) {
+    tabstrip.addEventListener("wheel", (e) => {
+      if (e.deltaY === 0) return;   // Let native horizontal scroll (trackpad deltaX) through.
+      e.preventDefault();
+      tabstrip.scrollLeft += e.deltaY;
+    }, { passive: false });
+  }
   $("q").addEventListener("input", () => {
     if ($("mode").value === "text") repaint();   // Instant client-side filter.
   });

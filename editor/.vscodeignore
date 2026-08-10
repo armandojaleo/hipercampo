@@ -3,6 +3,7 @@ src/**
 tests/**
 test-results/**
 playwright-report/**
+coverage-tmp/**
 tools/**
 playwright.config.js
 PUBLISHING*.md
