@@ -5,6 +5,32 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Fixed — viewer (extension v0.9.21)
+- **Pause was global, not per-project.** Pausing recording from one project's
+  viewer silently paused every other project sharing the same database.
+  `pause`/`resume` now use a per-directory registry (`hipercampo.paused_projects`,
+  the same pattern as the opt-in `hipercampo.projects` registry), and the CLI
+  (`pause`, `resume`, `graph`, `status`) takes an explicit `--project`/`path`;
+  the extension passes it on every call instead of relying on `execFile`'s
+  inherited (and wrong) working directory.
+- **`dream()`'s hypothesis text had a stray typo** (`«mm{text}»`) reaching agents
+  over `hc_dream`/MCP. Fixed; the viewer itself was unaffected since it builds
+  its own phrase client-side.
+- **Ideas cards showed garbled multi-line fragments instead of a readable
+  snippet.** A consolidated memory's text can be a multi-line bulleted summary;
+  the card sliced the first 70 *raw* characters, so bullets and line breaks
+  landed mid-sentence. Whitespace is now collapsed before cutting, with a
+  visible "…" when something was trimmed; the same fix extends to the pair
+  cards and the "via" line, which previously showed the full untruncated text.
+
+### Added — viewer (extension v0.9.21)
+- **Ambient activity footer.** A short, non-intrusive phrase in the footer for
+  what the memory is doing right now — recalling, saving a memory, dreaming —
+  sourced from the decision log, never a popup. A found dream bridge gets its
+  own phrase and is clickable to jump to Ideas; a turn with real token savings
+  says so. No phrase for uninteresting entries (e.g. a token injection with no
+  savings stays silent).
+
 ## [0.1.0b14] — 2026-08-09
 
 ### Changed — core and compatibility

@@ -2,7 +2,7 @@
   "name": "hipercampo-viewer",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "0.9.20",
+  "version": "0.9.21",
   "preview": true,
   "publisher": "armandojaleo",
   "license": "MIT",
@@ -127,7 +127,7 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "test": "npm run compile && node tests/i18n.test.js",
+    "test": "npm run compile && node tests/i18n.test.js && node tests/extension.test.js",
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run test:e2e",
     "preview": "node tools/preview.js --all",

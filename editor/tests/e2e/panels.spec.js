@@ -126,3 +126,28 @@ test("the facts panel renders the role triple and marks closed facts",
     await expect(fichas.nth(1)).toHaveClass(/cerrado/);
     expect(errors).toEqual([]);
   });
+
+test("an idea card flattens a multi-line consolidated memory instead of cutting it mid-sentence",
+  async ({ page }) => {
+    // The bug (reported by a human as "I visited Ideas but I don't get them"): a
+    // consolidated memory's text is a multi-line bulleted summary. The card sliced
+    // the first 70 RAW characters, so bullets and line breaks landed mid-word —
+    // it read as garbage, not as an idea. Whitespace must collapse before cutting.
+    const errors = await openViewer(page, { view: "ideas" });
+    const messy = "[grouped x2]\n· Cross-platform stdlib RSS measurement added, "
+      + "with a long trailing detail that must not survive uncut into the headline.";
+    await send(page, {
+      type: "ideas",
+      data: {
+        bridges: [{
+          a: messy, b: "a short memory", via: "a shared checkpoint",
+          a_id: 1, b_id: 2, similarity: 0.42,
+        }],
+      },
+    });
+    const headline = page.locator("#view-ideas .idea-h");
+    const text = await headline.textContent();
+    expect(text).not.toMatch(/\n\s*·/);   // no raw bullet/line-break mid-headline
+    expect(text).toMatch(/…/);            // visibly cut, not silently truncated
+    expect(errors).toEqual([]);
+  });

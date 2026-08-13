@@ -135,7 +135,9 @@ async function fetchGraph(): Promise<{ memories: Memory[]; edges: any[]; scope: 
   // The viewer ALWAYS fetches every context; the chips select one or all client-side.
   // Consequently, clearing "all contexts" never empties the screen by fetching a
   // namespace that may not exist.
-  const out = await run(["graph", "--all-namespaces"]);
+  const path = projectPath();
+  const out = await run(path ? ["graph", "--all-namespaces", "--project", path]
+                              : ["graph", "--all-namespaces"]);
   const data = JSON.parse(out);
   const scope = hostMessages(vscode.env.language).allContexts;
   return { memories: data.nodes || [], edges: data.edges || [], scope, db: data.db, paused: !!data.paused };
@@ -171,7 +173,8 @@ async function fetchProject(): Promise<any> {
 }
 
 async function fetchStatus(): Promise<any> {
-  const out = await run(["status"]);
+  const path = projectPath();
+  const out = await run(path ? ["status", "--project", path] : ["status"]);
   return JSON.parse(out);
 }
 
@@ -179,6 +182,14 @@ async function fetchStatus(): Promise<any> {
 async function fetchLog(): Promise<any> {
   const out = await run(["log", "-n", "300", "--json"]);
   return JSON.parse(out);
+}
+
+// A short tail for the ambient activity footer: cheap enough to fetch on every
+// reload (debounced by the watcher already), unlike the full 300-entry Log tab.
+async function fetchActivityTail(): Promise<any[]> {
+  const out = await run(["log", "-n", "20", "--json"]);
+  const data = JSON.parse(out);
+  return data.entries || [];
 }
 
 // The token bill: aggregate plus time series, making this defining feature visible.
@@ -400,6 +411,10 @@ class Controller {
   private pend: NodeJS.Timeout | undefined;
   private quietUntil = 0;   // Ignore watcher events until this time (see below).
   private readonly disposables: vscode.Disposable[] = [];
+  // Ambient activity footer: `undefined` means "not baselined yet" (the first
+  // load sets it silently, so opening the viewer doesn't dump the whole recent
+  // history into the footer at once).
+  private lastActivityRaw: string | undefined | null = undefined;
 
   constructor(private readonly webview: vscode.Webview,
               private readonly ctx: vscode.ExtensionContext) {
@@ -449,7 +464,9 @@ class Controller {
       } else if (msg.type === "facts-request") {
         this.post({ type: "facts", data: await fetchFacts() });
       } else if (msg.type === "setPaused") {
-        await run([msg.value ? "pause" : "resume"]);
+        const path = projectPath();
+        const cmd = msg.value ? "pause" : "resume";
+        await run(path ? [cmd, path] : [cmd]);
         await this.load();
       } else if (msg.type === "setProjectEnabled") {
         const path = projectPath();
@@ -501,11 +518,32 @@ class Controller {
       this.post({ type: "project", data: await fetchProject() });
       if (db && db !== this.db) { this.db = db; this.watchDatabase(db); }
       void refreshValue();   // Fresh data also updates the status-bar value.
+      void this.postActivity();
     } catch (e: any) {
       this.post({ type: "error", message: e.message || String(e) });
     } finally {
       this.muteWatcher();   // The read touched -wal/-shm; do not trigger on it again.
     }
+  }
+
+  // Pushes only NEW log entries since the last load, for the ambient footer.
+  // Cosmetic: a failure here must never surface as a viewer error.
+  private async postActivity(): Promise<void> {
+    try {
+      const entries = await fetchActivityTail();
+      if (!entries.length) return;
+      if (this.lastActivityRaw === undefined) {
+        this.lastActivityRaw = entries[entries.length - 1].raw;   // baseline only
+        return;
+      }
+      const idx = this.lastActivityRaw === null ? -1
+        : entries.findIndex((e: any) => e.raw === this.lastActivityRaw);
+      // Not found (log rotated, or baseline was "empty"): still new, but capped
+      // so a rotation cannot dump a burst of stale-looking entries at once.
+      const fresh = (idx >= 0 ? entries.slice(idx + 1) : entries).slice(-5);
+      this.lastActivityRaw = entries[entries.length - 1].raw;
+      if (fresh.length) this.post({ type: "activity", entries: fresh });
+    } catch { /* no-op: the footer is decoration, not a source of errors */ }
   }
 
   // Watch the .db file and reload when the agent or another session changes it.

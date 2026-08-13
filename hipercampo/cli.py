@@ -369,7 +369,7 @@ def cmd_graph(args) -> int:
     ids = {n["id"] for n in nodes}
     edges = [e for e in edges if e["src"] in ids and e["dst"] in ids]
     print(json.dumps({"namespace": ns, "all_namespaces": args.all_namespaces,
-                      "db": os.path.abspath(db_path()), "paused": paused(),
+                      "db": os.path.abspath(db_path()), "paused": paused(args.project),
                       "nodes": nodes, "edges": edges}, ensure_ascii=False, default=str))
     return 0
 
@@ -699,9 +699,10 @@ def cmd_pause(args) -> int:
     keeps working and nothing is deleted."""
     from .support.config import set_paused
     want = not (args.cmd == "resume" or getattr(args, "off", False))
-    state = set_paused(want)
+    path = os.path.abspath(getattr(args, "path", None) or os.getcwd())
+    state = set_paused(want, path)
     forced = os.environ.get("HIPERCAMPO_PAUSED", "") not in ("", "0", "false", "False")
-    out: dict[str, Any] = {"paused": state}
+    out: dict[str, Any] = {"paused": state, "project": path}
     if forced and not want:
         out["notice"] = ("HIPERCAMPO_PAUSED is set in the environment and overrides "
                            "the switch: it stays paused until that's removed.")
@@ -743,9 +744,9 @@ def cmd_status(_args) -> int:
     from .support.config import db_path, paused
     from .support.procs import list_servers
     path = os.path.abspath(db_path())
-    here = os.getcwd()
+    here = os.path.abspath(getattr(_args, "project", None) or os.getcwd())
     out: dict[str, Any] = {"version": __version__, "python": sys.version.split()[0],
-                           "paused": paused(), "db": {"path": path},
+                           "paused": paused(here), "db": {"path": path},
                            # Per-project opt-in, for the viewer to show and toggle.
                            # `adopted` is not derivable from `enabled`: not-yet-adopted
                            # also reads as enabled, and the viewer needs to say which,
@@ -963,10 +964,14 @@ def main(argv=None) -> int:
     gr.add_argument("--all-namespaces", "-A", action="store_true")
     gr.add_argument("--namespace", help="context (default: the current one)")
     gr.add_argument("--include-dormant", action="store_true", default=True)
-    sub.add_parser("status", help="health status as JSON (CLI, DB, MCP, log)")
-    pa = sub.add_parser("pause", help="PAUSE the memory: stop recording ('do not record' mode)")
+    gr.add_argument("--project", help="project directory, for the pause check (default: cwd)")
+    st = sub.add_parser("status", help="health status as JSON (CLI, DB, MCP, log)")
+    st.add_argument("--project", help="project directory, for the pause check (default: cwd)")
+    pa = sub.add_parser("pause", help="PAUSE the memory for a project: stop recording ('do not record' mode)")
     pa.add_argument("--off", action="store_true", help="resume instead of pausing")
-    sub.add_parser("resume", help="resume the memory after a pause")
+    pa.add_argument("path", nargs="?", help="project directory (default: cwd)")
+    re_ = sub.add_parser("resume", help="resume the memory for a project after a pause")
+    re_.add_argument("path", nargs="?", help="project directory (default: cwd)")
     tk = sub.add_parser("tokens", help="token bill as JSON (for the viewer)")
     tk.add_argument("--json", action="store_true", default=True, help=argparse.SUPPRESS)
     dm = sub.add_parser("dormant", help="make memories dormant or wake them by id")

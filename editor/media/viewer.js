@@ -105,6 +105,11 @@
       ideasSim: "afinidad",
       ideasDiag: "Diagnóstico",
       ideasRazones: { too_few_memories: "pocos recuerdos", no_links: "sin enlaces", graph_too_closed: "grafo demasiado cerrado", candidates_below_quality: "candidatos descartados por calidad", ok: "hay candidatos" },
+      actAnalizando: "analizando…", actRecordando: "recordando…",
+      actGuardando: "guardando recuerdo…", actOlvidando: "olvidando recuerdo…",
+      actBuscandoIdeas: "buscando ideas nuevas…", actSonando: "soñando…",
+      actIdeaEncontrada: "he encontrado una idea que te podría servir — ¿la miras?",
+      actAhorrado: (n) => `has ahorrado ${n} tokens en el contexto…`,
     },
     en: {
       filtrar: "Filter by text…", comoBuscar: "How to search",
@@ -202,6 +207,11 @@
       ideasSim: "affinity",
       ideasDiag: "Diagnostic",
       ideasRazones: { too_few_memories: "too few memories", no_links: "no links", graph_too_closed: "graph too closed", candidates_below_quality: "candidates below quality", ok: "has candidates" },
+      actAnalizando: "analyzing…", actRecordando: "recalling…",
+      actGuardando: "saving a memory…", actOlvidando: "forgetting a memory…",
+      actBuscandoIdeas: "looking for new ideas…", actSonando: "dreaming…",
+      actIdeaEncontrada: "found an idea that might help you — take a look?",
+      actAhorrado: (n) => `saved ${n} tokens off the context…`,
     },
   };
   const L = DICT[lang];
@@ -1155,14 +1165,20 @@
     if (!d) { c.innerHTML = `<p class="hint">${L.ideasCargando}</p>`; return; }
     const br = d.bridges || [];
     if (!br.length) { c.innerHTML = `<p class="hint">${L.ideasVacio}</p>`; return; }
-    const corta = (s) => esc((s || "").slice(0, 70));
+    // Consolidated memories can be multi-line bulleted summaries ("[grouped x2]\n· …");
+    // sliced raw they read as a garbled mid-sentence fragment, not an idea. Collapse
+    // whitespace first, THEN cut, and say plainly when something was cut.
+    const corta = (s, max) => {
+      const flat = (s || "").replace(/\s+/g, " ").trim();
+      return esc(flat.length > max ? flat.slice(0, max - 1) + "…" : flat);
+    };
     c.innerHTML = `<p class="hint">${L.ideasIntro}</p>` + br.map((b) =>
       `<div class="idea">`
-      + `<div class="idea-h">💡 ${esc(L.ideasHipotesis(corta(b.a), corta(b.b), corta(b.via)))}</div>`
+      + `<div class="idea-h">💡 ${esc(L.ideasHipotesis(corta(b.a, 70), corta(b.b, 70), corta(b.via, 70)))}</div>`
       + `<div class="idea-pair">`
-      + `<span class="idea-node">#${b.a_id} ${esc(b.a || "")}</span>`
-      + `<span class="idea-node">#${b.b_id} ${esc(b.b || "")}</span></div>`
-      + `<div class="idea-via"><small>${L.ideasVia}: «${esc(b.via || "")}» · `
+      + `<span class="idea-node">#${b.a_id} ${corta(b.a, 220)}</span>`
+      + `<span class="idea-node">#${b.b_id} ${corta(b.b, 220)}</span></div>`
+      + `<div class="idea-via"><small>${L.ideasVia}: «${corta(b.via, 90)}» · `
       + `${L.ideasSim} ${(+b.similarity || 0).toFixed(2)}</small></div>`
       + `</div>`).join("");
   }
@@ -1266,6 +1282,8 @@
       renderFacts(msg.data);
     } else if (msg.type === "ideas") {
       renderIdeas(msg.data);
+    } else if (msg.type === "activity") {
+      pushActivity(msg.entries || []);
     } else if (msg.type === "error") {
       $("error").classList.remove("hidden");
       $("error").textContent = L.errorLeer + msg.message;
@@ -1351,6 +1369,65 @@
     btn.textContent = on ? L.optinDisable : L.optinOn;
     btn.classList.toggle("on", !on);
   }
+
+  // --- ambient activity footer -----------------------------------------------
+  // Turns raw decision-log entries into a short, non-intrusive phrase: what the
+  // memory is doing right now. No popups, no sound — just the footer, one line
+  // at a time, that fades back out once the queue is empty.
+  let activityQueue = [];
+  let activityTimer = null;
+
+  function activityPhrase(e) {
+    const msg = e.message || "";
+    switch (e.action) {
+      case "assist": return { text: L.actAnalizando };
+      case "recall": return { text: L.actRecordando };
+      case "muse": return { text: L.actBuscandoIdeas };
+      case "remember": case "learn": return { text: L.actGuardando };
+      case "unlearn": case "forget": case "purge": return { text: L.actOlvidando };
+      case "dream": case "bridge": case "sleep": case "autosleep": {
+        const m = /(\d+)\s+hypothes[ei]s\(es\)/.exec(msg);
+        if (m && Number(m[1]) > 0) return { text: L.actIdeaEncontrada, idea: true };
+        return { text: L.actSonando };
+      }
+      case "tokens": {
+        const m = /injected (\d+) tok \(of (\d+)/.exec(msg);
+        if (!m) return null;
+        const saved = Number(m[2]) - Number(m[1]);
+        return saved > 0 ? { text: L.actAhorrado(saved) } : null;
+      }
+      default: return null;
+    }
+  }
+
+  function pumpActivity() {
+    const bar = $("activity-bar"), text = $("activity-text");
+    if (!activityQueue.length) {
+      bar.classList.remove("visible", "idea");
+      activityTimer = null;
+      return;
+    }
+    const next = activityQueue.shift();
+    text.textContent = next.text;
+    bar.classList.remove("hidden");
+    bar.classList.add("visible");
+    bar.classList.toggle("idea", !!next.idea);
+    activityTimer = setTimeout(pumpActivity, next.idea ? 7000 : 2600);
+  }
+
+  function pushActivity(entries) {
+    for (const e of entries) {
+      const p = activityPhrase(e);
+      if (p) activityQueue.push(p);
+    }
+    // Ambient means current, not a backlog to catch up on.
+    if (activityQueue.length > 6) activityQueue = activityQueue.slice(-6);
+    if (!activityTimer && activityQueue.length) pumpActivity();
+  }
+
+  $("activity-bar").addEventListener("click", () => {
+    if ($("activity-bar").classList.contains("idea")) activateView("ideas");
+  });
 
   function renderPause() {
     $("paused-banner").classList.toggle("hidden", !PAUSED);

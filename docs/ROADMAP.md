@@ -92,10 +92,27 @@ the repository's most important files. The next leap is not another feature, but
 
 Three demonstrations, ordered by effort and value:
 
-1. 🟡 **Complete LongMemEval, not just the adapter.** Run and publish all 500 official
-   instances reproducibly against **Mem0, Letta/MemGPT, Zep/Graphiti, classic RAG,
-   and embeddings + reranker**. Separate evidence-session recall from LLM answer
-   quality, as the runner already does. Currently blocked on data/network access.
+1. 🟡 **Complete LongMemEval, not just the adapter — now blocked on more than access.**
+   Run and publish all 500 official instances reproducibly against **Mem0,
+   Letta/MemGPT, Zep/Graphiti, classic RAG, and embeddings + reranker**. Separate
+   evidence-session recall from LLM answer quality, as the runner already does. Data/
+   network access is still one blocker, but no longer the only one: publishing
+   against the full set now first needs the abstention collapse below understood —
+   without it, the number would ship with the confounder in it.
+
+   **Measured on a stratified 60-instance subset (dense haystacks, ~48 sessions
+   each), 2026-08-11: abstention collapses to 0.000 (0/7), against 0.833 on our own
+   `stress.py` benchmark.** Recall@5 stays healthy at 0.830 (chance ~0.10), so this
+   is not a retrieval failure — it is specific to abstention. Probed at k=1/3/5/20 on
+   the same 7 questions: k is always returned exactly, at every level, so it is not
+   an artifact of requesting k=20. Working hypothesis, not yet confirmed: the gate
+   abstains by comparing similarity against the tail's noise (z-score), and in a
+   large, homogeneous corpus there is no tail to stand out against — everything looks
+   a little similar, so nothing drops below the threshold. If so, this does not get
+   fixed by moving the threshold. None of our other benchmarks can see this because
+   they all use small corpora. Reproduce with `python scripts/context_efficiency.py
+   --longmemeval data/longmemeval_s_cleaned.json --limit 60` (dataset not in the
+   repo, 277 MB, `data/` is gitignored; ~195s CPU per instance).
 2. ⚪ **Longitudinal experiment (the definitive one).** Simulate 100k–1M events over
    months: preference changes, contradictions, expiring facts, repetitive noise,
    exceptional events, and resurfacing memories. Metrics: useful memory/MB, useful
@@ -305,20 +322,42 @@ panel silently**: no test on either side sees it, the value just renders empty.
 - `PROJECT.enabled` against an emitted `enabled_here` — the opt-in banner would have
   claimed every project was off, forever. Caught before shipping.
 - Log rows rendering as `?` — an unescaped newline split entries in two.
+- **Pause was global, not per-project (found 2026-08-13).** Pausing recording in one
+  project's viewer silently paused every other project sharing the same DB.
+  `config.paused()`/`set_paused()` used a single flag file next to the shared
+  database with no directory scoping — unlike `enable`/`disable`, which already
+  keyed itself by directory for exactly this reason. Compounding it, `extension.ts`
+  called `pause`/`resume`/`graph`/`status` without passing the workspace path, the
+  same `execFile`-without-`cwd` trap noted below, just not yet closed off for this
+  command. Fixed: `paused(path)`/`set_paused(on, path)` now use a per-directory
+  registry (`hipercampo.paused_projects`, same pattern as `hipercampo.projects`),
+  the CLI takes `--project`/positional `path` on `pause`, `resume`, `graph`, and
+  `status`, and the extension passes `projectPath()` explicitly on all four calls.
+  Verified with two projects sharing one DB: pausing one no longer touches the other.
 
 What exists now: `tests/contracts/test_viewer_json.py` binds the field names the
 viewer reads against what the CLI emits, for all six payloads (`status`, `tokens`,
 `projects`, `log`, `graph`, `facts`), and three Playwright end-to-end tests gate
 viewer releases.
 
+- 🟢 **The extension host (`src/*.ts`) has a first contract test (2026-08-13),
+  `editor/tests/extension.test.js`, wired into `npm test`/CI.** It mocks `vscode`
+  and `execFile`, drives the sidebar provider exactly as VS Code would, and asserts
+  that `pause`, `resume`, `graph`, `status`, and `enable` all carry the project path
+  explicitly — the exact contract whose absence caused the bug above. Confirmed RED
+  against the pre-fix `extension.ts` before being merged, per house rule. It covers
+  one contract, not the whole file: `Panel`, `chooseDatabase`, `editLinked`, `mutate`,
+  `reclassify`, and error paths remain unexercised.
+
 What is still missing:
 
 - ⚪ **Behaviour, not just field names.** The contract tests prove the keys line up;
   they say nothing about whether the panel *renders* correctly. That is the
   Playwright side, and three tests is thin for 1806 lines.
-- ⚪ **The extension host (`src/*.ts`) is untested.** It is what shells out to the
-  CLI, and it already hid a real trap: `execFile` runs without `cwd`, so a bare
-  `hipercampo enable` from the viewer would have registered the wrong directory.
+- ⚪ **Most of the extension host is still untested.** The new contract test closes
+  the specific path-passing trap; `Panel`/`chooseDatabase`/`editLinked` and the
+  remaining `onMessage` branches (`mutate`, `reclassify`, `backup`, `kill-server`,
+  `set-budget`, `reindex`) have no coverage yet.
 
 ## Phase 7 — Engineering maturity and the path to embedded use
 
@@ -391,6 +430,14 @@ into a phase together with its measurement.
 
 - ✅ **Facts in the viewer:** `hipercampo facts [--json]` and the extension's **Facts**
   tab already expose structured role facts visually.
+- ✅ **Ambient activity footer (2026-08-13).** The viewer's footer shows a short,
+  non-intrusive phrase for what the memory is doing right now — "recalling…",
+  "saving a memory…", "dreaming…" — sourced from the decision log, never a popup.
+  A found dream bridge gets its own phrase and is clickable to jump to Ideas; a
+  turn with real token savings gets "saved N tokens off the context…". No
+  ambient noise for uninteresting entries (e.g. a `tokens` log line with no
+  savings produces nothing). Covered by `editor/tests/e2e/activity.spec.js`,
+  confirmed RED before the footer existed.
 - ✅ **Supply chain:** `vsce` is pinned exactly in `vsix.yml`, GitHub Actions are pinned
   by SHA, and Playwright gates the webview before `VSCE_PAT` reaches the publish step.
   See [SECURITY.md](../SECURITY.md).

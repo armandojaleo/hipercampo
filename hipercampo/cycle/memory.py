@@ -1108,7 +1108,7 @@ class Hipercampo:
                 "a": by_id[a]["text"], "b": by_id[b]["text"], "via": by_id[x]["text"],
                 "a_id": a, "b_id": b, "similarity": round(s_ab, 3),
                 "path_strength": round(path, 3), "calibration": calibration,
-                "hypothesis": f"«mm{by_id[a]['text'][:60]}» and «"
+                "hypothesis": f"«{by_id[a]['text'][:60]}» and «"
                               f"{by_id[b]['text'][:60]}» might be related "
                               f"(both evoke «{by_id[x]['text'][:50]}»)"})
 
