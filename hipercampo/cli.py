@@ -967,7 +967,7 @@ def main(argv=None) -> int:
     gr.add_argument("--project", help="project directory, for the pause check (default: cwd)")
     st = sub.add_parser("status", help="health status as JSON (CLI, DB, MCP, log)")
     st.add_argument("--project", help="project directory, for the pause check (default: cwd)")
-    pa = sub.add_parser("pause", help="PAUSE the memory for a project: stop recording ('do not record' mode)")
+    pa = sub.add_parser("pause", help="PAUSE the memory for a project ('do not record' mode)")
     pa.add_argument("--off", action="store_true", help="resume instead of pausing")
     pa.add_argument("path", nargs="?", help="project directory (default: cwd)")
     re_ = sub.add_parser("resume", help="resume the memory for a project after a pause")
