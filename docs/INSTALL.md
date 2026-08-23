@@ -538,6 +538,77 @@ Or simply **copy the `.db` file** with the server stopped; that is just as valid
 On Docker: `docker run --rm -v hipercampo_data:/data -v "%cd%":/backup alpine \
 cp /data/hipercampo.db /backup/`.
 
+### The same memory on several machines of yours
+
+Copying the `.db` is how you **seed** a new machine, not how you keep two of them
+current. Once both have remembered different things, `--restore` flattens one
+side whole — and a synced folder (OneDrive, Dropbox, Drive) does the same without
+saying so: SQLite is one binary file, so on a divergence the client picks a side
+and **the other side's memories are gone with no error to notice**.
+
+That is what `export` and `import` are for. They do not move the file; they move
+**what the database means**, as a text log (JSON Lines) that gets merged on
+arrival.
+
+```bash
+# On each machine, when you want to publish what it knows:
+hipercampo export                       # -> hipercampo-<machine>.jsonl
+
+# And to take in the other one's (a dry run by default: writes nothing):
+hipercampo import hipercampo-laptop.jsonl
+hipercampo import hipercampo-laptop.jsonl --apply     # now for real
+hipercampo reindex                      # reweave the neighbour graph
+```
+
+The dry run's report says what would land (`new`), what merges (`merged`), what
+was already there (`unchanged`) and, separately, **`overwrites`**: the judgements
+held here that the other machine overrides. That is the one place in the whole
+merge where something you decided stops being true, so it is listed to be read,
+not merely counted.
+
+**Why this can merge instead of just picking a side.** Every record travels
+identified by a *hash of its content*, never by its local `id` — ids are
+`AUTOINCREMENT`, so the same memory carries different numbers on each machine,
+and a format shipping ids would rewire the graph towards the wrong memories, in
+silence. And the merge rules are monotone (max on `strength`, `access_count` and
+`last_access`; earliest birth on `created`; most recent wins on `importance`,
+`confidence` and `dormant`), which is what makes **importing twice, or in any
+order, give the same result**.
+
+#### Keeping it in a private GitHub repository
+
+A good transport, on two conditions:
+
+**Do not push the `.db`.** Git cannot merge SQLite either: it would report
+"binary files differ", you would pick a side, and you would be back at the
+problem above. Push **one export file per machine**. Each writes only its own, so
+git never has a conflict and the merge happens at `import`.
+
+**Private is not secret.** In a private repository the plaintext is held by
+GitHub's servers, by anyone with access to the repo, and by any Action running
+there; and a repository made public by accident is one click away. Encrypt the
+export before it leaves the disk and GitHub only ever holds ciphertext:
+
+```bash
+# Publish (with age; gpg works the same, or git-crypt if you want it transparent)
+hipercampo export -                    | age -r <your-public-key> > memory/desktop.age
+git -C memory commit -am "desktop memory" && git -C memory push
+
+# Take in the other machine's
+git -C memory pull
+age -d -i ~/.age/key.txt memory/laptop.age | hipercampo import -            # look first
+age -d -i ~/.age/key.txt memory/laptop.age | hipercampo import - --apply
+```
+
+`export -` writes to stdout and `import -` reads stdin precisely so a plaintext
+copy of a whole memory never has to touch the disk.
+
+> ⚠️ **`purge` does not propagate.** Physical deletion leaves nothing to export,
+> so a memory purged on one machine **comes back** from the other on the next
+> `import`. Forgetting does travel (it is the `dormant` flag, an ordinary field).
+> If you purge a secret, purge it on **every** machine and re-export everywhere
+> before importing anything.
+
 ---
 
 ## Optional semantics (for synonyms)

@@ -10,6 +10,8 @@ hipercampo CLI — for use from the terminal and, above all, from HOOKS
     hipercampo sleep                 # consolidate + forget + dream
     hipercampo stats                 # memory status
     hipercampo backup [dest]         # consistent backup
+    hipercampo export [dest]         # write this memory as a log, for another machine
+    hipercampo import <file>         # MERGE another machine's log (dry run without --apply)
     hipercampo servers               # which MCP servers are alive and since when
     hipercampo restart               # terminate them after an upgrade (client relaunches)
     hipercampo log [-f] [-g text]    # what it decided and why (live with -f)
@@ -867,6 +869,53 @@ def cmd_doctor(_args) -> int:
         return 1
 
 
+def cmd_export(args) -> int:
+    """Writes this memory out as a text log, to carry to another machine.
+
+    Not a backup: `backup` copies the file over the destination, which is
+    exactly what must NOT happen between two machines that both grew memories
+    while apart. See storage/exchange.py."""
+    from .storage.exchange import export_to
+    from .support.config import db_path
+    machine = args.machine or os.environ.get("HIPERCAMPO_MACHINE") or _hostname()
+    dest = args.dest or f"hipercampo-{machine}.jsonl"
+    nss = None if getattr(args, "all_namespaces", False) else [_ns(args)]
+    report = export_to(dest, db_path(), nss, machine)
+    # With `export -` stdout IS the log, on its way into age/gpg. The summary
+    # goes to stderr there, or it would corrupt the very thing being encrypted.
+    print(json.dumps(report, ensure_ascii=False),
+          file=sys.stderr if dest == "-" else sys.stdout)
+    return 0
+
+
+def cmd_import(args) -> int:
+    """Merges another machine's log into this memory.
+
+    DRY RUN BY DEFAULT: prints what would land and changes nothing until
+    --apply. The report lists `overwrites` separately because that is the only
+    part of the merge where a judgement made on this machine stops being true —
+    it should be read, not just counted."""
+    from .storage.exchange import import_from
+    from .support.config import db_path
+    try:
+        report = import_from(args.src, db_path(), namespace=_ns(args),
+                             all_namespaces=getattr(args, "all_namespaces", False),
+                             dry_run=not args.apply)
+    except (OSError, ValueError) as e:
+        print(f"Cannot import: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if not args.apply:
+        print("\nDry run: nothing was written. Repeat with --apply to merge.",
+              file=sys.stderr)
+    return 0
+
+
+def _hostname() -> str:
+    import socket
+    return socket.gethostname() or "unknown"
+
+
 # Command -> function. `pause` and `resume` are the same command seen from
 # its two sides, and cmd_pause tells them apart via `args.cmd`.
 _COMMANDS = {
@@ -877,6 +926,7 @@ _COMMANDS = {
     "tokens": cmd_tokens, "pause": cmd_pause, "resume": cmd_pause,
     "dormant": cmd_dormant, "purge": cmd_purge, "log": cmd_log,
     "enable": cmd_projects, "disable": cmd_projects, "projects": cmd_projects,
+    "export": cmd_export, "import": cmd_import,
 }
 
 
@@ -948,6 +998,25 @@ def main(argv=None) -> int:
                      help="ideas from ALL contexts (each on its own)")
     bk = sub.add_parser("backup", help="consistent backup")
     bk.add_argument("dest", nargs="?")
+    # Sync between YOUR OWN machines. Deliberately two commands and not one
+    # "sync": the transport (a private repo, a USB stick, an encrypted folder)
+    # is not hipercampo's business, and pretending it is would mean holding
+    # someone's credentials to move their own memory around.
+    ex = sub.add_parser("export", help="write this memory as a text log, to carry elsewhere")
+    ex.add_argument("dest", nargs="?",
+                    help="output file, or '-' for stdout to pipe into age/gpg "
+                         "(default: hipercampo-<machine>.jsonl)")
+    ex.add_argument("--namespace", help="context (default: the current one)")
+    ex.add_argument("--all-namespaces", "-A", action="store_true",
+                    help="the whole file, not just the current context")
+    ex.add_argument("--machine", help="name to stamp on the log (default: hostname)")
+    im = sub.add_parser("import", help="MERGE another machine's log into this memory")
+    im.add_argument("src", help="log exported on the other machine, or '-' for stdin")
+    im.add_argument("--namespace", help="context to write into (default: the current one)")
+    im.add_argument("--all-namespaces", "-A", action="store_true",
+                    help="land every context in the log, not just the current one")
+    im.add_argument("--apply", action="store_true",
+                    help="actually merge (without this it is a dry run)")
     ls = sub.add_parser("list", help="dump the memories (table or --json for the UI)")
     ls.add_argument("--json", action="store_true", help="JSON output (for the viewer)")
     ls.add_argument("--all-namespaces", "-A", action="store_true",

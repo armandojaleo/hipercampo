@@ -5,6 +5,41 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Added — core
+- **`hipercampo export` / `hipercampo import`: the same memory on more than one
+  machine.** Two machines that both grew memories while apart could not be
+  reconciled before: `backup --restore` copies the file *over* the destination,
+  and a sync client (Dropbox, OneDrive, git) resolves a divergence in a binary
+  SQLite file by picking a side — the other side's memories vanish with nothing
+  to notice. Export writes a JSON Lines log of what the database *means*;
+  import MERGES it. `storage/exchange.py`, covered by
+  `tests/storage/test_exchange.py`.
+  - **No local ids travel.** Records are addressed by a content hash (`uid`), so
+    links, `memories.fact_id` and `facts.supersedes` resolve against local ids on
+    arrival. `memories.id` is AUTOINCREMENT, so the same memory holds different
+    ids on each machine, and a format carrying ids would rewire the graph to
+    the wrong memories — silently, since a wrong graph only retrieves worse.
+  - **The merge is a small CRDT**, so importing twice, or in any order, from any
+    number of machines converges: accumulators (`strength`, `access_count`,
+    `last_access`) take the max — deliberately not the sum, which would inflate a
+    memory on every re-import of an append-only log; `created` and its birth
+    `novelty` take the earliest; judgements (`importance`, `confidence`,
+    `dormant`, `superseded`, `consolidated`) are last-writer-wins by
+    `last_access`, and each one overwritten is listed in the report.
+  - **Hypervectors travel only when they cannot be recomputed.** `encode_text` is
+    seeded with sha256 per token, so an ordinary memory's vector is identical on
+    any machine and is left out of the file. A consolidated semantic memory
+    carries the *bundle* of what it absorbed rather than the encoding of its own
+    label, so the export compares before omitting and ships those verbatim.
+    Recomputing them would have lost the consolidation with no error anywhere.
+  - **Dry run by default**; `--apply` writes. Import respects write isolation
+    (only the configured context, `-A` for the whole file); `type='knn'` links
+    and `surprise_counts` are not exported (a rebuildable index and a threshold
+    nobody could reason about after merging).
+  - **Known gap, stated rather than hidden: `purge` does not propagate.**
+    Physical deletion leaves nothing to export, so a purged memory returns from
+    the other machine on the next import. Forgetting (`dormant`) propagates fine.
+
 ## [0.1.0b15] — 2026-08-13
 
 ### Fixed — core

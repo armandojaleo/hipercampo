@@ -507,6 +507,76 @@ O simplemente **copia el fichero `.db`** con el server parado; es igual de váli
 En Docker: `docker run --rm -v hipercampo_data:/data -v "%cd%":/backup alpine \
 cp /data/hipercampo.db /backup/`.
 
+### La misma memoria en varias máquinas tuyas
+
+Copiar el `.db` sirve para **sembrar** una máquina nueva, no para mantener dos al
+día. En cuanto las dos han recordado cosas distintas, `--restore` machaca un lado
+entero, y una carpeta sincronizada (OneDrive, Dropbox, Drive) hace lo mismo pero
+sin avisar: SQLite es un binario, así que ante una divergencia el cliente elige un
+lado y **los recuerdos del otro desaparecen sin ningún error**.
+
+Para eso están `export` e `import`. No mueven el fichero: mueven **lo que la base
+de datos significa**, en un log de texto (JSON Lines) que se fusiona al llegar.
+
+```bash
+# En cada máquina, cuando quieras publicar lo tuyo:
+hipercampo export                       # -> hipercampo-<nombre-máquina>.jsonl
+
+# Y para traerte lo de la otra (en seco por defecto: no escribe nada):
+hipercampo import hipercampo-portatil.jsonl
+hipercampo import hipercampo-portatil.jsonl --apply     # ahora sí
+hipercampo reindex                      # retejer el grafo de vecinos
+```
+
+El informe del ensayo en seco te dice qué entraría (`new`), qué se funde
+(`merged`), qué ya estaba (`unchanged`) y, aparte, **`overwrites`**: los juicios
+que tenías aquí y que la otra máquina pisa. Es el único punto de toda la fusión
+donde algo que decidiste deja de ser verdad, así que se lista para leerlo, no
+solo para contarlo.
+
+**Por qué se puede fusionar y no solo elegir un lado.** Cada registro viaja
+identificado por un *hash de su contenido*, nunca por su `id` local — los `id` son
+`AUTOINCREMENT`, así que el mismo recuerdo tiene números distintos en cada máquina
+y un formato que llevara ids recablearía el grafo hacia recuerdos equivocados, en
+silencio. Y las reglas de fusión son monótonas (máximo en `strength`, `access_count`
+y `last_access`; el nacimiento más antiguo en `created`; el más reciente manda en
+`importance`, `confidence` y `dormant`), que es lo que hace que **importar dos
+veces, o en cualquier orden, dé el mismo resultado**.
+
+#### Guardarlo en un repo privado de GitHub
+
+Buen transporte, con dos condiciones:
+
+**No subas el `.db`.** Git tampoco sabe fusionar SQLite: te daría «binary files
+differ», elegirías un lado y habrías vuelto al problema de arriba. Sube **un fichero
+de export por máquina**. Cada una escribe solo el suyo, así que git nunca tiene un
+conflicto y la fusión ocurre en el `import`.
+
+**Privado no es secreto.** En un repo privado el texto plano lo tienen los
+servidores de GitHub, cualquiera con acceso al repo y cualquier Action que corra
+ahí; y un repo que se hace público por error es un clic. Cifra el export antes de
+que salga del disco y GitHub solo custodia texto cifrado:
+
+```bash
+# Publicar (con age; sirve igual gpg, o git-crypt si lo quieres transparente)
+hipercampo export -                    | age -r <tu-clave-pública> > memoria/sobremesa.age
+git -C memoria commit -am "memoria sobremesa" && git -C memoria push
+
+# Traerse lo de la otra máquina
+git -C memoria pull
+age -d -i ~/.age/clave.txt memoria/portatil.age | hipercampo import -            # míralo primero
+age -d -i ~/.age/clave.txt memoria/portatil.age | hipercampo import - --apply
+```
+
+`export -` escribe a stdout e `import -` lee de stdin precisamente para que una
+copia en claro de toda tu memoria no tenga que pasar nunca por el disco.
+
+> ⚠️ **`purge` no se propaga.** El borrado físico no deja nada que exportar, así
+> que un recuerdo purgado en un PC **vuelve** desde el otro en el siguiente
+> `import`. Olvidar sí viaja (es el flag `dormant`, un campo normal). Si purgas un
+> secreto, púrgalo en **todas** las máquinas y vuelve a exportar en todas antes de
+> importar nada.
+
 ---
 
 ## Semántica opcional (para sinónimos)
