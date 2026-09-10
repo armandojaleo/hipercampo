@@ -107,18 +107,34 @@ Three demonstrations, ordered by effort and value:
    without it, the number would ship with the confounder in it.
 
    **Measured on a stratified 60-instance subset (dense haystacks, ~48 sessions
-   each), 2026-08-11: abstention collapses to 0.000 (0/7), against 0.833 on our own
+   each), 2026-08-11 and reconfirmed 2026-09-10 on a freshly re-downloaded copy of
+   the dataset (the first copy had a corrupted 16 MB block; the number did not
+   change): abstention collapses to 0.000 (0/7), against 0.833 on our own
    `stress.py` benchmark.** Recall@5 stays healthy at 0.830 (chance ~0.10), so this
    is not a retrieval failure — it is specific to abstention. Probed at k=1/3/5/20 on
    the same 7 questions: k is always returned exactly, at every level, so it is not
-   an artifact of requesting k=20. Working hypothesis, not yet confirmed: the gate
-   abstains by comparing similarity against the tail's noise (z-score), and in a
-   large, homogeneous corpus there is no tail to stand out against — everything looks
-   a little similar, so nothing drops below the threshold. If so, this does not get
-   fixed by moving the threshold. None of our other benchmarks can see this because
-   they all use small corpora. Reproduce with `python scripts/context_efficiency.py
-   --longmemeval data/longmemeval_s_cleaned.json --limit 60` (dataset not in the
-   repo, 277 MB, `data/` is gitignored; ~195s CPU per instance).
+   an artifact of requesting k=20.
+
+   **Root cause, confirmed 2026-09-10 by instrumenting `abstention_gate()` on all
+   seven `_abs` instances: it is the ABSOLUTE FLOOR (`ANSWER_MIN_SCORE=0.19`), not
+   the z-score, that never fires.** The original working hypothesis (no tail to
+   stand out against in a homogeneous corpus) was wrong in the direction that
+   mattered: the tail behaves normally at this scale — `mu` 0.03-0.06, `sd`
+   0.02-0.04 — so `z_threshold` stays low (0.08-0.13) and the z-score gate is not
+   the binding constraint. In every one of the 7 instances `best` (0.21-0.53)
+   clears both the z-score AND the floor with room to spare. At ~4,600 atoms drawn
+   from one person's own dense conversation history, some memory sharing surface
+   vocabulary with the query ("hamster", "job", "Google"...) always scores above
+   0.19 without containing the answer — the floor was calibrated on N=20-500
+   corpora where an unrelated query's best match rarely clears it, and does not
+   hold at LongMemEval's density. Fixing this is a calibration exercise
+   (`scripts/calibrate.py` extended with dense-corpus data, trading off against
+   false recall on the existing small-corpus benchmarks it already protects — see
+   Phase 1b for why that pair was hard to get right the first time), not a
+   one-line threshold bump; not yet done. Reproduce with
+   `python scripts/context_efficiency.py --longmemeval
+   data/longmemeval_s_cleaned.json --limit 60` (dataset not in the repo, 277 MB,
+   `data/` is gitignored; ~195s CPU per instance).
 2. ⚪ **Longitudinal experiment (the definitive one).** Simulate 100k–1M events over
    months: preference changes, contradictions, expiring facts, repetitive noise,
    exceptional events, and resurfacing memories. Metrics: useful memory/MB, useful

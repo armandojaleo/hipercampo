@@ -299,7 +299,12 @@ def run_longmemeval(path: str | Path, limit: int | None = None,
             for session_id, session in zip(
                     instance["haystack_session_ids"],
                     instance["haystack_sessions"], strict=True):
-                result = hc.remember(_session_text(session), 0.5, 0.7)
+                text = _session_text(session)
+                if not text.strip():
+                    # LongMemEval ships some haystack sessions with zero turns
+                    # (padding/placeholders); there is nothing to remember there.
+                    continue
+                result = hc.remember(text, 0.5, 0.7)
                 _map_session(hc, result, session_id, memory_to_session)
             config.paused = lambda: True
             hits, latency, cost = _measure_query(hc, instance["question"], k=min(100, k * 4))
