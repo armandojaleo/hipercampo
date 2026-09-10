@@ -11,11 +11,17 @@ on top would be another project; this core stays local and simple.
 
 Status: 🟢 done · 🟡 in progress · ⚪ pending
 
-## Current state — v0.1.0b14 (9 August 2026)
+## Current state — v0.1.0b15 (13 August 2026)
 
-Beta b14 is published on PyPI after green multi-platform CI and benchmarks. It
-carries the layered package, the finished English migration, per-project opt-in,
-and a round of fixes described in the changelog.
+Beta b15 is published on PyPI. It closes a real cross-project bug (pause was
+global, not per-project — see "The viewer is where the net does not reach"
+below) and a typo in `dream()`'s hypothesis text. The viewer side (extension
+v0.9.21, same fix plus the ambient activity footer and cleaner Ideas cards) is
+built and installed locally but not yet on the Marketplace, which is still at
+v0.9.20 — that publish step is manual (see `editor/PUBLISHING.md`).
+
+Beta b14, one cycle earlier, is where the layered package, the finished
+English migration, and per-project opt-in landed.
 
 Two of those fixes are worth repeating here, because they say something about the
 gates rather than the features:
