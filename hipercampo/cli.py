@@ -18,6 +18,7 @@ hipercampo CLI — for use from the terminal and, above all, from HOOKS
     hipercampo identity              # what's been learned while working
     hipercampo enable|disable        # turn hipercampo on/off for THIS project
     hipercampo projects              # where it is on
+    hipercampo hook-install --global # make every project introduce hipercampo on its own
     hipercampo doctor                # diagnosis: path, permissions, version, deps
     hipercampo version
 
@@ -449,8 +450,25 @@ def cmd_projects(args) -> int:
 
     if args.cmd in ("enable", "disable"):
         config.set_project_enabled(target, args.cmd == "enable")
-        print(json.dumps({"project": target, "enabled": args.cmd == "enable"},
-                         ensure_ascii=False))
+        toggle: dict[str, Any] = {"project": target, "enabled": args.cmd == "enable"}
+        if args.cmd == "enable":
+            # Being enabled here is necessary but not sufficient: without the
+            # SYNAPTIC hook (SessionStart + UserPromptSubmit), nothing ever
+            # calls `hipercampo hook`, so a session in this project has the
+            # tools available but no reason to know hipercampo exists —
+            # measured live, 2026-09-18. Flagging it here (not silently
+            # installing it) because settings.json can carry other hooks a
+            # blind write shouldn't risk.
+            from .support import hooksetup
+            if not hooksetup.hook_installed("global"):
+                toggle["global_hook_missing"] = True
+                toggle["hint"] = (
+                    "no SessionStart/UserPromptSubmit hook found at "
+                    "~/.claude/settings.json, so sessions elsewhere "
+                    "won't introduce hipercampo on their own. Run "
+                    "`hipercampo hook-install --global` once to fix "
+                    "this for every project.")
+        print(json.dumps(toggle, ensure_ascii=False))
         return 0
 
     registry = config.enabled_projects()
@@ -478,6 +496,24 @@ def cmd_projects(args) -> int:
         print("\nactive in:")
         for p in registry:
             print(f"  {p}")
+    return 0
+
+
+def cmd_hook_install(args) -> int:
+    """Writes the SYNAPTIC-mode hook (SessionStart + UserPromptSubmit calling
+    `hipercampo hook`) into a settings.json — global by default, since that is
+    what makes every project introduce hipercampo on its own instead of
+    depending on `enable` alone. Idempotent and additive: existing hooks and
+    other settings.json keys are preserved."""
+    from .support import hooksetup
+    scope = "global" if getattr(args, "global_", False) else "project"
+    path = (None if scope == "global" else
+           os.path.abspath(getattr(args, "path", None) or os.getcwd()))
+    result = hooksetup.install_hook(scope, path)
+    print(json.dumps(result, ensure_ascii=False))
+    if result["installed"]:
+        print("\nOpen /hooks once (or restart Claude Code) to load it.",
+              file=sys.stderr)
     return 0
 
 
@@ -926,7 +962,7 @@ _COMMANDS = {
     "tokens": cmd_tokens, "pause": cmd_pause, "resume": cmd_pause,
     "dormant": cmd_dormant, "purge": cmd_purge, "log": cmd_log,
     "enable": cmd_projects, "disable": cmd_projects, "projects": cmd_projects,
-    "export": cmd_export, "import": cmd_import,
+    "export": cmd_export, "import": cmd_import, "hook-install": cmd_hook_install,
 }
 
 
@@ -959,6 +995,12 @@ def main(argv=None) -> int:
     pr = sub.add_parser("projects", help="where hipercampo is active")
     pr.add_argument("path", nargs="?", help="project directory (default: current)")
     pr.add_argument("--json", action="store_true", help="JSON output (for the viewer)")
+    hi = sub.add_parser("hook-install",
+                        help="write the SessionStart/UserPromptSubmit hook into settings.json")
+    hi.add_argument("--global", dest="global_", action="store_true",
+                    help="~/.claude/settings.json instead of this project's")
+    hi.add_argument("path", nargs="?",
+                    help="project directory when not --global (default: current)")
     sub.add_parser("version", help="installed version")
     for name, hlp in (("assist", "what's needed right now (hooks)"),
                           ("recall", "retrieve"), ("muse", "inspiration"),

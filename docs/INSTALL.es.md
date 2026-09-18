@@ -294,7 +294,18 @@ hipercampo decide solo qué toca (`hipercampo assist`): recordar si preguntas,
 inspirar si estás atascado, sugerir guardar/actualizar si afirmas algo nuevo, o
 **callarse** si no hay nada relevante. Nunca escribe por su cuenta.
 
-En `~/.claude/settings.json` (global) o `.claude/settings.json` (del proyecto):
+```bash
+hipercampo hook-install --global      # para todos los proyectos a partir de ahora
+hipercampo hook-install               # solo este (./.claude/settings.json)
+```
+
+Se puede ejecutar más de una vez sin riesgo: solo añade el hook si no está ya, y
+deja intactos cualquier otro hook o ajuste. Sin esto, estar en la lista de opt-in
+(arriba) no basta — nada llama nunca a `hipercampo hook`, así que una sesión en un
+proyecto habilitado puede seguir sin saber que hipercampo existe.
+
+O a mano, en `~/.claude/settings.json` (global) o `.claude/settings.json` (del
+proyecto):
 
 ```json
 {

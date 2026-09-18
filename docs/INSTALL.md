@@ -323,7 +323,18 @@ hipercampo decides for itself what is called for (`hipercampo assist`): recall i
 you ask, inspire if you are stuck, suggest storing/updating if you state something
 new, or **stay quiet** if nothing is relevant. It never writes on its own.
 
-In `~/.claude/settings.json` (global) or `.claude/settings.json` (per project):
+```bash
+hipercampo hook-install --global      # every project from now on
+hipercampo hook-install               # just this one (./.claude/settings.json)
+```
+
+Safe to run more than once: it only adds the hook if it is not already there, and
+leaves any other hooks or settings untouched. Without it, being on the opt-in list
+(above) is not enough — nothing ever calls `hipercampo hook`, so a session in an
+enabled project can still have no idea hipercampo exists.
+
+Or by hand, in `~/.claude/settings.json` (global) or `.claude/settings.json`
+(per project):
 
 ```json
 {
