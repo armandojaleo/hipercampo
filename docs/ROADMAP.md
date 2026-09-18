@@ -127,14 +127,24 @@ Three demonstrations, ordered by effort and value:
    vocabulary with the query ("hamster", "job", "Google"...) always scores above
    0.19 without containing the answer — the floor was calibrated on N=20-500
    corpora where an unrelated query's best match rarely clears it, and does not
-   hold at LongMemEval's density. Fixing this is a calibration exercise
-   (`scripts/calibrate.py` extended with dense-corpus data, trading off against
-   false recall on the existing small-corpus benchmarks it already protects — see
-   Phase 1b for why that pair was hard to get right the first time), not a
-   one-line threshold bump; not yet done. Reproduce with
-   `python scripts/context_efficiency.py --longmemeval
-   data/longmemeval_s_cleaned.json --limit 60` (dataset not in the repo, 277 MB,
-   `data/` is gitignored; ~195s CPU per instance).
+   hold at LongMemEval's density.
+
+   **Swept, 2026-09-18 (`scripts/calibrate.py --longmemeval 60`, real dense
+   haystacks, not synthetic filler): NO floor separates the two cases — the
+   trade-off is steep and near 1:1, not a knee to pick.** Raising
+   `ANSWER_MIN_SCORE` from 0.19 to 0.24 buys abstention 0.00→0.43 but costs
+   recall@k 0.833→0.667; at 0.33 it is 0.71 abstention for 0.333 recall; past
+   0.42 abstention plateaus at 0.86 — it never reaches 1.0 — while recall keeps
+   falling to 0.167. The positive and negative `best`-score distributions
+   genuinely overlap at this density: a single scalar threshold cannot
+   separate "real answer" from "near-miss that shares vocabulary" here, no
+   matter where it is set. **Do not fix this by moving `ANSWER_MIN_SCORE`** —
+   the next lever is calibration (conformal/isotonic, item 4 under "Long-term
+   technical direction" below) or a signal richer than one score, not a bigger
+   constant. Reproduce with `python scripts/calibrate.py --n 20,100,500
+   --longmemeval 60` (dataset not in the repo, 277 MB, `data/` is gitignored;
+   ~170s CPU per LongMemEval instance, ~13 instances — the synthetic N-sweep is
+   seconds).
 2. ⚪ **Longitudinal experiment (the definitive one).** Simulate 100k–1M events over
    months: preference changes, contradictions, expiring facts, repetitive noise,
    exceptional events, and resurfacing memories. Metrics: useful memory/MB, useful

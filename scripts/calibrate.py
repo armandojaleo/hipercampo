@@ -39,6 +39,9 @@ from hipercampo.support import audit                     # noqa: E402
 from hipercampo.cycle import memory
 from hipercampo.cycle.memory import Hipercampo                 # noqa: E402
 from scripts.stress import CASES, DISTRACTORS            # noqa: E402
+# context_efficiency imports NEGATIVE_QUERIES from this module, so importing it
+# back at module scope would be circular; imported lazily inside
+# observe_longmemeval() instead, the only place that needs it.
 
 # --- NEGATIVE queries ------------------------------------------------------
 # The five queries in baselines.py gave 0.20 granularity, too coarse to distinguish
@@ -177,6 +180,111 @@ def observe(target_n: int, semantic: bool = False) -> dict:
             "positivas": positivas, "negativas": negativas}
 
 
+# --- LongMemEval observation ------------------------------------------------
+# The synthetic filler() above grows N with template text from the office/company
+# domain, deliberately NOT topically related to the queries it dilutes — that is
+# what makes it a clean N-growth study. It does not reproduce the failure found
+# 2026-09-10: ANSWER_MIN_SCORE=0.19 never fires on real LongMemEval haystacks,
+# because dense first-person history means something ALWAYS shares enough surface
+# vocabulary with the query to clear the floor without answering it. That needs
+# real dense text, not template filler, so this observes directly against the
+# same stratified 60-instance LongMemEval sample used by
+# `context_efficiency.py --longmemeval`.
+LONGMEMEVAL_PATH = Path("data/longmemeval_s_cleaned.json")
+
+
+def observe_longmemeval(limit: int = 60, n_pos: int = 6) -> dict:
+    """Same contract as `observe()` (gate OPEN, raw signals recorded), but
+    against real LongMemEval haystacks instead of synthetic filler. `_abs`
+    instances (no true answer in the haystack) are the NEGATIVE set here —
+    the real-world analogue of NEGATIVE_QUERIES, but sharing the corpus's own
+    vocabulary instead of being from an unrelated domain. A handful of
+    ordinary instances (known answer_session_ids) are the POSITIVE set.
+
+    Costs ~170s CPU per instance (real dense text, no bounding) — this is
+    the expensive half of calibration, so it is cached the same way
+    `observe()`'s N-sweep already is: run once, sweep thresholds for free.
+    """
+    from scripts.context_efficiency import load_longmemeval, _session_text, _map_session
+    if not LONGMEMEVAL_PATH.exists():
+        raise SystemExit(f"LongMemEval dataset not found at {LONGMEMEVAL_PATH} "
+                         "(not shipped in the repo; see docs/ROADMAP.md).")
+    instances = load_longmemeval(LONGMEMEVAL_PATH, limit=limit)
+    abs_instances = [i for i in instances if "_abs" in str(i["question_id"])]
+    pos_instances = [i for i in instances
+                     if "_abs" not in str(i["question_id"])][:n_pos]
+
+    def ingest(inst: dict, ns: str) -> tuple[Hipercampo, dict[int, object]]:
+        hc = Hipercampo(":memory:", namespace=ns)
+        mapping: dict[int, object] = {}
+        for sid, sess in zip(inst["haystack_session_ids"],
+                              inst["haystack_sessions"], strict=True):
+            text = _session_text(sess)
+            if not text.strip():
+                continue                    # LongMemEval ships some empty sessions
+            result = hc.remember(text, 0.5, 0.7)
+            _map_session(hc, result, sid, mapping)
+        return hc, mapping
+
+    previo, memory.GATE_ENABLED = memory.GATE_ENABLED, False
+    negativas, positivas = [], []
+    try:
+        for n, inst in enumerate(abs_instances):
+            hc, _ = ingest(inst, f"cal-lme-abs-{n}")
+            hits = hc.recall(inst["question"], k=len(_) or 1, hops=0,
+                             include_history=True)
+            acts = [(h["id"], h["activation"]) for h in hits]
+            negativas.append({"diag": dict(hc.last_decision), "acts": acts,
+                              "objetivo": None, "pos": None,
+                              "question_id": inst["question_id"]})
+            hc.close()
+        for n, inst in enumerate(pos_instances):
+            hc, mapping = ingest(inst, f"cal-lme-pos-{n}")
+            hits = hc.recall(inst["question"], k=len(mapping) or 1, hops=0,
+                             include_history=True)
+            acts = [(h["id"], h["activation"]) for h in hits]
+            correct = {mid for mid, sid in mapping.items()
+                      if sid in set(inst["answer_session_ids"])}
+            ids_order = [i for i, _ in acts]
+            pos = next((idx for idx, i in enumerate(ids_order) if i in correct),
+                       None)
+            positivas.append({"diag": dict(hc.last_decision), "acts": acts,
+                              "objetivo_set": correct, "pos": pos,
+                              "question_id": inst["question_id"]})
+            hc.close()
+    finally:
+        memory.GATE_ENABLED = previo
+    return {"negativas": negativas, "positivas": positivas,
+            "n_abs": len(abs_instances), "n_pos": len(pos_instances)}
+
+
+def evaluar_longmemeval(obs: dict, min_item: float, suelo: float, z: float) -> dict:
+    """`evaluar()`'s counterpart for `observe_longmemeval()`: same two gates
+    (per-item MIN_RECALL_SCORE, then `abstention_gate`), but correctness is
+    SESSION membership (a query can be answered by several atoms of the same
+    session), matching how `context_efficiency.py --longmemeval` scores it."""
+    def responde(s: dict) -> bool:
+        vivos = [(i, a) for i, a in s["acts"] if a >= min_item]
+        if not vivos:
+            return False
+        directa = np.array(sorted((a for _, a in s["acts"]), reverse=True))
+        ok, _ = memory.abstention_gate(directa, len(vivos), semantic=False,
+                                       floor=suelo, zmin=z)
+        return ok
+
+    abstention_acc = (sum(1 for s in obs["negativas"] if not responde(s))
+                      / len(obs["negativas"])) if obs["negativas"] else None
+    hits = 0
+    for s in obs["positivas"]:
+        if not responde(s):
+            continue
+        ids = {i for i, a in s["acts"] if a >= min_item}
+        if ids & s["objetivo_set"]:
+            hits += 1
+    recall_at_k = hits / len(obs["positivas"]) if obs["positivas"] else None
+    return {"abstention_accuracy": abstention_acc, "recall_at_k": recall_at_k}
+
+
 # --- threshold-set evaluation ---------------------------------------------
 def evaluar(obs: dict, min_item: float, suelo: float, z: float) -> dict:
     """Recompute MRR and false recall for thresholds without rerunning memory."""
@@ -206,7 +314,7 @@ def evaluar(obs: dict, min_item: float, suelo: float, z: float) -> dict:
     return {"mrr": mrr, "global": glob, "falsaRec": falsa}
 
 
-def main(ns: list[int], semantico: bool = False):
+def main(ns: list[int], semantico: bool = False, longmemeval: int | None = None):
     audit.set_enabled(False) if hasattr(audit, "set_enabled") else None
     actual = ((memory.MIN_RECALL_SCORE, memory.ANSWER_MIN_SCORE_SEM, memory.RECALL_Z_SEM)
               if semantico else
@@ -282,10 +390,67 @@ def main(ns: list[int], semantico: bool = False):
           f"-> MRR {codo[3]['global']:.3f} · falsaRec {codo[3]['falsaRec']:.2f}")
     print("\n(The choice is a TRADE-OFF: no row wins in both columns.)")
 
+    if not longmemeval:
+        return
+
+    # 4) Same sweep, against REAL dense haystacks instead of synthetic filler.
+    # Root cause found 2026-09-10: ANSWER_MIN_SCORE=0.19 never fires there — see
+    # docs/ROADMAP.md. This re-evaluates the SAME (min_item, suelo, z) grid
+    # already swept above, at zero extra memory runs, so a threshold can be
+    # picked that does not regress the small-corpus table to fix the dense one.
+    print(f"\n=== Observing LongMemEval (stratified {longmemeval}-sample: its "
+          "abstention instances + up to 6 positive ones; ~170s CPU each) ===",
+          flush=True)
+    obs_lme = observe_longmemeval(limit=longmemeval)
+    print(f"  {obs_lme['n_abs']} abstention instances, {obs_lme['n_pos']} "
+          "positive instances observed.")
+
+    print("\n=== Threshold sweep on LongMemEval (same grid as above) ===")
+    cab = (f"{'MIN_ITEM':>9}{'SUELO':>8}{'Z':>6}"
+           f"{'recall@k':>10}{'abstAcc':>10}")
+    print(cab); print("-" * len(cab))
+    filas_lme = []
+    for min_item, suelo, z, _ in filas:
+        r = evaluar_longmemeval(obs_lme, min_item, suelo, z)
+        filas_lme.append((min_item, suelo, z, r))
+        rk = r["recall_at_k"] if r["recall_at_k"] is not None else float("nan")
+        aa = r["abstention_accuracy"] if r["abstention_accuracy"] is not None else float("nan")
+        print(f"{min_item:>9.2f}{suelo:>8.2f}{z:>6.1f}{rk:>10.3f}{aa:>10.2f}")
+
+    # Combined knee: among thresholds that do not lose the small-corpus false
+    # recall (same tolerance as step 3), maximize LongMemEval abstention
+    # accuracy without recall_at_k dropping below its own value AT THE CURRENT
+    # PRODUCTION THRESHOLDS — a floor that abstains perfectly by refusing to
+    # answer anything is not a fix.
+    r_actual_lme = evaluar_longmemeval(obs_lme, *actual)
+    piso_recall = r_actual_lme["recall_at_k"] or 0.0
+    conjuntos = list(zip(filas, filas_lme, strict=True))
+    validos = [(f, flme) for f, flme in conjuntos
+               if f[3]["falsaRec"] <= mejor_falsa + 0.02
+               and (flme[3]["recall_at_k"] or 0.0) >= piso_recall - 0.05]
+    print(f"\nProduction thresholds on LongMemEval: recall@k={r_actual_lme['recall_at_k']:.3f} "
+          f"· abstention_accuracy={r_actual_lme['abstention_accuracy']:.2f}")
+    if not validos:
+        print("No swept combination improves LongMemEval abstention without "
+              "regressing the small-corpus false recall or LongMemEval recall@k "
+              "beyond tolerance — the fix needs a wider grid or a different lever, "
+              "not just a bigger ANSWER_MIN_SCORE.")
+        return
+    f, flme = max(validos, key=lambda pair: pair[1][3]["abstention_accuracy"] or 0.0)
+    print(f"Combined knee: MIN_RECALL_SCORE={f[0]} ANSWER_MIN_SCORE={f[1]} "
+          f"RECALL_Z={f[2]} -> small-corpus MRR {f[3]['global']:.3f} · "
+          f"falsaRec {f[3]['falsaRec']:.2f} · LongMemEval recall@k "
+          f"{flme[3]['recall_at_k']:.3f} · abstention_accuracy "
+          f"{flme[3]['abstention_accuracy']:.2f}")
+
 
 if __name__ == "__main__":
     ns = [20, 100, 500]
+    longmemeval = None
     for i, a in enumerate(sys.argv):
         if a == "--n" and i + 1 < len(sys.argv):
             ns = [int(x) for x in sys.argv[i + 1].split(",")]
-    main(ns, semantico="--semantic" in sys.argv)
+        if a == "--longmemeval":
+            nxt = sys.argv[i + 1] if i + 1 < len(sys.argv) else ""
+            longmemeval = int(nxt) if nxt.isdigit() else 60
+    main(ns, semantico="--semantic" in sys.argv, longmemeval=longmemeval)
