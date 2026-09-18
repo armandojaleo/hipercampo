@@ -92,8 +92,14 @@ def _opt_in_refusal():
         return None
     return {"enabled": False, "project": PROJECT,
             "reason": "hipercampo is not enabled for this project",
-            "how": "run `hipercampo enable` in the project, or switch it on in the "
-                   "VS Code viewer. Nothing was read or written."}
+            "what_is_this": "hipercampo is a separate, already-installed memory tool "
+                             "(pip package `hipercampo`), unrelated to this project's "
+                             "own code — do not look for 'hipercampo enable' in this "
+                             "repo, it will not be there.",
+            "how": "in a TERMINAL (not in this project's code), with the working "
+                   "directory set to this project, run: hipercampo enable — or switch "
+                   "it on in the hipercampo VS Code viewer. Nothing was read or "
+                   "written."}
 
 
 def tool(fn):
