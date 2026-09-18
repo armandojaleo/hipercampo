@@ -98,13 +98,14 @@ the repository's most important files. The next leap is not another feature, but
 
 Three demonstrations, ordered by effort and value:
 
-1. 🟡 **Complete LongMemEval, not just the adapter — now blocked on more than access.**
+1. 🟡 **Complete LongMemEval, not just the adapter — access is the remaining blocker.**
    Run and publish all 500 official instances reproducibly against **Mem0,
    Letta/MemGPT, Zep/Graphiti, classic RAG, and embeddings + reranker**. Separate
-   evidence-session recall from LLM answer quality, as the runner already does. Data/
-   network access is still one blocker, but no longer the only one: publishing
-   against the full set now first needs the abstention collapse below understood —
-   without it, the number would ship with the confounder in it.
+   evidence-session recall from LLM answer quality, as the runner already does.
+   The abstention collapse below is now understood and closed as a documented
+   limitation rather than an open confounder (2026-09-18) — publishing can report
+   it honestly instead of waiting on a fix similarity-only scoring cannot provide.
+   Data/network access to run the other systems is the remaining blocker.
 
    **Measured on a stratified 60-instance subset (dense haystacks, ~48 sessions
    each), 2026-08-11 and reconfirmed 2026-09-10 on a freshly re-downloaded copy of
@@ -158,10 +159,30 @@ Three demonstrations, ordered by effort and value:
    or larger than several positives (`031748ae_abs` at 0.083 beats 4 of the 6
    positives outright). **Honest limit, not a closed door: 13 points is too
    few to rule out margin definitively — this rules out "margin alone, at
-   this sample size," not the idea.** Before spending more CPU on a bigger
-   sample or a margin+floor combination, the cheaper next move is checking
-   whether conformal/isotonic calibration (already on the list below) needs
-   this resolved first or can absorb it directly.
+   this sample size," not the idea.**
+
+   **Closed, same day, with a structural proof rather than more samples: the
+   nearest cross-class pair in (`best`, `margin`) space is
+   `gpt4_70e84552_abs` (should abstain: 0.207, 0.002) against `6a1eabeb`
+   (should answer: 0.198, 0.001) — distance ≈0.009, effectively the same
+   point.** Two instances requiring opposite decisions carry near-identical
+   similarity signal. This is not a sample-size problem: no monotonic
+   recalibration of this signal — floor, margin, or conformal/isotonic
+   calibration over either — can ever separate two points that collide in
+   feature space, however much calibration data is added. **Conformal/
+   isotonic calibration over the existing signal is therefore ruled out as a
+   full fix, not just untried**, and item 4 under "Long-term technical
+   direction" below should be read with that ceiling in mind. The real
+   requirement is a signal similarity does not carry: whether the candidate's
+   text actually contains the queried fact (a number, a name, the specific
+   thing asked for), not how much it sounds like the question. That is a
+   different kind of check — closer to content verification than to
+   threshold-tuning — and doing it without an LLM call in the hot recall path
+   is an open design question, not yet started. Accepted as a known,
+   documented limitation for now: LongMemEval's full 500-instance run (item 1
+   above) can proceed and report abstention honestly as a limitation of dense,
+   single-person corpora, rather than staying blocked on a fix that similarity
+   alone cannot provide.
 2. ⚪ **Longitudinal experiment (the definitive one).** Simulate 100k–1M events over
    months: preference changes, contradictions, expiring facts, repetitive noise,
    exceptional events, and resurfacing memories. Metrics: useful memory/MB, useful
