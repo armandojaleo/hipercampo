@@ -285,6 +285,52 @@ def evaluar_longmemeval(obs: dict, min_item: float, suelo: float, z: float) -> d
     return {"abstention_accuracy": abstention_acc, "recall_at_k": recall_at_k}
 
 
+def margin_signal(s: dict) -> dict:
+    """`best` minus the SECOND-best direct activation (and their ratio).
+
+    Next hypothesis after "no floor on `best` separates the two cases"
+    (measured 2026-09-18, docs/ROADMAP.md): a real answer in a dense corpus
+    may still stand out from its OWN nearest competitor even where its
+    absolute score is diluted by the size of the candidate pool, while a
+    near-miss that merely shares surface vocabulary tends to have several
+    similarly-mediocre competitors nearby — so the GAP might separate what
+    the absolute floor cannot. Unverified until swept the same way the floor
+    was; this only computes the signal, `main()` reports whether it holds up."""
+    vals = sorted((a for _, a in s["acts"]), reverse=True)
+    best = vals[0] if vals else 0.0
+    second = vals[1] if len(vals) > 1 else 0.0
+    return {"best": best, "second": second, "margin": best - second,
+            "ratio": (best / second) if second > 1e-9 else float("inf")}
+
+
+def reportar_margen(obs_lme: dict) -> None:
+    """p5/median/p95 of `margin_signal` for positives vs. negatives, and the
+    overlap fraction — same diagnostic `main()` already runs on `best` alone
+    for the synthetic corpus, applied here to the candidate replacement
+    signal instead of re-deriving a new floor for the one just ruled out."""
+    pos = np.array([margin_signal(s)["margin"] for s in obs_lme["positivas"]])
+    neg = np.array([margin_signal(s)["margin"] for s in obs_lme["negativas"]])
+    print("\n=== Margin (best - second_best) on LongMemEval: positive vs. negative ===")
+    if len(pos) == 0 or len(neg) == 0:
+        print("(not enough observations on one side to compare)")
+        return
+    p = np.percentile(pos, [5, 50, 95])
+    q = np.percentile(neg, [5, 50, 95])
+    overlap = float((neg >= np.median(pos)).mean())
+    print(f"positive p5/median/p95: {p[0]:.3f}/{p[1]:.3f}/{p[2]:.3f}")
+    print(f"negative p5/median/p95: {q[0]:.3f}/{q[1]:.3f}/{q[2]:.3f}")
+    print(f"overlap (negatives >= median positive): {overlap:.2f}  "
+          "(0.00 would mean margin cleanly separates them; compare against "
+          "the floor's own overlap on `best`, printed above)")
+    print("\nPer-instance margin (best/second/margin/ratio):")
+    for label, group in (("neg", obs_lme["negativas"]), ("pos", obs_lme["positivas"])):
+        for s in group:
+            m = margin_signal(s)
+            print(f"  {label} {s.get('question_id', '?'):<20} best={m['best']:.3f} "
+                  f"second={m['second']:.3f} margin={m['margin']:.3f} "
+                  f"ratio={m['ratio']:.2f}")
+
+
 # --- threshold-set evaluation ---------------------------------------------
 def evaluar(obs: dict, min_item: float, suelo: float, z: float) -> dict:
     """Recompute MRR and false recall for thresholds without rerunning memory."""
@@ -430,6 +476,12 @@ def main(ns: list[int], semantico: bool = False, longmemeval: int | None = None)
                and (flme[3]["recall_at_k"] or 0.0) >= piso_recall - 0.05]
     print(f"\nProduction thresholds on LongMemEval: recall@k={r_actual_lme['recall_at_k']:.3f} "
           f"· abstention_accuracy={r_actual_lme['abstention_accuracy']:.2f}")
+
+    # Whether or not the floor sweep found anything: check the next candidate
+    # signal regardless, so a bad floor result doesn't also hide whether
+    # margin was worth trying.
+    reportar_margen(obs_lme)
+
     if not validos:
         print("No swept combination improves LongMemEval abstention without "
               "regressing the small-corpus false recall or LongMemEval recall@k "

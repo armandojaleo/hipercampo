@@ -145,6 +145,23 @@ Three demonstrations, ordered by effort and value:
    --longmemeval 60` (dataset not in the repo, 277 MB, `data/` is gitignored;
    ~170s CPU per LongMemEval instance, ~13 instances — the synthetic N-sweep is
    seconds).
+
+   **Second candidate signal tried, same day: the MARGIN (`best` minus the
+   second-best direct activation) instead of `best` alone — also does not
+   cleanly separate them.** Hypothesis: a real answer might stand out from its
+   own nearest competitor even where its absolute score is diluted by pool
+   size, while a vocabulary-only near-miss tends to have several similarly
+   mediocre competitors nearby. Measured (`reportar_margen` in
+   `scripts/calibrate.py`, same 7 negative + 6 positive instances): median
+   margin is ~3x higher on positives (0.035) than negatives (0.011), a real
+   trend, but overlap stays at 0.43 — 3 of 7 negatives have a margin equal to
+   or larger than several positives (`031748ae_abs` at 0.083 beats 4 of the 6
+   positives outright). **Honest limit, not a closed door: 13 points is too
+   few to rule out margin definitively — this rules out "margin alone, at
+   this sample size," not the idea.** Before spending more CPU on a bigger
+   sample or a margin+floor combination, the cheaper next move is checking
+   whether conformal/isotonic calibration (already on the list below) needs
+   this resolved first or can absorb it directly.
 2. ⚪ **Longitudinal experiment (the definitive one).** Simulate 100k–1M events over
    months: preference changes, contradictions, expiring facts, repetitive noise,
    exceptional events, and resurfacing memories. Metrics: useful memory/MB, useful
