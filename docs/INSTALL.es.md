@@ -296,7 +296,9 @@ En una conversación con Claude, pídele:
 > «Guarda en tu memoria que prefiero respuestas directas» → usará `hc_remember`.
 > Más tarde: «¿qué recuerdas sobre cómo prefiero que me hables?» → usará `hc_recall`.
 
-También puedes verificar el servidor sin Claude, con un handshake MCP crudo:
+También puedes verificar el servidor sin Claude, con un handshake MCP crudo.
+
+macOS/Linux (bash):
 
 ```bash
 printf '%s\n' \
@@ -305,7 +307,29 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-Debe listar las 18 herramientas `hc_*`.
+Windows (PowerShell) — canalizar las mismas líneas directamente añade un BOM
+UTF-8 que rompe el primer mensaje, así que usa un pequeño script en su lugar:
+
+```powershell
+@'
+import json, subprocess, sys
+p = subprocess.Popen([sys.executable, "-m", "hipercampo.server"], stdin=subprocess.PIPE,
+                      stdout=subprocess.PIPE, text=True, bufsize=1, encoding="utf-8")
+for msg in [
+    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}},
+    {"jsonrpc": "2.0", "method": "notifications/initialized"},
+    {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+]:
+    p.stdin.write(json.dumps(msg) + "\n")
+    p.stdin.flush()
+for _ in range(2):
+    print(p.stdout.readline().strip())
+p.terminate()
+'@ | Set-Content -Encoding utf8 handshake_check.py
+python handshake_check.py
+```
+
+En ambos casos debe listar las 18 herramientas `hc_*`.
 
 ---
 

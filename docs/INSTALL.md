@@ -325,7 +325,9 @@ In a conversation with Claude, ask it:
 > «Store in your memory that I prefer direct answers» → it will use `hc_remember`.
 > Later: «what do you remember about how I like to be spoken to?» → `hc_recall`.
 
-You can also verify the server without Claude, with a raw MCP handshake:
+You can also verify the server without Claude, with a raw MCP handshake.
+
+macOS/Linux (bash):
 
 ```bash
 printf '%s\n' \
@@ -334,7 +336,29 @@ printf '%s\n' \
 '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python -m hipercampo.server
 ```
 
-It must list the 18 `hc_*` tools.
+Windows (PowerShell) — piping the same lines directly adds a UTF-8 BOM that
+breaks the first message, so use a small script instead:
+
+```powershell
+@'
+import json, subprocess, sys
+p = subprocess.Popen([sys.executable, "-m", "hipercampo.server"], stdin=subprocess.PIPE,
+                      stdout=subprocess.PIPE, text=True, bufsize=1, encoding="utf-8")
+for msg in [
+    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}},
+    {"jsonrpc": "2.0", "method": "notifications/initialized"},
+    {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+]:
+    p.stdin.write(json.dumps(msg) + "\n")
+    p.stdin.flush()
+for _ in range(2):
+    print(p.stdout.readline().strip())
+p.terminate()
+'@ | Set-Content -Encoding utf8 handshake_check.py
+python handshake_check.py
+```
+
+Either way it must list the 18 `hc_*` tools.
 
 ---
 
