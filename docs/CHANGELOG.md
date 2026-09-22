@@ -5,6 +5,25 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Added — core
+- **`hipercampo install [--isolated | --shared]`: one command instead of three manual
+  ones.** Registers the MCP server for this project (a project-scoped `.mcp.json` for
+  `--isolated`, with its own `proj-<name>` namespace; a user-scope entry for `--shared`,
+  joining an existing one if the user already registered hipercampo that way elsewhere
+  instead of creating a second, competing entry), runs `hipercampo enable`, and installs
+  the SYNAPTIC hook globally if it's missing. Without a flag it asks interactively;
+  found live that `sys.stdin.isatty()` can report "interactive" on a closed/redirected
+  stdin (git-bash on Windows) — `input()` failing with `EOFError` is now treated the
+  same as a non-interactive terminal (refuse, don't guess) instead of crashing with a
+  traceback. `hipercampo/support/mcpsetup.py`, `tests/support/test_mcpsetup.py`.
+- **`hipercampo hook-install [--global]`: same idea, for the SYNAPTIC hook alone.**
+  Found live: a Claude Code session opened in an already-enabled project, with the MCP
+  server registered, still had no idea hipercampo existed — nothing had ever called
+  `hipercampo hook`, because the hook from docs/INSTALL.md had never been hand-copied
+  into anyone's `settings.json`. Additive and idempotent: preserves whatever else is
+  there and recognises a differently-spelled existing entry instead of duplicating it.
+  `hipercampo/support/hooksetup.py`, `tests/support/test_hooksetup.py`.
+
 ### Changed — viewer listing & site
 - **The Marketplace description and the viewer's README led with a feature list, not
   with why any of it matters.** Both (EN/ES) now open with what the viewer actually

@@ -16,6 +16,8 @@ hipercampo CLI — for use from the terminal and, above all, from HOOKS
     hipercampo restart               # terminate them after an upgrade (client relaunches)
     hipercampo log [-f] [-g text]    # what it decided and why (live with -f)
     hipercampo identity              # what's been learned while working
+    hipercampo install --isolated    # one-shot: register MCP + enable + hook, this project alone
+    hipercampo install --shared      # ...or join the memory your other --shared projects use
     hipercampo enable|disable        # turn hipercampo on/off for THIS project
     hipercampo projects              # where it is on
     hipercampo hook-install --global # make every project introduce hipercampo on its own
@@ -517,6 +519,57 @@ def cmd_hook_install(args) -> int:
     return 0
 
 
+def cmd_install(args) -> int:
+    """One command instead of three manual, undocumented-in-practice steps:
+    register the MCP server for THIS project (choosing, explicitly, whether
+    it joins a shared memory or gets its own isolated drawer), enable it, and
+    offer the SYNAPTIC hook. Without this, a project ends up wherever the
+    LAST `claude mcp add` happened to point — which is how a real project
+    ended up silently sharing the 'personal' namespace with everything else.
+
+    `--isolated` / `--shared` decide the mode; without either, asks — unless
+    stdin isn't a terminal (scripts, CI), where guessing would be worse than
+    refusing."""
+    from .support import config, hooksetup, mcpsetup
+    target = os.path.abspath(getattr(args, "path", None) or os.getcwd())
+    mode = "isolated" if getattr(args, "isolated", False) else (
+        "shared" if getattr(args, "shared", False) else None)
+    if mode is None:
+        # isatty() alone isn't trusted: it has reported "interactive" on a
+        # redirected/empty stdin before (git-bash on Windows, seen live).
+        # input() is the real test; EOF on it is treated the same as a
+        # non-interactive terminal — refuse rather than pick a mode for you.
+        refusal = ("Neither --isolated nor --shared was given, and no answer "
+                  "came back (not an interactive terminal, or stdin is "
+                  "closed) — safer to refuse than to guess. Re-run with one "
+                  "of the two flags.")
+        if not sys.stdin.isatty():
+            print(refusal, file=sys.stderr)
+            return 2
+        print("Should this project's memory be ISOLATED (its own drawer, "
+              "nothing else reads or writes it) or SHARED (joins the memory "
+              "your other --shared projects already use)?")
+        try:
+            answer = input("[i]solated / [s]hared: ").strip().lower()
+        except EOFError:
+            print(refusal, file=sys.stderr)
+            return 2
+        mode = "shared" if answer.startswith("s") else "isolated"
+
+    mcp_result = mcpsetup.install(target, mode)
+    config.set_project_enabled(target, True)
+    hook_result = None
+    if not hooksetup.hook_installed("global"):
+        hook_result = hooksetup.install_hook("global")
+
+    out = {"project": target, "mode": mode, "mcp": mcp_result, "enabled": True,
+           "hook": hook_result}
+    print(json.dumps(out, ensure_ascii=False))
+    print("\nRestart Claude Code (or open /hooks and /mcp once) to pick this up.",
+          file=sys.stderr)
+    return 0
+
+
 def cmd_budget(args) -> int:
     """Views or sets the hook's token budget (what the memory injects per
     turn). Persisted next to the .db and honored by the hook on the next
@@ -963,6 +1016,7 @@ _COMMANDS = {
     "dormant": cmd_dormant, "purge": cmd_purge, "log": cmd_log,
     "enable": cmd_projects, "disable": cmd_projects, "projects": cmd_projects,
     "export": cmd_export, "import": cmd_import, "hook-install": cmd_hook_install,
+    "install": cmd_install,
 }
 
 
@@ -1001,6 +1055,15 @@ def main(argv=None) -> int:
                     help="~/.claude/settings.json instead of this project's")
     hi.add_argument("path", nargs="?",
                     help="project directory when not --global (default: current)")
+    ins = sub.add_parser(
+        "install",
+        help="register the MCP server for this project (isolated or shared) and enable it")
+    grp = ins.add_mutually_exclusive_group()
+    grp.add_argument("--isolated", action="store_true",
+                     help="this project's own namespace; nothing else reads or writes it")
+    grp.add_argument("--shared", action="store_true",
+                     help="join the namespace your other --shared projects already use")
+    ins.add_argument("path", nargs="?", help="project directory (default: current)")
     sub.add_parser("version", help="installed version")
     for name, hlp in (("assist", "what's needed right now (hooks)"),
                           ("recall", "retrieve"), ("muse", "inspiration"),

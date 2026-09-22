@@ -118,6 +118,30 @@ docker compose run --rm hipercampo   # arranca el server (stdio); Ctrl+C para sa
 
 ## Paso final · Conectar tu agente
 
+### El camino rápido (Claude Code)
+
+```bash
+cd mi-proyecto
+hipercampo install --isolated    # namespace propio de este proyecto, nadie más lo lee
+# o:
+hipercampo install --shared      # se une a la memoria que ya usan tus proyectos --shared
+```
+
+Un solo comando en vez de tres manuales: registra el servidor MCP (`.mcp.json` del
+proyecto para `--isolated`, o una entrada a nivel de usuario para `--shared` — uniéndose
+a una ya existente si ya registraste hipercampo así en otro sitio), ejecuta `hipercampo
+enable` por ti, e instala el hook SINÁPTICO a nivel global si todavía no está (ver más
+abajo). Sin flag, pregunta. Reinicia Claude Code (o abre `/mcp` y `/hooks` una vez)
+después para que lo recoja.
+
+**Por qué importa aislado vs. compartido**: registrar el servidor sin elegir es como un
+proyecto acaba donde apuntara el último `claude mcp add` — normalmente el registro
+"personal" global que ya tenías, compartiendo memoria con todos los demás proyectos sin
+querer. `install` hace esa elección explícita en vez de accidental.
+
+El resto de esta sección es lo que `install` hace por ti, explicado paso a paso — útil
+si quieres más control, otro cliente, o entender qué ha cambiado.
+
 ### Codex (CLI / extensión IDE / aplicación de escritorio)
 
 Codex admite servidores MCP locales por STDIO y sus clientes locales comparten la
