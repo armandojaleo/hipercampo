@@ -1,8 +1,10 @@
 # hipercampo — memory viewer for VS Code
 
-See and explore an agent's hipercampo memory without leaving the editor. The viewer is
-local-first: it opens no network connection and never accesses SQLite directly. It calls
-the `hipercampo` CLI, which already enforces contexts, migrations and isolation.
+Watch an agent's memory think: what it stored, why it was surprised enough to keep it,
+what it consolidated in sleep, and what it let go. See and explore hipercampo memory
+without leaving the editor. The viewer is local-first: it opens no network connection
+and never accesses SQLite directly. It calls the `hipercampo` CLI, which already
+enforces contexts, migrations and isolation.
 
 The extension follows the language configured in VS Code. English is the fallback and
 Spanish is fully localized. [Leer en español](README.es.md).

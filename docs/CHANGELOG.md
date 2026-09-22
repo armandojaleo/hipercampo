@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Changed — viewer listing & site
+- **The Marketplace description and the viewer's README led with a feature list, not
+  with why any of it matters.** Both (EN/ES) now open with what the viewer actually
+  shows you — an agent's memory thinking, not just a UI tour. `editor/package.nls*.json`,
+  `editor/README*.md`.
+- **A `docs/posts/` section**, sharing `docs/index.html`'s design language via the new
+  `docs/style.css`, for write-ups longer than a changelog line deserves — starting with
+  the abstention-gate investigation (floor, then margin, then the structural proof that
+  neither could ever have worked) as the first post.
+
 ### Added — core
 - **`hipercampo export` / `hipercampo import`: the same memory on more than one
   machine.** Two machines that both grew memories while apart could not be

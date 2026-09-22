@@ -1,9 +1,11 @@
 # hipercampo — visor de memoria para VS Code
 
-Una ventana para **ver y explorar** la memoria de hipercampo sin salir del editor.
-Local-first: no abre red ni base de datos; llama al CLI `hipercampo`, que ya sabe de
-contextos y aislamiento. Es de **solo lectura para consultar**, y toda escritura
-(olvidar / borrar) es una acción explícita que pasa por el propio CLI con confirmación.
+Mira pensar la memoria de un agente: qué guardó, por qué le sorprendió lo bastante
+como para quedárselo, qué consolidó al dormir y qué dejó ir. Una ventana para **ver y
+explorar** la memoria de hipercampo sin salir del editor. Local-first: no abre red ni
+base de datos; llama al CLI `hipercampo`, que ya sabe de contextos y aislamiento. Es de
+**solo lectura para consultar**, y toda escritura (olvidar / borrar) es una acción
+explícita que pasa por el propio CLI con confirmación.
 
 [Read in English](README.md).
 

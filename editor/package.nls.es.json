@@ -1,6 +1,6 @@
 {
   "ext.displayName": "Hipercampo — visor de memoria",
-  "ext.description": "Explora la memoria de Hipercampo desde VS Code: mapa, tiempo, hechos, ideas, coste de tokens y salud (local-first, sin red).",
+  "ext.description": "Mira pensar la memoria de tu agente: qué recuerda, por qué y qué eligió olvidar. Basado en VSA, local-first, sin nube — mapa, línea temporal, hechos y coste en tokens.",
   "cmd.showMemories": "Hipercampo: ver memorias",
   "cmd.refresh": "Hipercampo: refrescar memorias",
   "cmd.editLinked": "Hipercampo: editar contextos enlazados",

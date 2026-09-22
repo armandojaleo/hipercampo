@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What we measured, and what we couldn't fix — hipercampo</title>
+<meta name="description" content="Three attempts at abstention in dense memories. Two failed quietly. The third proved the first two could never have worked.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="mast-sm">
+  <div class="wrap">
+    <p class="kicker">hipercampo · post · 2026-09-22</p>
+    <h1 style="font-size:clamp(1.8rem,5.5vw,2.8rem)">What we measured, and what we couldn't fix</h1>
+    <p class="thesis">Three attempts at abstention in dense memories. Two failed quietly.
+    The third proved the first two could never have worked.</p>
+    <nav class="cta">
+      <a href="index.html">posts</a>
+      <a href="../index.html">home</a>
+      <a href="https://github.com/armandojaleo/hipercampo/blob/main/docs/ROADMAP.md">roadmap</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <article>
+
+  <section>
+    <p>Most memory-system posts are announcements: a new benchmark, a new number, a launch.
+    This one isn't. It's the record of chasing a bug for several sessions, closing it with a
+    negative result, and writing that down instead of quietly moving the threshold and hoping
+    nobody checks. Measuring before believing — and saying the limits out loud — is the one
+    rule this project doesn't bend on, so this had to be a post, not a line buried in a
+    changelog.</p>
+  </section>
+
+  <section>
+    <p class="label">The setup</p>
+    <p><code>hc_recall</code> can say nothing. Instead of always returning its best guess,
+    hipercampo's recall gate can <strong style="color:var(--paper)">abstain</strong> — return
+    an empty result rather than a confident wrong one. On our own benchmarks (small,
+    single-topic corpora) that works: abstention accuracy of 0.833 against unrelated queries.</p>
+    <p>Run the same gate against <a href="https://github.com/xiaowu0162/LongMemEval">LongMemEval</a>
+    — real dense, single-person conversation histories, dozens of sessions per haystack — and
+    abstention accuracy collapses to <strong style="color:var(--write)">0.000</strong>. Recall
+    stayed healthy (0.830 at k=5, chance is ~0.10), so this wasn't a retrieval failure. The
+    memory found the right things. It just never said "I don't know" when it should have.</p>
+  </section>
+
+  <section>
+    <p class="label">Attempt 1 — raise the floor</p>
+    <p>The gate's simplest defense is an absolute floor: if the best match doesn't clear a
+    score, stay quiet. Swept the whole grid against real LongMemEval haystacks instead of
+    synthetic filler text:</p>
+    <table class="ledger">
+      <tr><th>floor</th><th>recall@k</th><th>abstention</th></tr>
+      <tr><td class="idea">0.19 (production)</td><td class="what">0.833</td><td class="what">0.00</td></tr>
+      <tr><td class="idea">0.24</td><td class="what">0.667</td><td class="what">0.43</td></tr>
+      <tr><td class="idea">0.33</td><td class="what">0.333</td><td class="what">0.71</td></tr>
+      <tr><td class="idea">0.42+</td><td class="what">0.167</td><td class="what">0.86 (never 1.0)</td></tr>
+    </table>
+    <p style="margin-top:1rem">No floor buys abstention without paying for it in recall at
+    close to 1:1. Worse: raised as high as we swept it, abstention plateaus at 0.86 — it never
+    reaches a clean 1.0, while recall keeps falling. Whatever this is, it isn't a knee to pick.</p>
+  </section>
+
+  <section>
+    <p class="label">Attempt 2 — the margin instead of the score</p>
+    <p>Next hypothesis: maybe the raw score is the wrong axis. A real answer might stand out
+    clearly from its own nearest competitor even when its absolute score is diluted by a large
+    candidate pool; a near-miss that only shares vocabulary might have several similarly
+    mediocre competitors nearby. So: measure the gap between the best match and the
+    second-best, instead of the best alone.</p>
+    <p>There was a real trend — median margin was about <strong style="color:var(--paper)">3×
+    higher</strong> on questions with a true answer (0.035) than on ones without (0.011). But
+    overlap between the two groups stayed at 0.43, and three of the seven no-answer cases had a
+    margin as large as several of the answerable ones. A trend that overlaps that much isn't a
+    gate.</p>
+  </section>
+
+  <section>
+    <p class="label">Attempt 3 — looking for why, and finding a proof instead of a bigger sample</p>
+    <p>Thirteen observations is a small sample, and the honest next step would normally be
+    "get more data." Instead we looked at which two points, across the whole set, sat closest
+    to each other in (score, margin) space — one that should have triggered an answer, one that
+    should have triggered silence:</p>
+    <pre><span class="prompt">gpt4_70e84552_abs</span>  should ABSTAIN  →  best=0.207  margin=0.002
+<span class="prompt">6a1eabeb</span>           should ANSWER   →  best=0.198  margin=0.001</pre>
+    <p style="margin-top:1rem">Distance between them: ≈0.009. Effectively the same point,
+    answerable one way and not the other. That's not a sample-size problem — it's a ceiling.
+    No monotonic recalibration of this signal, however sophisticated (a hand-tuned threshold, a
+    learned margin, conformal or isotonic calibration), can ever separate two observations that
+    collide in feature space. More data would only find more collisions like it.</p>
+  </section>
+
+  <section>
+    <p class="label">What actually would fix it</p>
+    <p>Similarity tells you how much a candidate <em>sounds like</em> the question. It doesn't
+    tell you whether the candidate <em>contains the fact being asked for</em> — a number, a
+    name, the specific thing that answers it. That's a different kind of check: closer to
+    content verification than to threshold-tuning, and doing it without a heavyweight model
+    call sitting in the hot recall path is a real, unsolved design question — not a tuning
+    knob we haven't turned far enough yet.</p>
+    <p>We haven't built that. It's written down as an open problem in the
+    <a href="https://github.com/armandojaleo/hipercampo/blob/main/docs/ROADMAP.md">roadmap</a>,
+    not as a solved one. LongMemEval's full run can proceed reporting this honestly, as a
+    documented limitation of dense, single-person corpora — which is more useful to anyone
+    evaluating this than a threshold quietly tuned to look better on one benchmark and worse
+    everywhere else.</p>
+  </section>
+
+  <section>
+    <p class="label">Reproduce it</p>
+    <pre><span class="prompt">$</span> python scripts/calibrate.py --n 20,100,500 --longmemeval 60</pre>
+    <p>Needs the official LongMemEval dataset (not shipped in this repo; ~170s CPU per
+    instance). Everything above — the floor sweep, the margin analysis, the nearest cross-class
+    pair — comes out of that one run. The commits are
+    <a href="https://github.com/armandojaleo/hipercampo/commit/eba84ae">eba84ae</a>,
+    <a href="https://github.com/armandojaleo/hipercampo/commit/c546810">c546810</a>, and
+    <a href="https://github.com/armandojaleo/hipercampo/commit/514dfcc">514dfcc</a>.</p>
+  </section>
+
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">hipercampo — local-first, MIT-licensed, CPU-only. no accounts, no telemetry.</div>
+</footer>
+
+</body>
+</html>
