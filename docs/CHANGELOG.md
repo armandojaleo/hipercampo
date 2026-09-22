@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+## [0.1.0b16] — 2026-09-22
+
 ### Added — core
 - **`hipercampo install [--isolated | --shared]`: one command instead of three manual
   ones.** Registers the MCP server for this project (a project-scoped `.mcp.json` for
