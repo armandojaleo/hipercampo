@@ -46,8 +46,12 @@ def actual_cost():
     """Return the injection-cost distribution from the real audit log."""
     toks = []
     for ln in audit.tail(0, action="tokens"):
-        m = re.search(r"(\d+) tok", ln)
-        if m and "inyect" in ln.lower():
+        # `\b` matters: without it "10:09:22 tokens" matches, and the
+        # "cost" reported was the timestamp's seconds (mean 30, max 59).
+        m = re.search(r"(\d+) tok\b", ln)
+        # "inyect" covers log lines written before the log went English.
+        # Matching only that silently dropped every newer entry.
+        if m and re.search(r"inject|inyect", ln, re.I):
             toks.append(int(m.group(1)))
     if not toks:
         return {}
