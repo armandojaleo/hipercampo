@@ -62,6 +62,50 @@ def test_hook_returns_json_expected_by_claude_code():
     _limpiar_db()
 
 
+def test_hook_injects_an_index_line_for_long_memories():
+    # Measured before the index: ~300 tok per injecting turn, paid whether
+    # the memory was read or not. A long memory now enters as ONE line with
+    # its #id, and the agent reads the rest on demand.
+    _limpiar_db()
+    largo = ("El servidor de produccion esta alojado en Frankfurt. "
+             + "La migracion se hizo en marzo porque la latencia desde Madrid "
+               "era de ochenta milisegundos y el proveedor anterior subio el precio "
+               "un cuarenta por ciento sin previo aviso, cosa que nadie esperaba. " * 2
+             + "COLA_QUE_NO_DEBE_ENTRAR")
+    _correr("remember", largo)
+    r = _hook("¿donde esta alojado el servidor de produccion?")
+    ctx = r["hookSpecificOutput"]["additionalContext"]
+    assert "Frankfurt" in ctx, ctx
+    assert "COLA_QUE_NO_DEBE_ENTRAR" not in ctx, ctx
+    assert "- #" in ctx and "hc_recall(ids=" in ctx, ctx
+    _limpiar_db()
+
+
+def test_short_memory_goes_in_whole_without_index_marks():
+    _limpiar_db()
+    _correr("remember", "el servidor de produccion esta alojado en Frankfurt")
+    ctx = _hook("¿donde esta alojado el servidor de produccion?")[
+        "hookSpecificOutput"]["additionalContext"]
+    assert "- #" not in ctx and "hc_recall(ids=" not in ctx, ctx
+    _limpiar_db()
+
+
+def test_get_by_id_returns_full_text_and_reinforces():
+    from hipercampo.cycle.memory import Hipercampo
+    _limpiar_db()
+    hc = Hipercampo(_DB)
+    try:
+        mid = hc.remember("dato unico para leer por id, con su cola entera", 0.5)["id"]
+        antes = hc.store.get(mid)["access_count"]
+        got = hc.get([mid, 999999])
+        assert [g["id"] for g in got] == [mid], got
+        assert got[0]["text"].endswith("cola entera"), got
+        assert hc.store.get(mid)["access_count"] == antes + 1
+    finally:
+        hc.close()
+    _limpiar_db()
+
+
 def test_hook_stays_quiet_when_nothing_is_known():
     _limpiar_db()
     _correr("remember", "algo totalmente ajeno sobre jardineria y macetas")

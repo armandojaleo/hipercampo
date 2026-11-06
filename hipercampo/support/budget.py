@@ -18,6 +18,7 @@ about it, not enough to bill by. Anyone who wants exactness can install
 """
 
 import os
+import re
 
 # Characters per token (estimate for ES/EN prose). Adjustable in case
 # someone works in a language where the ratio is very different.
@@ -136,6 +137,27 @@ def truncate(text: str, max_tokens: int) -> str:
     if space > limit * 0.6:                       # don't leave a tiny stub
         cut = cut[:space]
     return cut.rstrip(" .,;:—-") + " […]"
+
+
+HEADLINE_TOKENS = 25
+
+
+def headline(text: str, max_tokens: int = HEADLINE_TOKENS) -> str:
+    """One index line for a memory: its first sentence, or as much as fits.
+
+    Unlike a silent cut, this is DECLARED: the line carries its #id and
+    the header says it's an index, so the reader knows there's more and
+    how to get it. A memory short enough is returned whole, unmarked:
+    indexing it would cost the same and hide nothing."""
+    text = " ".join(text.split())
+    if estimate_tokens(text) <= max_tokens:
+        return text
+    # Not ":" — "PENDIENTE (2026-08-11): …" is a label, not a headline.
+    m = re.match(r"(.{20,}?[.!?])\s", text)
+    first = m.group(1) if m else text
+    if estimate_tokens(first) <= max_tokens:
+        return first + " …"
+    return truncate(first, max_tokens).replace(" […]", " …")
 
 
 def _notice(omitted: int, budget: int) -> str:

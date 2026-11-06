@@ -142,11 +142,14 @@ def hc_remember(text: str, importance: float = 0.5, confidence: float = 0.5) -> 
 
 
 @tool
-def hc_recall(query: str, k: int = 5, include_history: bool = False,
+def hc_recall(query: str = "", k: int = 5, include_history: bool = False,
               max_scan: int | None = None, nav: bool = False,
-              nav_auto: bool = False) -> list:
+              nav_auto: bool = False, ids: list[int] | None = None) -> list:
     """Retrieves what's relevant. Returns [] if it doesn't know anything.
+    ids=[...] reads those memories in full (the #ids of an index).
     max_scan bounds CPU/RAM; nav/nav_auto turn on the navigable graph."""
+    if ids:
+        return hc.get(ids)
     a = _read_args(k, max_scan, nav, nav_auto)
     return hc.recall(query, a["k"], include_history=include_history,
                      max_scan=a["max_scan"], nav=a["nav"])

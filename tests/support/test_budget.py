@@ -475,6 +475,18 @@ def test_activating_unknown_tool_does_not_crash():
     assert "error" in r and r["available"]
 
 
+def test_headline_keeps_short_memories_whole_and_cuts_long_ones_declared():
+    corto = "el servidor esta en Frankfurt"
+    assert budget.headline(corto) == corto
+    largo = ("PENDIENTE INVESTIGAR (2026-08-11): la abstencion no funciona en "
+             "corpus densos. " + "Detalle que no debe entrar en el indice. " * 10)
+    h = budget.headline(largo)
+    # A colon ends a label, not a sentence: the headline must carry the claim.
+    assert "abstencion no funciona" in h, h
+    assert h.endswith("…") and "Detalle" not in h, h
+    assert budget.estimate_tokens(h) <= budget.HEADLINE_TOKENS + 2, h
+
+
 if __name__ == "__main__":
     fallos = 0
     for nombre, fn in sorted(globals().items()):

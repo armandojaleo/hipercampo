@@ -37,8 +37,11 @@ atexit.register(_cerrar_server_de_prueba)
 # herramienta -> parámetros (nombre: ¿tiene valor por defecto?)
 HERRAMIENTAS = {
     "hc_remember":      {"text": False, "importance": True, "confidence": True},
-    "hc_recall":        {"query": False, "k": True, "include_history": True,
-                         "max_scan": True, "nav": True, "nav_auto": True},
+    # `ids` es DELIBERADO: el hook inyecta un índice (#id por línea) y así se
+    # lee el detalle. Por eso `query` pasa a tener valor por defecto.
+    "hc_recall":        {"query": True, "k": True, "include_history": True,
+                         "max_scan": True, "nav": True, "nav_auto": True,
+                         "ids": True},
     "hc_update":        {"target": True, "new_text": True, "importance": True,
                          "memory_id": True, "confidence": True},
     "hc_remember_fact": {"subject": True, "predicate": True, "object": True,
