@@ -81,6 +81,27 @@ def test_hook_injects_an_index_line_for_long_memories():
     _limpiar_db()
 
 
+def test_atom_and_its_source_are_shown_once():
+    # Seen in the real memory: an atom and its own source back to back,
+    # the same sentence twice. The source becomes a pointer on the atom.
+    _limpiar_db()
+    texto = ("El servidor de produccion esta alojado en Frankfurt desde marzo. "
+             "La base de datos usa PostgreSQL dieciseis con replicas en Dublin. "
+             "Las copias de seguridad se hacen cada noche a las tres en punto. "
+             "El dominio principal se renueva cada mes de octubre sin falta. "
+             "Los certificados TLS los emite Let's Encrypt de forma automatica. "
+             "El equipo de guardia rota cada semana entre cuatro personas fijas. "
+             "Los registros se guardan noventa dias antes de borrarse del todo. "
+             "La monitorizacion avisa por Telegram cuando algo cae mas de un minuto.")
+    r = json.loads(_correr("remember", texto)[1] or "{}")
+    assert r.get("atomized"), r
+    ctx = _hook("¿donde esta alojado el servidor de produccion?")[
+        "hookSpecificOutput"]["additionalContext"]
+    assert ctx.count("Frankfurt") == 1, ctx
+    assert f"(more: #{r['id']})" in ctx, ctx
+    _limpiar_db()
+
+
 def test_short_memory_goes_in_whole_without_index_marks():
     _limpiar_db()
     _correr("remember", "el servidor de produccion esta alojado en Frankfurt")
@@ -101,6 +122,9 @@ def test_get_by_id_returns_full_text_and_reinforces():
         assert [g["id"] for g in got] == [mid], got
         assert got[0]["text"].endswith("cola entera"), got
         assert hc.store.get(mid)["access_count"] == antes + 1
+        # The identity index points into __self__: those ids must resolve too.
+        sid = hc.learn("una leccion larga de identidad", "leccion")["id"]
+        assert [g["id"] for g in hc.get([sid])] == [sid]
     finally:
         hc.close()
     _limpiar_db()

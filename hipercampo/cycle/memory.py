@@ -754,9 +754,13 @@ class Hipercampo:
         aren't readable from this project are simply absent."""
         ids = [int(i) for i in ids][:50]
         rows = self.store.get_many(ids)
+        # The identity index points into `__self__`, readable from anywhere.
+        own = [r["id"] for r in rows.values()]
+        if len(rows) < len(set(ids)):
+            rows.update(self._self_store().get_many([i for i in ids if i not in rows]))
         found = [rows[i] for i in ids if i in rows]
-        if found:
-            self.store.touch([r["id"] for r in found])
+        if own:
+            self.store.touch(own)
         audit.log("recall", f"{len(found)} by id", ids=",".join(map(str, ids)))
         output = []
         for r in found:

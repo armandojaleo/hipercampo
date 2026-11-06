@@ -65,17 +65,34 @@ def normalise_type(kind: str) -> str | None:
     return LEGACY_TYPES.get(kind)
 
 
+# Measured on the real identity (2026-11-06): the actual rules run 21-52 tok;
+# the long ones (150-377) are project episodes. Above this, an index line.
+IDENTITY_FULL_MAX = 60
+
+
 def format_identity(rows: list) -> str:
-    """The identity, as text ready to inject at the start of a session."""
+    """The identity, as text ready to inject at the start of a session.
+
+    ONE line per item, always: the budget trims whole lines, and a
+    multi-line item used to be cut mid-way (a stray "1. deployments.json
+    — trivial…" closed the injected block). Long items become "#id
+    headline …", read in full with hc_recall(ids=[...])."""
+    from ..support.budget import estimate_tokens, headline
     if not rows:
         return ""
     by_type: dict[str, list[str]] = {}
+    index: list[str] = []
     for r in rows:
         text = r["text"]
         prefix, _, body = text.partition(": ")
         kind = normalise_type(prefix)
         if kind is None:                  # no recognisable prefix: it's a lesson
             kind, body = "lesson", text
+        body = " ".join(body.split())
+        if estimate_tokens(body) > IDENTITY_FULL_MAX:
+            # LAST, so the budget drops index lines before a whole rule.
+            index.append(f"#{r['id']} {kind}: {headline(body)}")
+            continue
         by_type.setdefault(kind, []).append(body)
 
     plural = {"rule": "RULES", "preference": "PREFERENCES",
@@ -85,4 +102,7 @@ def format_identity(rows: list) -> str:
         if kind in by_type:
             parts.append(f"{plural[kind]} ({TYPES[kind]}):")
             parts += [f"  - {c}" for c in by_type[kind]]
+    if index:
+        parts.append("LONGER (index only):")
+        parts += [f"  - {c}" for c in index]
     return "\n".join(parts)

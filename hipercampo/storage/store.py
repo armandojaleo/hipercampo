@@ -729,6 +729,18 @@ class Store:
                 out[row["id"]] = row
         return out
 
+    def atom_sources(self, ids) -> dict[int, int]:
+        """{atom_id: source_id} for atoms whose source is ALSO among `ids`.
+        Lets a caller show a fact once instead of as atom + its source."""
+        ids = [int(i) for i in ids]
+        if len(ids) < 2:
+            return {}
+        marks = ",".join("?" * len(ids))
+        rows = self.db.execute(
+            f"SELECT src, dst FROM links WHERE type='atom' "
+            f"AND src IN ({marks}) AND dst IN ({marks})", (*ids, *ids)).fetchall()
+        return {r["dst"]: r["src"] for r in rows}
+
     def neighbors(self, mem_id: int, include_proposed: bool = False) -> list[tuple[int, float]]:
         """Neighbors via CONFIRMED associations. Hypotheses
         (status='proposed') do NOT propagate activation until accepted:

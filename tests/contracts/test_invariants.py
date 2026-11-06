@@ -180,6 +180,22 @@ def test_legacy_spanish_identity_types_still_work():
     assert "regla:" not in salida, "the legacy prefix leaked into the output"
 
 
+def test_identity_is_one_line_per_item_and_long_items_go_last_as_index():
+    """The budget trims whole LINES. A multi-line item was cut mid-way (a stray
+    "1. deployments.json — trivial…" closed the real injected block), and long
+    project episodes took the place of short real rules."""
+    from hipercampo.cycle.identity import format_identity
+
+    largo = "decision: " + "un episodio largo de otro proyecto. " * 30 + "\n1. COLA"
+    rows = [{"id": 7, "text": largo},
+            {"id": 8, "text": "regla: medir antes de creer"}]
+    lineas = format_identity(rows).splitlines()
+    assert not any("COLA" in ln for ln in lineas), lineas
+    assert lineas[-1].startswith("  - #7 decision: "), lineas
+    regla = next(i for i, ln in enumerate(lineas) if "medir antes" in ln)
+    assert regla < len(lineas) - 1, "the short rule must come before the index"
+
+
 def test_learn_accepts_the_old_parameter_name_and_values():
     """`hc_learn(tipo="regla")` was the public signature. Both the old parameter
     name and the old values keep working; new rows are stored in English."""
