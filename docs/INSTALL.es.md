@@ -340,7 +340,17 @@ Claude Code puede dispararse **en cada mensaje tuyo**, como una sinapsis.
 
 hipercampo decide solo qué toca (`hipercampo assist`): recordar si preguntas,
 inspirar si estás atascado, sugerir guardar/actualizar si afirmas algo nuevo, o
-**callarse** si no hay nada relevante. Nunca escribe por su cuenta.
+**callarse** si no hay nada relevante. Nunca escribe una memoria por su cuenta.
+
+Lo único que guarda sin que se lo pidas es un **marcapáginas**: en `PreCompact` y
+`SessionEnd` lee el registro de la sesión y apunta dónde lo dejaste (el título de la
+sesión, lo que se pidió, los ficheros cambiados, los commits y lo último que se dijo).
+El siguiente `SessionStart` en ese proyecto lo inyecta (≤250 tokens,
+`HIPERCAMPO_CHECKPOINT_BUDGET`). Así cerrar una sesión larga y cara y abrir una nueva
+no pierde nada. Hay uno por proyecto, se sobrescribe cada vez y vive en
+`hipercampo.checkpoints.json` junto a la base de datos, nunca en la memoria. Es
+extractivo (sin LLM): fiable en los hechos, más flojo en la intención. Solo funciona
+en Claude Code, porque los demás clientes no tienen esos hooks.
 
 ```bash
 hipercampo hook-install --global      # para todos los proyectos a partir de ahora
@@ -667,7 +677,7 @@ Sube el MRR global de recuperación de **0.77 a 0.95** en el banco de estrés
 
 | Síntoma | Causa / solución |
 |---|---|
-| `No module named hipercampo` | No hiciste `pip install -e .` en la carpeta del proyecto. |
+| `No module named hipercampo` | No hiciste `pip install -e .` en la carpeta del proyecto, o la moviste después: la instalación editable guarda la ruta absoluta, así que repítela desde la nueva ubicación (o usa `pip install .`, que copia el código y no depende de dónde esté el repo). |
 | Claude no ve las herramientas | Reinicia el cliente tras editar la config; revisa que la ruta/comando sea correcta. |
 | El comando `hipercampo` no existe | Usa `python -m hipercampo.server` (el script de consola puede no estar en el PATH). |
 | Docker: "cannot access stdin" | Falta `-i` en `docker run` (MCP habla por stdin). |

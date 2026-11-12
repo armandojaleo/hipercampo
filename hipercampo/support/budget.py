@@ -65,6 +65,10 @@ HOOK_BUDGET = _int_env("HIPERCAMPO_HOOK_BUDGET", _default_budget())
 # learned rules only ever grows.
 IDENTITY_BUDGET = _int_env("HIPERCAMPO_IDENTITY_BUDGET", 500)
 
+# Where the last session left off: also paid once per session, on top of the
+# identity. Small on purpose — it is a bookmark, the detail is in the memory.
+CHECKPOINT_BUDGET = _int_env("HIPERCAMPO_CHECKPOINT_BUDGET", 250)
+
 _tokenizer = None
 _tried = False
 

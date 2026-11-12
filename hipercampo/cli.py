@@ -139,9 +139,27 @@ def cmd_hook(_args) -> int:
         print("{}")
         return 0
 
+    # Before the context is compacted or the session closes: leave a bookmark,
+    # so the next session (or this one, after compacting) starts from where
+    # this one was instead of from the identity alone. Nothing to say back.
+    event = payload.get("hook_event_name")
+    if event in ("PreCompact", "SessionEnd"):
+        from .support import checkpoint
+        try:
+            cp = checkpoint.extract(str(payload.get("transcript_path") or ""), project)
+            if cp:
+                checkpoint.save(project, cp, str(payload.get("session_id") or ""),
+                                "compacted" if event == "PreCompact" else "closed")
+                audit.log("checkpoint", f"{event}: {len(cp['prompts'])} prompts, "
+                          f"{len(cp['files'])} files, {len(cp['commits'])} commits")
+        except Exception:
+            pass                       # a bookmark is never worth breaking the exit
+        print("{}")
+        return 0
+
     # At session START there's no question to answer: what's needed is to
     # recall who's working, so the session doesn't start from scratch.
-    if payload.get("hook_event_name") == "SessionStart":
+    if event == "SessionStart":
         try:
             hc = _hc()
             try:
@@ -149,28 +167,43 @@ def cmd_hook(_args) -> int:
             finally:
                 hc.close()
         except Exception:
+            r = {}
+        lines: list[str] = []
+        if r.get("n"):
+            # Identity is paid for ONCE per session, so its budget is more
+            # generous than a single turn's; but it still has a ceiling, or it
+            # would grow unbounded as rules get learned.
+            header = "[memory - working identity] learned in past sessions:"
+            lines, spent = budget.fit_budget([header] + r["text"].splitlines(),
+                                             budget.IDENTITY_BUDGET)
+            # A section heading whose items were all trimmed is noise.
+            lines = [ln for i, ln in enumerate(lines)
+                     if not (ln.endswith(":") and not ln.startswith(" ")
+                             and i > 0 and not (i + 1 < len(lines)
+                                                and lines[i + 1].startswith("  - ")))]
+            if any(re.match(r"\s*- #\d", ln) for ln in lines):
+                footer = "(#id = longer item; hc_recall(ids=[...]) to read it)"
+                lines.append(footer)
+                spent["tokens"] += budget.estimate_tokens(footer)
+            audit.log("tokens", f"identity {spent['tokens']} tok"
+                      + (f" (of {spent['original']})" if spent.get("original") else ""))
+
+        from .support import checkpoint
+        cp = checkpoint.load(project)
+        # A resumed session already HAS its own conversation back; its own
+        # bookmark on top would be the same thing said twice.
+        same = (payload.get("source") == "resume" and cp
+                and cp.get("session_id") == payload.get("session_id"))
+        if cp and not same:
+            cp_lines = checkpoint.render(cp)       # fits its own budget
+            if len(cp_lines) > 1:
+                lines += cp_lines
+                audit.log("tokens", "checkpoint "
+                          f"{sum(budget.estimate_tokens(ln) for ln in cp_lines)} tok")
+
+        if not lines:
             print("{}")
             return 0
-        if not r.get("n"):
-            print("{}")
-            return 0
-        # Identity is paid for ONCE per session, so its budget is more
-        # generous than a single turn's; but it still has a ceiling, or it
-        # would grow unbounded as rules get learned.
-        header = "[memory - working identity] learned in past sessions:"
-        lines, spent = budget.fit_budget([header] + r["text"].splitlines(),
-                                       budget.IDENTITY_BUDGET)
-        # A section heading whose items were all trimmed is noise.
-        lines = [ln for i, ln in enumerate(lines)
-                 if not (ln.endswith(":") and not ln.startswith(" ")
-                         and i > 0 and not (i + 1 < len(lines)
-                                            and lines[i + 1].startswith("  - ")))]
-        if any(re.match(r"\s*- #\d", ln) for ln in lines):
-            footer = "(#id = longer item; hc_recall(ids=[...]) to read it)"
-            lines.append(footer)
-            spent["tokens"] += budget.estimate_tokens(footer)
-        audit.log("tokens", f"identity {spent['tokens']} tok"
-                  + (f" (of {spent['original']})" if spent.get("original") else ""))
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",

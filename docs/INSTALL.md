@@ -369,7 +369,17 @@ By default memory is *pull*: Claude decides when to call it. With a Claude Code
 
 hipercampo decides for itself what is called for (`hipercampo assist`): recall if
 you ask, inspire if you are stuck, suggest storing/updating if you state something
-new, or **stay quiet** if nothing is relevant. It never writes on its own.
+new, or **stay quiet** if nothing is relevant. It never writes a memory on its own.
+
+The one thing it does save unasked is a **bookmark**: at `PreCompact` and
+`SessionEnd` it reads the session transcript and keeps where you left off (the
+session's title, what was asked, files changed, commits, the last thing said), and
+the next `SessionStart` in that project injects it (≤250 tokens,
+`HIPERCAMPO_CHECKPOINT_BUDGET`). So closing a long, expensive session and opening a
+fresh one loses nothing. One bookmark per project, overwritten each time, kept in
+`hipercampo.checkpoints.json` next to the database, never in the memory itself. It is
+extractive (no LLM): reliable on facts, weaker on intent. Claude Code only, since
+other clients have no such hooks.
 
 ```bash
 hipercampo hook-install --global      # every project from now on
@@ -699,7 +709,7 @@ It raises global retrieval MRR from **0.77 to 0.95** on the stress bench
 
 | Symptom | Cause / fix |
 |---|---|
-| `No module named hipercampo` | You did not run `pip install -e .` in the project folder. |
+| `No module named hipercampo` | You did not run `pip install -e .` in the project folder, or you moved the folder afterwards: an editable install stores the absolute path, so repeat it from the new location (or use `pip install .`, which copies the code and does not depend on where the repo lives). |
 | Claude does not see the tools | Restart the client after editing the config; check the path/command is right. |
 | The `hipercampo` command does not exist | Use `python -m hipercampo.server` (the console script may not be on your PATH). |
 | Docker: "cannot access stdin" | `-i` is missing from `docker run` (MCP speaks over stdin). |

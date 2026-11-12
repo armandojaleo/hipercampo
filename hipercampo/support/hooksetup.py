@@ -19,6 +19,9 @@ _COMMAND = "python -m hipercampo.cli hook"
 _EVENTS = {
     "SessionStart": "recordando quién soy trabajando...",
     "UserPromptSubmit": "consultando la memoria...",
+    # The write side: where the session left off, so a new one starts there.
+    "PreCompact": "guardando dónde lo dejamos...",
+    "SessionEnd": "guardando dónde lo dejamos...",
 }
 
 

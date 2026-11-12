@@ -19,14 +19,16 @@ from helpers import ROOT  # noqa: E402
 sys.path.insert(0, str(ROOT))
 from hipercampo.support import hooksetup  # noqa: E402
 
+_ALL = ["SessionStart", "UserPromptSubmit", "PreCompact", "SessionEnd"]
+
 
 def test_project_scope_creates_settings_from_scratch(tmp_path):
     result = hooksetup.install_hook("project", str(tmp_path))
-    assert result["installed"] == ["SessionStart", "UserPromptSubmit"]
+    assert result["installed"] == _ALL
     assert result["already_present"] == []
 
     written = json.loads((tmp_path / ".claude" / "settings.json").read_text("utf-8"))
-    for event in ("SessionStart", "UserPromptSubmit"):
+    for event in _ALL:
         cmds = [h["command"] for g in written["hooks"][event] for h in g["hooks"]]
         assert "python -m hipercampo.cli hook" in cmds
 
@@ -57,10 +59,10 @@ def test_idempotent_second_run_does_not_duplicate(tmp_path):
     result = hooksetup.install_hook("project", str(tmp_path))
 
     assert result["installed"] == []
-    assert set(result["already_present"]) == {"SessionStart", "UserPromptSubmit"}
+    assert set(result["already_present"]) == set(_ALL)
 
     written = json.loads((tmp_path / ".claude" / "settings.json").read_text("utf-8"))
-    for event in ("SessionStart", "UserPromptSubmit"):
+    for event in _ALL:
         assert len(written["hooks"][event]) == 1, (
             f"{event} was duplicated on a second install: {written['hooks'][event]}")
 
@@ -94,5 +96,20 @@ def test_loose_match_recognises_a_differently_spelled_existing_command(tmp_path)
 
     result = hooksetup.install_hook("project", str(tmp_path))
 
-    assert result["installed"] == []
+    # Only the two read-side events were there: the write side is added,
+    # the existing entries are left alone.
+    assert result["installed"] == ["PreCompact", "SessionEnd"]
     assert set(result["already_present"]) == {"SessionStart", "UserPromptSubmit"}
+
+
+def test_an_install_from_before_checkpoints_reports_itself_incomplete(tmp_path):
+    """Installs made before PreCompact/SessionEnd existed only READ the
+    memory: nothing ever saved where a session left off. `hook_installed`
+    must say so, or `enable` would never offer the upgrade."""
+    settings = tmp_path / ".claude"
+    settings.mkdir(parents=True)
+    old = {"hooks": {e: [{"hooks": [{"type": "command",
+                                     "command": "python -m hipercampo.cli hook"}]}]
+                     for e in ("SessionStart", "UserPromptSubmit")}}
+    (settings / "settings.json").write_text(json.dumps(old), encoding="utf-8")
+    assert hooksetup.hook_installed("project", str(tmp_path)) is False

@@ -5,6 +5,23 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+### Added — core
+- **Where you left off, across sessions.** The hook now also runs on `PreCompact` and
+  `SessionEnd`. It reads the transcript and keeps a per-project bookmark: the session
+  title, what was asked, files changed, commits, and the end of the last message,
+  which is where the next step usually is. `SessionStart` injects it within
+  `HIPERCAMPO_CHECKPOINT_BUDGET` (250). A long session is expensive because every
+  turn re-sends its history, and starting a new one is only free if nothing is lost.
+  Until now that depended on someone calling `hc_remember` at the right moment.
+  Extractive, no LLM. Failed edits don't count as changes. One-word replies ("si")
+  and IDE blocks aren't treated as requests. Pasted text is kept, because it is often
+  the request itself. An empty session never overwrites a real bookmark, and a
+  resumed session doesn't get its own bookmark repeated back. On a real session the
+  first cut trimmed from the bottom and dropped "last said" while keeping six file
+  paths, so the trimming now goes by priority. `hook_installed` reports installs
+  made before this as incomplete, so `enable` offers the upgrade.
+  `hipercampo/support/checkpoint.py`, `tests/support/test_checkpoint.py`.
+
 ## [0.1.0b16] — 2026-09-22
 
 ### Added — core

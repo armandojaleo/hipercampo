@@ -196,6 +196,72 @@ def test_startup_without_identity_stays_quiet():
     _limpiar_db()
 
 
+def _hook_payload(payload: dict) -> dict:
+    original = sys.stdin
+    sys.stdin = io.StringIO(json.dumps(payload))
+    try:
+        _, salida = _correr("hook")
+    finally:
+        sys.stdin = original
+    return json.loads(salida)
+
+
+def _fake_transcript(path: Path, prompts: list[str], edited: list[str]) -> None:
+    """The shape of a Claude Code transcript (.jsonl), reduced to what matters."""
+    rows = [{"type": "ai-title", "aiTitle": "Checkpoint al cerrar la sesion"}]
+    for p in prompts:
+        rows.append({"type": "user", "message": {"role": "user", "content": p}})
+    for i, f in enumerate(edited):
+        rows.append({"type": "assistant", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "id": f"t{i}", "name": "Edit",
+             "input": {"file_path": f}}]}})
+    rows.append({"type": "assistant", "message": {"role": "assistant", "content": [
+        {"type": "text", "text": "Siguiente paso: medir el ahorro de tokens."}]}})
+    path.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+
+
+def test_session_end_leaves_a_checkpoint_the_next_session_starts_from(tmp_path):
+    """A long session is expensive because every turn re-sends the whole
+    history; the way out is a NEW session, and that's only free if nothing
+    is lost. Before this, closing or compacting saved nothing: the next
+    session started from the identity alone."""
+    _limpiar_db()
+    transcript = tmp_path / "s.jsonl"
+    _fake_transcript(transcript,
+                     ["guardar un checkpoint cuando la sesion se compacta", "si"],
+                     [str(tmp_path / "hipercampo" / "support" / "checkpoint.py")])
+    r = _hook_payload({"hook_event_name": "PreCompact", "cwd": str(tmp_path),
+                       "session_id": "a", "transcript_path": str(transcript)})
+    assert r == {}, r                    # PreCompact has nothing to say back
+
+    r = _hook_payload({"hook_event_name": "SessionStart", "source": "startup",
+                       "cwd": str(tmp_path), "session_id": "b"})
+    ctx = r.get("hookSpecificOutput", {}).get("additionalContext", "")
+    assert "where we left off" in ctx, r
+    assert "guardar un checkpoint" in ctx, ctx
+    assert "checkpoint.py" in ctx, ctx
+    assert "medir el ahorro" in ctx, ctx
+    _limpiar_db()
+
+
+def test_an_empty_session_does_not_erase_the_previous_checkpoint(tmp_path):
+    """Opening a session and closing it straight away must not overwrite real
+    work with nothing — that would be losing context, the very failure."""
+    _limpiar_db()
+    full, empty = tmp_path / "full.jsonl", tmp_path / "empty.jsonl"
+    _fake_transcript(full, ["refactorizar el modulo de presupuesto"], [])
+    empty.write_text(json.dumps({"type": "user", "message": {"content": "si"}}),
+                     encoding="utf-8")
+    for t in (full, empty):
+        _hook_payload({"hook_event_name": "SessionEnd", "cwd": str(tmp_path),
+                       "session_id": t.stem, "transcript_path": str(t)})
+    r = _hook_payload({"hook_event_name": "SessionStart", "source": "startup",
+                       "cwd": str(tmp_path), "session_id": "next"})
+    assert "refactorizar" in r.get("hookSpecificOutput", {}).get(
+        "additionalContext", ""), r
+    _limpiar_db()
+
+
 # --- commands ---------------------------------------------------------------
 
 def test_remember_and_recall_through_cli():

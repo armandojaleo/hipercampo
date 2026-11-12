@@ -24,6 +24,30 @@
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hipercampo.cli hook",
+            "timeout": 15,
+            "statusMessage": "guardando dónde lo dejamos..."
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hipercampo.cli hook",
+            "timeout": 15,
+            "statusMessage": "guardando dónde lo dejamos..."
+          }
+        ]
+      }
     ]
   }
 }
