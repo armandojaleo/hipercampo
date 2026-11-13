@@ -46,16 +46,29 @@ def test_a_failed_edit_is_not_reported_as_a_change(tmp_path):
     assert cp["files"] == ["a.py"], cp
 
 
-def test_commit_subject_from_a_heredoc_and_from_dash_m(tmp_path):
-    heredoc = ("git commit -m \"$(cat <<'EOF'\nShow a fact once\n\nBody.\n"
-               "EOF\n)\"")
+def _said(tool_id: str, output: str) -> dict:
+    return {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": tool_id, "content": output}]}}
+
+
+def test_a_commit_is_what_git_confirmed_not_what_the_command_said(tmp_path):
+    """Found on a real session: a command that only MENTIONED `git commit`
+    (testing a regex) was reported as a commit, and the real one, a
+    multi-line -m "…", was missed. Git's own "[branch sha] subject" line is
+    the fact; the command text is not."""
+    multiline = 'git add -A && git commit -m "Continuity across sessions\n\nBody."'
+    mention = "python -c \"c='git commit -m \\\"$(cat <<EOF\nShow a fact once'\""
     t = _write(tmp_path / "t.jsonl", [
-        _tool("c1", "Bash", command=heredoc), _result("c1", False),
-        _tool("c2", "Bash", command='git add . && git commit -m "Fix the audit"'),
-        _result("c2", False),
-        _tool("c3", "Bash", command="git log --oneline"), _result("c3", False),
+        _tool("c1", "Bash", command=multiline),
+        _said("c1", "[main 0beb734] Continuity across sessions\n 13 files changed"),
+        _tool("c2", "Bash", command=mention), _said("c2", "None"),
+        _tool("c3", "Bash", command="git commit -m 'x'"),
+        _said("c3", [{"type": "text", "text": "nothing to commit, working tree clean"}]),
+        _tool("c4", "Bash", command="git commit --amend --no-edit"),
+        _said("c4", [{"type": "text", "text": "[feat/x 1a2b3c4] Fix the audit\n"}]),
     ])
-    assert checkpoint.extract(t)["commits"] == ["Show a fact once", "Fix the audit"]
+    assert checkpoint.extract(t)["commits"] == ["Continuity across sessions",
+                                                "Fix the audit"]
 
 
 def test_ide_noise_and_one_word_replies_are_not_requests(tmp_path):
@@ -100,3 +113,17 @@ def test_pasted_text_is_the_request_so_only_its_wrapper_goes(tmp_path):
         '</pasted_content id="7f">'}}])
     assert checkpoint.extract(t)["prompts"] == [
         "Tengo este feedback: los pesos no cambian"]
+
+
+def test_uncommitted_work_is_in_the_bookmark(tmp_path):
+    """Found resuming a real session: "next: commit what is pending" was
+    there, but which files were pending (and so where the why lived) was
+    not. Git states it; the transcript can't."""
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "notes.md").write_text("pendiente\n", encoding="utf-8")
+    t = _write(tmp_path / "t.jsonl", [
+        {"type": "user", "message": {"content": "corrige el mensaje del commit"}}])
+    cp = checkpoint.extract(t, str(tmp_path))
+    assert "notes.md" in cp["uncommitted"], cp
+    assert "uncommitted (the diff holds the why): " in "\n".join(checkpoint.render(cp))

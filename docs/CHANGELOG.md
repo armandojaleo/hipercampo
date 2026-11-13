@@ -21,6 +21,20 @@ All notable changes to this project are documented here. Format loosely based on
   paths, so the trimming now goes by priority. `hook_installed` reports installs
   made before this as incomplete, so `enable` offers the upgrade.
   `hipercampo/support/checkpoint.py`, `tests/support/test_checkpoint.py`.
+  Commits are what **git confirmed** (`[main 0beb734] Subject` in the command's
+  output), not what the command text says. Run on its own real session, the first
+  version reported a commit that never happened: a command that only *mentioned*
+  `git commit` while testing a regex. It also missed the real one, a multi-line
+  `-m "…"`.
+  The bookmark also lists what was left **uncommitted** (`git status`). On the
+  first real resume, the next step was there but its *why* lived only in that
+  uncommitted diff, and the new session had to go and find it.
+- **`scripts/session_cost.py`: what a long session really costs.** It reads the
+  `usage` of every call from Claude Code's transcripts. Measured: 44k → 157k
+  tokens of context per call over 61 calls. This replaces two scripts from the first
+  commit of this feature. One modelled injection with invented numbers and reported a
+  "25% saving" that was never measured. The other measured only the memory's
+  injection, which is under 1% of the context.
 
 ## [0.1.0b16] — 2026-09-22
 

@@ -242,6 +242,44 @@ final score and z-contrast failed to separate signal from noise. Measured end to
 end: **87k → 26k tokens** over a 30-turn session. Counts are character-based
 estimates; install `tiktoken` for exactness.
 
+## One session or many, without losing the thread
+
+What hipercampo injects is small. A long session is expensive for another reason:
+**every API call re-reads the whole conversation**. Measured from Claude Code's own
+transcripts (`python scripts/session_cost.py`):
+
+| Session | Calls | Context, first call | Context, last call |
+|---|---:|---:|---:|
+| short | 27 | 34k | 66k (1.9×) |
+| long | 61 | 44k | 157k (3.6×) |
+| long | 81 | 39k | 122k (3.1×) |
+
+Most of that is a cache read, billed cheaper, so these are tokens read, not money.
+Still, the way out is to **start a new session**, which drops back to the ~40k
+baseline. That is only worth it if nothing is lost, so hipercampo takes part in the
+whole life of a session, not just in each turn:
+
+```
+ SessionStart ──▶ who you are (rules, lessons)  +  where you left off   ≤500 + ≤250 tok
+      │
+ every prompt ──▶ an INDEX of what's relevant (#id → hc_recall for detail)  ≤350 tok
+      │
+ PreCompact / ──▶ writes the bookmark: session title, what was asked, files changed
+ SessionEnd       (not failed edits), commits, the end of the last message
+```
+
+The bookmark (`hipercampo/support/checkpoint.py`) is **extractive, no LLM**, so it is
+reliable on facts and weaker on intent. It keeps one per project, overwritten each
+time, in `hipercampo.checkpoints.json` next to the database. It never goes into the
+memory, so it doesn't compete with what was actually learned. An empty session never
+overwrites a real bookmark. It works on Claude Code only, since it relies on lifecycle
+hooks other clients don't have. `hipercampo hook-install --global` sets it up.
+
+**Not yet measured:** whether a task resumed from the bookmark ends as well as one
+finished in a single long session. Shorter sessions read fewer tokens, which is
+arithmetic. Losing nothing when you cut is the claim still to prove, and it is open
+in the [ROADMAP](docs/ROADMAP.md).
+
 ## The four axes of a memory (novelty ≠ importance ≠ reliability ≠ utility)
 
 | Axis | What it measures | Who sets it | Used for |
@@ -320,6 +358,8 @@ text ──▶ encoder.py ──▶ hypervector (10,000 bits)      semantic.py  
     policy.py  ── what to do at THIS turn (reads run, writes only suggested)
                              │
     server.py  ── MCP (stdio) ──▶ Claude · Codex · others    cli.py ── terminal + hooks
+                                                                       └── checkpoint.py
+                                                                           (where you left off)
 ```
 
 Every public operation is wrapped in `@resiliente`: if SQLite fails it **logs the

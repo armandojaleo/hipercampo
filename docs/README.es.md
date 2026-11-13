@@ -185,6 +185,44 @@ porque ni el score final ni el contraste (z) separaban la señal del ruido. Medi
 de punta a punta: **87k → 26k tokens** en una sesión de 30 turnos. Las cuentas son
 estimaciones por caracteres; instala `tiktoken` si quieres exactitud.
 
+## Una sesión o muchas, sin perder el hilo
+
+Lo que inyecta hipercampo es poco. Una sesión larga sale cara por otra razón:
+**cada llamada a la API vuelve a leer la conversación entera**. Medido con los propios
+registros de Claude Code (`python scripts/session_cost.py`):
+
+| Sesión | Llamadas | Contexto, primera llamada | Contexto, última llamada |
+|---|---:|---:|---:|
+| corta | 27 | 34k | 66k (1,9×) |
+| larga | 61 | 44k | 157k (3,6×) |
+| larga | 81 | 39k | 122k (3,1×) |
+
+La mayor parte es lectura de caché, que se cobra más barata, así que son tokens
+leídos y no dinero. Aun así, la salida es **abrir una sesión nueva**, que vuelve a la
+base de unos 40k. Eso solo compensa si no se pierde nada, así que hipercampo participa
+en toda la vida de una sesión, no solo en cada turno:
+
+```
+ SessionStart ──▶ quién eres (reglas, lecciones)  +  dónde lo dejaste   ≤500 + ≤250 tok
+      │
+ cada mensaje ──▶ un ÍNDICE de lo relevante (#id → hc_recall para el detalle)  ≤350 tok
+      │
+ PreCompact / ──▶ escribe el marcapáginas: título de la sesión, lo pedido, ficheros
+ SessionEnd       cambiados (sin ediciones fallidas), commits, el final del último mensaje
+```
+
+El marcapáginas (`hipercampo/support/checkpoint.py`) es **extractivo, sin LLM**: fiable
+en los hechos y más flojo en la intención. Hay uno por proyecto, se sobrescribe cada
+vez y vive en `hipercampo.checkpoints.json` junto a la base de datos. Nunca entra en la
+memoria, así que no compite con lo aprendido. Una sesión vacía nunca pisa un
+marcapáginas real. Solo funciona en Claude Code, porque depende de hooks del ciclo de
+vida que otros clientes no tienen. Se instala con `hipercampo hook-install --global`.
+
+**Aún sin medir:** si una tarea retomada desde el marcapáginas acaba igual de bien que
+una hecha en una sola sesión larga. Que una sesión corta lea menos tokens es
+aritmética. Que cortar no pierda nada es lo que falta probar, y está abierto en el
+[ROADMAP](ROADMAP.md).
+
 ## Los cuatro ejes de un recuerdo (novedad ≠ importancia ≠ fiabilidad ≠ utilidad)
 
 | Eje | Qué mide | Quién lo pone | Para qué se usa |
@@ -263,6 +301,8 @@ texto ──▶ encoder.py ──▶ hipervector (10.000 bits)   semantic.py  pu
      policy.py  ── qué toca en ESTE turno (lecturas se ejecutan, escrituras se sugieren)
                               │
      server.py  ── MCP (stdio) ──▶ Claude · Codex · otros    cli.py ── terminal + hooks
+                                                                        └── checkpoint.py
+                                                                            (dónde lo dejaste)
 ```
 
 Toda operación pública va envuelta en `@resiliente`: si SQLite falla, **avisa en el

@@ -20,6 +20,7 @@ store, so it never competes in recall with what was actually learned.
 import json
 import os
 import re
+import subprocess
 import time
 
 from . import budget, config
@@ -53,14 +54,16 @@ def _clean(text: str) -> str:
     return " ".join(_TAG.sub(" ", _PASTE.sub(" ", text)).split())
 
 
-def _commit_subject(command: str) -> str | None:
-    if "git commit" not in command:
-        return None
-    m = re.search(r"<<\s*'?EOF'?\s*\n\s*(.+)", command)
-    if not m:
-        m = re.search(r"git commit[^\n]*?-m\s+([\"'])(.+?)\1", command)
-        return m.group(2).strip() if m else None
-    return m.group(1).strip()
+# Git's own confirmation of a commit: "[main 0beb734] Subject". Parsing the
+# COMMAND instead was wrong both ways on a real session: a command that only
+# mentioned `git commit` counted as one, and a multi-line -m "…" was missed.
+_COMMITTED = re.compile(r"^\[[^\]\s]+(?: \([^)]*\))? [0-9a-f]{7,}\] (.+)$", re.M)
+_SHELL_TOOLS = ("Bash", "PowerShell")
+
+
+def _result_text(block: dict) -> str:
+    content = block.get("content")
+    return content if isinstance(content, str) else _text_of(content)
 
 
 def extract(transcript_path: str, cwd: str | None = None) -> dict | None:
@@ -86,9 +89,14 @@ def extract(transcript_path: str, cwd: str | None = None) -> dict | None:
                         and not row.get("isCompactSummary"):
                     if isinstance(content, list):
                         for b in content:
-                            if isinstance(b, dict) and b.get("type") == "tool_result" \
-                                    and b.get("is_error"):
+                            if not (isinstance(b, dict) and b.get("type") == "tool_result"):
+                                continue
+                            if b.get("is_error"):
                                 failed.add(b.get("tool_use_id"))
+                            elif pending.get(b.get("tool_use_id"), ("",))[0] == "commit?":
+                                m = _COMMITTED.search(_result_text(b))
+                                if m:
+                                    pending[b["tool_use_id"]] = ("commit", m.group(1).strip())
                     text = _clean(_text_of(content))
                     if len(text) >= _MIN_PROMPT_CHARS:
                         prompts.append(text)
@@ -102,10 +110,10 @@ def extract(transcript_path: str, cwd: str | None = None) -> dict | None:
                             args = b.get("input") or {}
                             if b.get("name") in _EDIT_TOOLS and args.get("file_path"):
                                 pending[b.get("id")] = ("file", str(args["file_path"]))
-                            elif b.get("name") == "Bash":
-                                subject = _commit_subject(str(args.get("command", "")))
-                                if subject:
-                                    pending[b.get("id")] = ("commit", subject)
+                            elif b.get("name") in _SHELL_TOOLS and \
+                                    "git commit" in str(args.get("command", "")):
+                                # A candidate only: what git answers decides.
+                                pending[b.get("id")] = ("commit?", "")
     except OSError:
         return None
 
@@ -117,13 +125,31 @@ def extract(transcript_path: str, cwd: str | None = None) -> dict | None:
             value = _relative(value, cwd)
             if value not in files:
                 files.append(value)
-        elif value not in commits:
+        elif what == "commit" and value not in commits:
             commits.append(value)
 
     if not prompts and not files and not commits:
         return None
     return {"title": title, "prompts": prompts, "files": files,
-            "commits": commits, "last_said": last_said, "at": time.time()}
+            "commits": commits, "uncommitted": _uncommitted(cwd),
+            "last_said": last_said, "at": time.time()}
+
+
+def _uncommitted(cwd: str | None) -> list[str]:
+    """What the session left changed but NOT committed. Measured on a real
+    resume: the bookmark said "next: commit what is pending" and the WHY of
+    it lived only in that uncommitted diff, which the next session had to go
+    and find. The transcript can't say this; git can, as a fact."""
+    if not cwd:
+        return []
+    try:
+        out = subprocess.run(["git", "status", "--porcelain"], cwd=cwd,
+                             capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if out.returncode != 0:
+        return []
+    return [ln[3:].strip().strip('"') for ln in out.stdout.splitlines() if len(ln) > 3]
 
 
 def _relative(path: str, cwd: str | None) -> str:
@@ -207,6 +233,11 @@ def render(cp: dict, max_tokens: int | None = None) -> list[str]:
         items.append((4, f"  - changed: {', '.join(files[-5:])}{more}"))
     for c in (cp.get("commits") or [])[-3:]:
         items.append((3, f"  - committed: {c}"))
+    pending = cp.get("uncommitted") or []
+    if pending:
+        more = f" (+{len(pending) - 5} more)" if len(pending) > 5 else ""
+        items.append((1, f"  - uncommitted (the diff holds the why): "
+                         f"{', '.join(pending[:5])}{more}"))
     if cp.get("last_said"):
         items.append((0, f"  - last said: {_last_sentences(cp['last_said'], 60)}"))
 

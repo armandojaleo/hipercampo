@@ -83,6 +83,15 @@ been seen RED against the old code, and the checker needs checking too.
    divergence-proof simulation tested on the real graph with zero NaNs, list sorting
    and kind filtering, per-recall token cost, and Status/Tokens fixes. **Screenshots**
    and **manual VSIX validation in both languages** remain before calling it stable.
+7. 🟡 **Continuity across sessions.** The hook writes a per-project bookmark at
+   `PreCompact`/`SessionEnd` and `SessionStart` injects it (`support/checkpoint.py`).
+   Measured: a long session's context grows 3-4× per call (44k → 157k over 61
+   calls, `scripts/session_cost.py`), so cutting it is the saving, not what the
+   memory injects. **Still to prove:** that a task resumed from the bookmark ends as
+   well as one done in one go. Method: the same tasks, done once straight through and
+   once cut halfway, comparing total tokens read *and* whether the result holds up.
+   A first attempt at this (since removed) modelled injection cost with invented
+   numbers and reported a 25% saving. It was not a measurement.
 
 ## The next leap: from ADDING to PROVING (evidence phase)
 
