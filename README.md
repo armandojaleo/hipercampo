@@ -119,7 +119,7 @@ numbers are printed by the tools, not typed here by hand.
 
 | | tests | coverage | how |
 |---|---|---|---|
-| Python core (`hipercampo/`) | 344 | **83%** | `coverage run -m pytest && coverage report` |
+| Python core (`hipercampo/`) | 344 | **82%** | `coverage run -m pytest && coverage report` |
 | Viewer (`editor/media/viewer.js`) | 8 end-to-end | **72%** | `cd editor && npm run coverage` |
 
 CI enforces a floor of 78% on the Python side. Viewer coverage comes from
