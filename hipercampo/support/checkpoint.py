@@ -91,12 +91,13 @@ def extract(transcript_path: str, cwd: str | None = None) -> dict | None:
                         for b in content:
                             if not (isinstance(b, dict) and b.get("type") == "tool_result"):
                                 continue
+                            tid = str(b.get("tool_use_id", ""))
                             if b.get("is_error"):
-                                failed.add(b.get("tool_use_id"))
-                            elif pending.get(b.get("tool_use_id"), ("",))[0] == "commit?":
+                                failed.add(tid)
+                            elif pending.get(tid, ("", ""))[0] == "commit?":
                                 m = _COMMITTED.search(_result_text(b))
                                 if m:
-                                    pending[b["tool_use_id"]] = ("commit", m.group(1).strip())
+                                    pending[tid] = ("commit", m.group(1).strip())
                     text = _clean(_text_of(content))
                     if len(text) >= _MIN_PROMPT_CHARS:
                         prompts.append(text)
@@ -109,11 +110,11 @@ def extract(transcript_path: str, cwd: str | None = None) -> dict | None:
                         elif b.get("type") == "tool_use":
                             args = b.get("input") or {}
                             if b.get("name") in _EDIT_TOOLS and args.get("file_path"):
-                                pending[b.get("id")] = ("file", str(args["file_path"]))
+                                pending[str(b.get("id", ""))] = ("file", str(args["file_path"]))
                             elif b.get("name") in _SHELL_TOOLS and \
                                     "git commit" in str(args.get("command", "")):
                                 # A candidate only: what git answers decides.
-                                pending[b.get("id")] = ("commit?", "")
+                                pending[str(b.get("id", ""))] = ("commit?", "")
     except OSError:
         return None
 

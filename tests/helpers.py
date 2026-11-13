@@ -9,8 +9,10 @@ Shared test utilities. Each file once repeated its own _open/_clean pair (15 of
     clean()                      # Close and delete .db, -wal, and -shm.
 """
 
+import inspect
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 # Keep the repository root in ONE place. Tests live in per-layer folders, so
@@ -77,7 +79,12 @@ def run_tests(globs) -> int:
     for name, fn in sorted(globs.items()):
         if name.startswith("test_") and callable(fn):
             try:
-                fn()
+                # Standalone there is no pytest to inject `tmp_path`; without
+                # this, a test asking for it errors on CI and passes locally.
+                if "tmp_path" in inspect.signature(fn).parameters:
+                    fn(tmp_path=Path(tempfile.mkdtemp(prefix="hc_test_")))
+                else:
+                    fn()
                 print(f"ok   {name}")
             except AssertionError as e:
                 fails += 1

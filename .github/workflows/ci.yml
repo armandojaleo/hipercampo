@@ -150,7 +150,14 @@ jobs:
           fi
           while IFS= read -r t; do
             echo "::group::$t"
-            python "$t"
+            # A file without a __main__ block, run as a script, executes NOTHING and
+            # exits 0. Four did, test_checkpoint.py among them, and passed every run
+            # of this step without one test running. Those go through pytest.
+            if grep -q "__main__" "$t"; then
+              python "$t"
+            else
+              python -m pytest -q -p no:cacheprovider "$t"
+            fi
             echo "::endgroup::"
           done <<< "$TESTS"
 
