@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely based on
 
 ## [Unreleased]
 
+## [0.1.0b17] — 2026-11-13
+
 ### Added — core
 - **Where you left off, across sessions.** The hook now also runs on `PreCompact` and
   `SessionEnd`. It reads the transcript and keeps a per-project bookmark: the session
