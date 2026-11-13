@@ -207,7 +207,12 @@ jobs:
             exit 1
           fi
           while IFS= read -r t; do
-            coverage run -a --source=hipercampo "$t" >/dev/null
+            # Same trap as the test step: a file without __main__ covers nothing.
+            if grep -q "__main__" "$t"; then
+              coverage run -a --source=hipercampo "$t" >/dev/null
+            else
+              coverage run -a --source=hipercampo -m pytest -q -p no:cacheprovider "$t" >/dev/null
+            fi
           done <<< "$TESTS"
           coverage report --sort=cover
           coverage report --fail-under=78
